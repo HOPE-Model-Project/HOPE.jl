@@ -1,0 +1,57 @@
+.docs-sidebar .docs-logo {
+  display: none;
+}
+
+.docs-sidebar .docs-package-name {
+  margin-top: 0.6rem;
+  margin-bottom: 0.95rem;
+}
+
+.docs-sidebar .docs-package-name .docs-autofit {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.docs-sidebar .docs-package-name a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  color: #426ab3 !important;
+  font-weight: 800;
+  font-size: 1.04rem !important;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.docs-sidebar .docs-package-name a:hover {
+  color: #34589a !important;
+}
+
+.docs-sidebar .docs-package-name a::before {
+  content: "";
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: 0 0 1.7rem;
+  background-image: url("hope-sidebar-icon.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  transform: translateY(1px);
+}
+
+html.theme--documenter-dark .docs-sidebar .docs-package-name a,
+html.theme--catppuccin-frappe .docs-sidebar .docs-package-name a,
+html.theme--catppuccin-macchiato .docs-sidebar .docs-package-name a,
+html.theme--catppuccin-mocha .docs-sidebar .docs-package-name a {
+  color: #6d95e6 !important;
+}
+
+html.theme--documenter-dark .docs-sidebar .docs-package-name a:hover,
+html.theme--catppuccin-frappe .docs-sidebar .docs-package-name a:hover,
+html.theme--catppuccin-macchiato .docs-sidebar .docs-package-name a:hover,
+html.theme--catppuccin-mocha .docs-sidebar .docs-package-name a:hover {
+  color: #8db0f0 !important;
+}

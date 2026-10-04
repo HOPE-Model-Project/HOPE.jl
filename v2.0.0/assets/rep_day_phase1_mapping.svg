@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420">
+  <rect width="900" height="420" fill="#fbfaf6"/>
+  <text x="40" y="40" font-family="Georgia, serif" font-size="24" fill="#19323c">Phase 1 Endogenous Representative Day Mapping</text>
+  <text x="40" y="68" font-family="Arial, sans-serif" font-size="14" fill="#455a64">Full chronology days in each season are clustered jointly using load + AF features. One actual observed medoid day is selected per season.</text>
+
+  <rect x="40" y="100" width="360" height="250" rx="16" fill="#eef4f1" stroke="#99b2a2"/>
+  <text x="60" y="130" font-family="Arial, sans-serif" font-size="18" fill="#19323c">Full Chronology</text>
+  <text x="60" y="155" font-family="Arial, sans-serif" font-size="13" fill="#455a64">Each box is one real day with aligned load and VRE profiles.</text>
+
+  <g font-family="Arial, sans-serif" font-size="12" fill="#19323c">
+    <rect x="65" y="185" width="70" height="46" rx="8" fill="#d7ebe1" stroke="#7aa38b"/>
+    <text x="82" y="212">Day 1</text>
+    <rect x="150" y="185" width="70" height="46" rx="8" fill="#d7ebe1" stroke="#7aa38b"/>
+    <text x="167" y="212">Day 2</text>
+    <rect x="235" y="185" width="70" height="46" rx="8" fill="#d7ebe1" stroke="#7aa38b"/>
+    <text x="252" y="212">Day 3</text>
+    <rect x="320" y="185" width="55" height="46" rx="8" fill="#d7ebe1" stroke="#7aa38b"/>
+    <text x="338" y="212">...</text>
+
+    <rect x="65" y="255" width="70" height="46" rx="8" fill="#fbe7c6" stroke="#d5a253"/>
+    <text x="82" y="282">Day 91</text>
+    <rect x="150" y="255" width="70" height="46" rx="8" fill="#fbe7c6" stroke="#d5a253"/>
+    <text x="167" y="282">Day 92</text>
+    <rect x="235" y="255" width="70" height="46" rx="8" fill="#fbe7c6" stroke="#d5a253"/>
+    <text x="252" y="282">Day 93</text>
+    <rect x="320" y="255" width="55" height="46" rx="8" fill="#fbe7c6" stroke="#d5a253"/>
+    <text x="338" y="282">...</text>
+  </g>
+
+  <rect x="470" y="100" width="180" height="250" rx="16" fill="#fff6ea" stroke="#d5a253"/>
+  <text x="490" y="130" font-family="Arial, sans-serif" font-size="18" fill="#19323c">Joint Feature Space</text>
+  <text x="490" y="155" font-family="Arial, sans-serif" font-size="13" fill="#455a64">One daily vector combines:</text>
+  <text x="500" y="185" font-family="Arial, sans-serif" font-size="13" fill="#19323c">• zonal load</text>
+  <text x="500" y="208" font-family="Arial, sans-serif" font-size="13" fill="#19323c">• generator AF</text>
+  <text x="500" y="231" font-family="Arial, sans-serif" font-size="13" fill="#19323c">• optional DR</text>
+  <text x="500" y="270" font-family="Arial, sans-serif" font-size="13" fill="#455a64">Phase 1 picks the</text>
+  <text x="500" y="292" font-family="Arial, sans-serif" font-size="13" fill="#455a64">1-medoid actual day</text>
+
+  <rect x="710" y="100" width="150" height="250" rx="16" fill="#edf2fb" stroke="#8aa3c2"/>
+  <text x="730" y="130" font-family="Arial, sans-serif" font-size="18" fill="#19323c">Representative Day</text>
+  <rect x="745" y="180" width="80" height="55" rx="10" fill="#cfe0ff" stroke="#6e8ebf"/>
+  <text x="765" y="212" font-family="Arial, sans-serif" font-size="14" fill="#19323c">Medoid</text>
+  <text x="735" y="270" font-family="Arial, sans-serif" font-size="13" fill="#455a64">Actual observed day</text>
+  <text x="736" y="292" font-family="Arial, sans-serif" font-size="13" fill="#455a64">used for load, AF,</text>
+  <text x="750" y="314" font-family="Arial, sans-serif" font-size="13" fill="#455a64">and DR together</text>
+
+  <path d="M405 210 C435 210, 445 210, 470 210" fill="none" stroke="#627d98" stroke-width="3"/>
+  <polygon points="468,204 482,210 468,216" fill="#627d98"/>
+  <path d="M650 210 C675 210, 685 210, 710 210" fill="none" stroke="#627d98" stroke-width="3"/>
+  <polygon points="708,204 722,210 708,216" fill="#627d98"/>
+</svg>
