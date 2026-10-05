@@ -41,20 +41,22 @@ The HOPE-AI module is developed in collaboration with [Qian Zhang](https://seas.
 
 Install [Julia](http://julialang.org/) language (Julia 1.9 or later is required for the current HOPE package setup). A short video tutorial on how to download and install Julia is provided [here](https://www.youtube.com/watch?v=t67TGcf4SmM).
 
-## 2. Install HOPE
+## 2. Install the registered HOPE release (recommended for most users)
 
-After registration in Julia's General registry:
+At the Julia prompt, install HOPE from Julia's General registry:
 
 ```julia
 import Pkg
 Pkg.add("HOPE")
+using HOPE
 ```
 
-Until registration is complete, install directly from GitHub:
+This installs the latest compatible registered release. To update to a newer
+registered release later, run:
 
 ```julia
 import Pkg
-Pkg.add(url = "https://github.com/HOPE-Model-Project/HOPE.jl")
+Pkg.update("HOPE")
 ```
 
 Installation requires neither model cases nor commercial solver licenses.
@@ -72,15 +74,29 @@ PCM, holistic, or EREC examples. In a source checkout, cloning to
 `HOPE/ModelCases` also enables automatic discovery. Package installation never
 downloads or modifies the model-case repository.
 
-## 4. Development checkout and solvers
+## 4. Install the latest development version
 
-To work on HOPE itself, clone the repository, then activate and instantiate it:
+Developers and users who intentionally want the most recent, unreleased changes
+should clone the `main` branch. The destination directory is named `HOPE` below
+to match the example workflows in this README:
+
+```bash
+git clone https://github.com/HOPE-Model-Project/HOPE.jl.git HOPE
+cd HOPE
+julia --project=.
+```
+
+Then instantiate the checked-out project at the Julia prompt:
 
 ```julia
 import Pkg
-Pkg.activate(".")
 Pkg.instantiate()
+using HOPE
 ```
+
+The `main` branch may contain changes that have not yet been included in a
+registered release. To update an existing checkout, run `git pull` in the HOPE
+directory and then run `Pkg.instantiate()` again.
 
 HOPE installs HiGHS, GLPK, Clp, and Cbc as its open-source solver stack.
 Gurobi, SCIP, and CPLEX are optional extensions: install the corresponding Julia

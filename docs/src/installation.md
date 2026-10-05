@@ -8,26 +8,26 @@ CurrentModule = HOPE
 
 Install [Julia](http://julialang.org/) language. Julia 1.9 or later is required for the current HOPE package setup. A short video tutorial on how to download and install Julia is provided [here](https://www.youtube.com/watch?v=t67TGcf4SmM).
 
-## 2. Install HOPE
+## 2. Install the registered HOPE release (recommended for most users)
 
-After registration in General, install the latest release by package name:
+At the Julia prompt, install HOPE from Julia's General registry:
 
 ```julia
 import Pkg
 Pkg.add("HOPE")
+using HOPE
 ```
 
-Until the initial registration is accepted, or to install the development branch
-directly, use the repository URL:
+This installs the latest compatible registered release. To update to a newer
+registered release later, run:
 
 ```julia
 import Pkg
-Pkg.add(url = "https://github.com/HOPE-Model-Project/HOPE.jl")
+Pkg.update("HOPE")
 ```
 
-Both commands install and precompile the Julia package. They do not download
-model cases, start dashboards or MCP services, install Python, or require a
-commercial solver license.
+Package installation does not download model cases, start dashboards or MCP
+services, install Python, or require a commercial solver license.
 
 ## 3. Get model cases
 
@@ -42,20 +42,36 @@ Model-case downloads are explicit and separate from package installation. Set `H
 - **Linux / macOS:** `export HOPE_MODELCASES_PATH=/path/to/HOPEModelCases`
 - **Windows (PowerShell):** `$env:HOPE_MODELCASES_PATH = "C:\path\to\HOPEModelCases"`
 
-## 4. Solvers and source development
+## 4. Install the latest development version
+
+Developers and users who intentionally want the most recent, unreleased changes
+should clone the `main` branch. The destination directory is named `HOPE` below
+to match the example workflows in this documentation:
+
+```bash
+git clone https://github.com/HOPE-Model-Project/HOPE.jl.git HOPE
+cd HOPE
+julia --project=.
+```
+
+Then instantiate the checked-out project at the Julia prompt:
+
+```julia
+import Pkg
+Pkg.instantiate()
+using HOPE
+```
+
+The `main` branch may contain changes that have not yet been included in a
+registered release. To update an existing checkout, run `git pull` in the HOPE
+directory and then run `Pkg.instantiate()` again.
+
+## 5. Solvers
 
 A normal package installation includes the open-source solvers
 [HiGHS](https://github.com/jump-dev/HiGHS.jl), [Cbc](https://github.com/coin-or/Cbc),
 [GLPK](https://github.com/jump-dev/GLPK.jl), and
 [Clp](https://github.com/jump-dev/Clp.jl). No commercial license is required.
-
-For development from a source checkout, activate and instantiate the repository:
-
-```julia
-import Pkg
-Pkg.activate(".")
-Pkg.instantiate()
-```
 
 Commercial solver packages such as [Gurobi](https://www.gurobi.com/),
 [SCIP](https://scipopt.org/), and
@@ -72,7 +88,7 @@ Pkg.add("Gurobi")   # or "SCIP" / "CPLEX"
 When you do this from an active HOPE environment, the commercial solver package is added
 to the **HOPE project environment**, not just Julia's global default environment.
 
-## 5. Minimal self-contained example
+## 6. Minimal self-contained example
 
 This one-bus DART SCUC example uses only package dependencies and creates no files:
 
