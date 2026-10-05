@@ -61,6 +61,12 @@ Pkg.update("HOPE")
 
 Installation requires neither model cases nor commercial solver licenses.
 
+HOPE installs HiGHS, GLPK, Clp, and Cbc as its open-source solver stack.
+Gurobi, SCIP, and CPLEX are optional extensions: install the corresponding Julia
+package and solver license only when you choose to use one of them. Dashboards
+and the MCP server under `tools/` are separate Python applications and are not
+started or installed with the Julia package.
+
 ## 3. Get model cases
 
 Model cases are maintained separately in [HOPEModelCases](https://github.com/HOPE-Model-Project/HOPEModelCases). Clone them explicitly to a user-selected path:
@@ -74,14 +80,26 @@ PCM, holistic, or EREC examples. In a source checkout, cloning to
 `HOPE/ModelCases` also enables automatic discovery. Package installation never
 downloads or modifies the model-case repository.
 
-## 4. Install the latest development version
+> [!TIP]
+> If you installed HOPE with `Pkg.add("HOPE")`, your setup is now complete.
+> Continue to [Quick run with the registered package](#quick-run-with-the-registered-package).
+
+## 4. Optional alternative: Install the latest development version
+
+> [!NOTE]
+> This optional workflow replaces Steps 2 and 3. Use it only if you are
+> contributing to HOPE, testing unreleased changes, or developing
+> repository-based tools such as HOPE-AI, dashboards, or the MCP server. Most
+> users should skip this step.
 
 Developers and users who intentionally want the most recent, unreleased changes
 should clone the `main` branch. The destination directory is named `HOPE` below
-to match the example workflows in this README:
+to match the detailed example workflows in this README. The model cases are
+cloned inside the source checkout so those workflows use the expected paths:
 
 ```bash
 git clone https://github.com/HOPE-Model-Project/HOPE.jl.git HOPE
+git clone https://github.com/HOPE-Model-Project/HOPEModelCases HOPE/ModelCases
 cd HOPE
 julia --project=.
 ```
@@ -98,22 +116,41 @@ The `main` branch may contain changes that have not yet been included in a
 registered release. To update an existing checkout, run `git pull` in the HOPE
 directory and then run `Pkg.instantiate()` again.
 
-HOPE installs HiGHS, GLPK, Clp, and Cbc as its open-source solver stack.
-Gurobi, SCIP, and CPLEX are optional extensions: install the corresponding Julia
-package and solver license only when you choose to use one of them. Dashboards
-and the MCP server under `tools/` are separate Python applications and are not
-started or installed with the Julia package.
+> [!TIP]
+> Continue to the [Detailed source-checkout workflow](#detailed-source-checkout-workflow).
+> It expands this setup into screenshot-based instructions for first-time users.
 
 # Run a Case in HOPE
 
-> **Source-checkout note:** The screenshot-based workflows below assume a development
-> checkout with HOPEModelCases cloned into `HOPE/ModelCases`. With a registered or
-> URL-based installation, activate your own Julia environment and pass the absolute
-> or user-selected case path to `run_hope`; do not write into the installed package.
+## Quick run with the registered package
 
-## Using VScode to Run a Case (Recommend)
+After completing Steps 1 through 3, start Julia in the environment where you
+installed HOPE and pass the selected case directory to `run_hope`. For example:
 
-Install Visual Studio Code: Download [VScode](https://code.visualstudio.com/) and [install](https://code.visualstudio.com/docs/setup/setup-overview) it. A short video tutorial on how to install VScode and add Julia to it can be found [here](https://www.youtube.com/watch?v=oi5dZxPGNlk).
+```julia
+using HOPE
+
+case_path = "/absolute/path/to/HOPEModelCases/MD_GTEP_clean_case"
+HOPE.run_hope(case_path)
+```
+
+Replace `case_path` with the location where you cloned HOPEModelCases. Results
+are written to the case's `output` directory; HOPE does not write into its
+installed package directory.
+
+## Detailed source-checkout workflow
+
+The screenshot-based instructions below expand optional Step 4 into a complete
+first-time workflow. They intentionally repeat project activation and
+instantiation so contributors can follow the process from the beginning.
+
+> [!NOTE]
+> These instructions assume that HOPE is cloned as `HOPE` and HOPEModelCases is
+> cloned into `HOPE/ModelCases`, as shown in Step 4.
+
+### Using VS Code to Run a Case (Recommended)
+
+Install Visual Studio Code: Download [VS Code](https://code.visualstudio.com/) and [install](https://code.visualstudio.com/docs/setup/setup-overview) it. A short video tutorial on how to install VS Code and add Julia to it can be found [here](https://www.youtube.com/watch?v=oi5dZxPGNlk).
 
 **(1)** Open the VScode, click the 'File' tab, select 'Open Folder...', and navigate to your home working directory:`/yourpath/home`
 
@@ -148,13 +185,15 @@ This installs the default HOPE environment and the bundled open-source solvers. 
 The results will be saved in `yourpath/home/HOPE/ModelCases/MD_GTEP_clean_case/output`. An example of a successful run in Julia prompt can be seen below.
 ![image](https://github.com/HOPE-Model-Project/HOPE.jl/assets/125523842/99790827-4337-4991-a320-85ae2bd10be2)
 
-**(7)**  For your future new runs, you can skip steps 4 and 5, and just follow steps 1,2,3,6.
+**(7)** For future runs with this workflow, you can skip workflow steps (4) and
+(5), and repeat steps (1), (2), (3), and (6).
 
-## Using System Terminal to Run a Case
+### Using System Terminal to Run a Case
 
-You can use a system terminal () either with a "Windows system" or a "Mac system" to run a test case. See details below.
+You can use a system terminal on Windows or macOS to run a test case. See the
+platform-specific instructions below.
 
-### Windows users
+#### Windows users
 
 **(1)** Open **Command Prompt** from Windows **Start** and navigate to your home path:`/yourpath/home`.
 
@@ -180,13 +219,12 @@ The results will be saved in `yourpath/home/HOPE/ModelCases/MD_GTEP_clean_case/o
 
 ![image](https://github.com/HOPE-Model-Project/HOPE.jl/assets/125523842/99790827-4337-4991-a320-85ae2bd10be2)
 
-**(7)** For your future new runs, you can skip steps 4 and 5, and just follow steps 1,2,3,6.
+**(7)** For future runs with this workflow, you can skip workflow steps (4) and
+(5), and repeat steps (1), (2), (3), and (6).
 
-#### Mac users
+#### macOS users
 
-# Run your case
-
-Follow these steps:
+**Run your case:** Follow these steps:
 ![image](https://github.com/HOPE-Model-Project/HOPE.jl/assets/125523842/bc0ef4d9-b9b1-468a-a9a0-a0b2aa3d4340)
 
 # Solvers
