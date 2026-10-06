@@ -3,35 +3,47 @@ title: "HOPE - Holistic Optimization Program for Electricity"
 version: "2.0.0"
 date-released: "2026-10-01"
 message: >-
-  If you use this software, please cite both the software
-  and the paper listed under preferred-citation.
+  If you use this software, please cite both the HOPE software
+  and the foundational paper listed under references.
 type: software
-repository-code: "https://github.com/hope-model-project/HOPE.jl"
+repository-code: "https://github.com/HOPE-Model-Project/HOPE.jl"
 license: MIT
 authors:
   - given-names: Shen
     family-names: Wang
     email: worldspace321@gmail.com
     orcid: "https://orcid.org/0000-0003-3019-0899"
+  - given-names: Aidan
+    family-names: Looney
+  - given-names: Qian
+    family-names: Zhang
   - given-names: Zoe
     family-names: Song
+  - given-names: Ziting
+    family-names: Huang
+  - given-names: Juan
+    family-names: Senga
   - given-names: Mahdi
     family-names: Mehrtash
+  - given-names: Le
+    family-names: Xie
+  - given-names: Christopher
+    family-names: Knittel
   - given-names: Benjamin F.
     family-names: Hobbs
-preferred-citation:
-  type: article
-  authors:
-    - given-names: Shen
-      family-names: Wang
-    - given-names: Zoe
-      family-names: Song
-    - given-names: Mahdi
-      family-names: Mehrtash
-    - given-names: Benjamin F.
-      family-names: Hobbs
-  title: "HOPE: Holistic Optimization Program for Electricity"
-  journal: SoftwareX
-  volume: 29
-  year: 2025
-  doi: "10.1016/j.softx.2024.101982"
+references:
+  - type: article
+    authors:
+      - given-names: Shen
+        family-names: Wang
+      - given-names: Zoe
+        family-names: Song
+      - given-names: Mahdi
+        family-names: Mehrtash
+      - given-names: Benjamin F.
+        family-names: Hobbs
+    title: "HOPE: Holistic Optimization Program for Electricity"
+    journal: SoftwareX
+    volume: 29
+    year: 2025
+    doi: "10.1016/j.softx.2024.101982"

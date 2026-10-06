@@ -290,6 +290,53 @@ For MCP / agent setup guidance, see:
 - [HOPE-AI: Running HOPE with an LLM Agent](https://hope-model-project.github.io/HOPE.jl/dev/hope_ai/)
 - [Local MCP server README](tools/hope_mcp_server/README.md)
 
+# Citation
+
+If HOPE contributes to your work, please cite both the software release and the
+foundational SoftwareX paper. The software citation credits the complete
+development team, while the paper documents the original model and methodology.
+GitHub's **Cite this repository** menu generates the software citation from
+[`CITATION.cff`](CITATION.cff).
+
+## HOPE software
+
+> Wang, S., Looney, A., Zhang, Q., Song, Z., Huang, Z., Senga, J.,
+> Mehrtash, M., Xie, L., Knittel, C., & Hobbs, B. F. (2026). *HOPE - Holistic
+> Optimization Program for Electricity* (Version 2.0.0) [Computer software].
+> https://github.com/HOPE-Model-Project/HOPE.jl
+
+```bibtex
+@software{hope_software_2026,
+  author  = {Wang, Shen and Looney, Aidan and Zhang, Qian and
+             Song, Zoe and Huang, Ziting and Senga, Juan and
+             Mehrtash, Mahdi and Xie, Le and Knittel, Christopher and
+             Hobbs, Benjamin F.},
+  title   = {{HOPE - Holistic Optimization Program for Electricity}},
+  version = {2.0.0},
+  year    = {2026},
+  url     = {https://github.com/HOPE-Model-Project/HOPE.jl}
+}
+```
+
+## Foundational paper
+
+> Wang, S., Song, Z., Mehrtash, M., & Hobbs, B. F. (2025). HOPE: Holistic
+> Optimization Program for Electricity. *SoftwareX, 29*, 101982.
+> https://doi.org/10.1016/j.softx.2024.101982
+
+```bibtex
+@article{wang_hope_2025,
+  author  = {Wang, Shen and Song, Zoe and Mehrtash, Mahdi and
+             Hobbs, Benjamin F.},
+  title   = {{HOPE: Holistic Optimization Program for Electricity}},
+  journal = {SoftwareX},
+  volume  = {29},
+  pages   = {101982},
+  year    = {2025},
+  doi     = {10.1016/j.softx.2024.101982}
+}
+```
+
 # Research & Publication
 
 [Energy Resilience and Efficiency in Maryland](https://mde.maryland.gov/programs/air/ClimateChange/MCCC/Doclib_ERE/EREWG%20Study%20Report%20--%20Energy%20Resilience%20and%20Efficiency%20in%20Maryland.pdf)
