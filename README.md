@@ -8,11 +8,20 @@
 
 ## How to cite HOPE?
 
-You can cite the paper:
+Please cite the HOPE software repository:
+
+```
+Wang, S., Looney, A., Zhang, Q., Song, Z., Huang, Z., Senga, J., Mehrtash, M., Xie, L., Knittel, C., & Hobbs, B. F. (2026). HOPE - Holistic Optimization Program for Electricity (Version 2.0.0) [Computer software]. https://github.com/HOPE-Model-Project/HOPE.jl
+```
+
+Please also cite the foundational paper:
 
 ```
 Wang, S., Song, Z., Mehrtash, M., & Hobbs, B. F. (2025). HOPE: Holistic Optimization Program for Electricity. SoftwareX, 29, 101982. https://doi.org/10.1016/j.softx.2024.101982
 ```
+
+See the repository [`CITATION.cff`](CITATION.cff) and the full [Citation](#citation)
+section below for citation metadata and BibTeX entries.
 
 # Overview
 
