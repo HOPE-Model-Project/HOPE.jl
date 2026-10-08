@@ -312,7 +312,7 @@ GitHub's **Cite this repository** menu generates the software citation from
 > Wang, S., Looney, A., Zhang, Q., Song, Z., Huang, Z., Senga, J.,
 > Mehrtash, M., Xie, L., Knittel, C., & Hobbs, B. F. (2026). *HOPE - Holistic
 > Optimization Program for Electricity* (Version 2.0.0) [Computer software].
-> https://github.com/HOPE-Model-Project/HOPE.jl
+> <https://github.com/HOPE-Model-Project/HOPE.jl>
 
 ```bibtex
 @software{hope_software_2026,
@@ -331,7 +331,7 @@ GitHub's **Cite this repository** menu generates the software citation from
 
 > Wang, S., Song, Z., Mehrtash, M., & Hobbs, B. F. (2025). HOPE: Holistic
 > Optimization Program for Electricity. *SoftwareX, 29*, 101982.
-> https://doi.org/10.1016/j.softx.2024.101982
+> <https://doi.org/10.1016/j.softx.2024.101982>
 
 ```bibtex
 @article{wang_hope_2025,
