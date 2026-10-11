@@ -19,7 +19,7 @@ Once configured, Claude Desktop will have access to **16 HOPE tools** organized 
 | Tool | Description |
 | ------ | ------------- |
 | `hope_warmup` | Pre-compiles the Julia/HOPE environment in the background. Call once per session before the first run. Returns a `job_id` immediately. |
-| `hope_run_hope` | Launches a HOPE single-case optimization run (GTEP or PCM) in the background. Returns a `job_id` immediately. |
+| `hope_run_hope` | Launches a HOPE single-case optimization run (GTEP, PCM, or DART) in the background. Returns a `job_id` immediately. |
 | `hope_run_holistic` | Launches a two-stage GTEP→PCM holistic workflow: Stage 1 solves capacity expansion; Stage 2 fixes the built fleet and runs production-cost dispatch. Returns a `job_id` immediately. |
 | `hope_run_erec` | Launches EREC (Equivalent Reliability Enhancement Capability) postprocessing on a completed run to quantify each resource's reliability contribution. Returns a `job_id` immediately. |
 | `hope_job_status` | Polls any background job for progress. Returns elapsed time, stdout tail, and the full output summary when the job completes. |
@@ -36,7 +36,7 @@ Once configured, Claude Desktop will have access to **16 HOPE tools** organized 
 | Tool | Description |
 | ------ | ------------- |
 | `hope_case_info` | Reads case settings and output file inventory instantly — no Julia required. |
-| `hope_output_summary` | Reads and summarizes existing output CSVs (system cost, capacity builds, storage builds) instantly — no Julia required. |
+| `hope_output_summary` | Reads and summarizes existing output CSVs (planning cost/builds or DART acceptance, coverage, settlement, and solver status) instantly — no Julia required. |
 | `hope_read_output` | Reads any specific output CSV with optional column filters — e.g., dispatch for a single zone, or capacity for one technology. |
 | `hope_emission_compliance` | Parses `carbon_emissions.csv` and `rps_target.csv` to report per-state compliance status, violation amounts, and penalty costs. |
 | `hope_nodal_prices` | Reads locational marginal prices (LMPs) from `nodal_prices.csv`, optionally filtered by bus/zone and hour range. |
@@ -58,7 +58,7 @@ Once configured, Claude Desktop will have access to **16 HOPE tools** organized 
 
 | Tool | Description |
 |------|-------------|
-| `hope_open_dashboard` | Launches the local HOPE Dash dashboard for a completed case run and returns its URL. Automatically picks the GTEP dashboard (port 8051) or the PCM dashboard (port 8050) based on `model_mode`. If a dashboard is already running on the target port, returns the existing URL immediately. |
+| `hope_open_dashboard` | Launches the GTEP or PCM dashboard for a completed case. DART has no dashboard yet and returns an explicit unsupported-mode response; its CSVs remain available through the output tools. |
 | `hope_close_dashboard` | Stops a dashboard launched by `hope_open_dashboard`. Pass `port=8051` or `port=8050` to stop a specific dashboard, or omit `port` to stop all dashboards tracked in the current session. |
 
 ---

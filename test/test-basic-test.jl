@@ -26,6 +26,9 @@
     @test isdefined(HOPE, :VALID_MODEL_MODES)
     @test isdefined(HOPE, :HOURS_PER_YEAR)
     @test isdefined(HOPE, :REQUIRED_FILES)
+    @test HOPE.VALID_MODEL_MODES == ["GTEP", "PCM", "DART"]
+    @test haskey(HOPE.REQUIRED_FILES, "DART")
+    @test HOPE.validate_model_mode("DART")
 
     @test !Base.isexported(HOPE, :get_representative_ts)
     @test !Base.isexported(HOPE, :get_TPmatched_ts)

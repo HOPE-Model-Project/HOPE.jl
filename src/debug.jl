@@ -46,7 +46,15 @@ function run_debug(case::AbstractString)
     path = case
     outpath = joinpath(path, "debug_report")
     mkdir_overwrite(outpath)
-    config_set = YAML.load(open(joinpath(case, "Settings", "HOPE_model_settings.yml")))
+    config_set = YAML.load_file(joinpath(case, "Settings", "HOPE_model_settings.yml"))
+    model_mode = uppercase(string(get(config_set, "model_mode", "")))
+    config_set["model_mode"] = model_mode
+    validate_model_mode(model_mode)
+    model_mode == "DART" && throw(
+        ArgumentError(
+            "run_debug does not support rolling DART cases. Set debug: 0 and use validate_hope before run_hope.",
+        ),
+    )
 
     #Set solver configuration
     optimizer = initiate_solver(path, config_set["solver"])
@@ -55,14 +63,10 @@ function run_debug(case::AbstractString)
     input_data = load_data(config_set, path)
 
     #create model
-    if config_set["model_mode"] == "GTEP"
+    if model_mode == "GTEP"
         my_model = create_GTEP_model(config_set, input_data, optimizer)
-    elseif config_set["model_mode"] == "PCM"
-        my_model = create_PCM_model(config_set, input_data, optimizer)
     else
-        println(
-            "ModeError: Please check the model mode, it should be 'GTEP' or 'PCM', the 'OPF' and 'DART' are currently not availiable!",
-        )
+        my_model = create_PCM_model(config_set, input_data, optimizer)
     end
     #debug model
     println("Debugging...")

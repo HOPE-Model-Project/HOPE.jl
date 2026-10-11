@@ -73,13 +73,14 @@ if !@isdefined(COLOR_MAP)
     const ORDERED_ES_TECH = ["Hydro_pump", "Battery"]
 
     # Model configuration constants
-    const VALID_MODEL_MODES = ["GTEP", "PCM"]
+    const VALID_MODEL_MODES = ["GTEP", "PCM", "DART"]
     const HOURS_PER_YEAR = 8760
 
     # File patterns
     const REQUIRED_FILES = Dict(
         "GTEP" => ["GTEP_input_total.xlsx", "HOPE_model_settings.yml"],
         "PCM" => ["PCM_input_total.xlsx", "HOPE_model_settings.yml"],
+        "DART" => ["manifest.yml", "stable_ids.csv", "HOPE_model_settings.yml"],
     )
 
 end # Guard against redefinition

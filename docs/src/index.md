@@ -11,7 +11,7 @@ HOPE currently provides five primary Julia workflows:
 
 1. the `GTEP` generation and transmission expansion planning model;
 2. the `PCM` production cost model;
-3. the `DART` module for in-memory day-ahead and real-time SCUC/SCED and settlement modeling;
+3. the `DART` day-ahead and real-time SCUC/SCED workflow, available through standard file-backed cases and a typed in-memory API;
 4. the holistic two-stage `GTEP`-to-`PCM` workflow; and
 5. the `EREC` postprocessing workflow.
 
@@ -30,7 +30,7 @@ Both dashboards can also be run locally — see [Run a Case in HOPE](@ref) for i
 
 # Model Cases Library
 
-Input data and configuration files for running HOPE are maintained in a separate repository: [HOPEModelCases](https://github.com/HOPE-Model-Project/HOPEModelCases). It includes cases spanning a range of test systems (IEEE 14/118, RTS-24, ISO-NE, PJM, Germany) and study questions including expansion planning, production cost modeling, resource aggregation, and holistic planning runs.
+Input data and configuration files for running HOPE are maintained in a separate repository: [HOPEModelCases](https://github.com/HOPE-Model-Project/HOPEModelCases). It includes cases spanning a range of test systems (IEEE 14/118, RTS-24, ISO-NE, PJM, Germany) and study questions including expansion planning, production cost modeling, day-ahead/real-time market operations, resource aggregation, and holistic planning runs.
 
 See [Installation](@ref) for setup instructions.
 

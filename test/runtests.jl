@@ -17,4 +17,6 @@ using Test
     include("test-lmp-sign-regression.jl")
     include("test-pcm-constraints.jl")
     include("test-dart.jl")
+    include("test-operational-snapshot.jl")
+    include("test-dart-workflow.jl")
 end

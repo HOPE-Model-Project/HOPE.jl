@@ -8,8 +8,9 @@ HOPE 2.0 supports five Julia workflows:
   `run_hope_holistic_fresh`;
 - EREC postprocessing through `calculate_erec` and
   `calculate_erec_from_output`; and
-- in-memory day-ahead/real-time SCUC and SCED through the exported DART types
-  and functions.
+- file-backed DART studies through `run_hope` and `validate_hope`, plus
+  programmatic day-ahead/real-time SCUC and SCED through the exported DART
+  types and functions.
 
 ## Supported public interface
 
@@ -26,8 +27,9 @@ in the [API Reference](@ref reference). The main groups are:
   `aggregate_gendata_pcm`;
 - EREC: `calculate_erec`, `calculate_erec_from_output`,
   `load_erec_settings`, and `load_postprocess_snapshot`;
-- DART: the exported `DART*` data/result types, model builders, solvers,
-  rolling-state helpers, and settlement calculation.
+- DART: `load_dart_case`, `validate_dart_case`, `run_dart_case`, the
+  exported `DART*` data/result types, installed-system converters, model
+  builders, solvers, rolling-state helpers, and settlement calculation.
 
 Unexported names are implementation details and may change without deprecation.
 Input CSV/XLSX columns and YAML settings form a versioned data contract; breaking
@@ -52,8 +54,8 @@ package directory. Tests use temporary directories for generated outputs.
 
 ## Current limitations
 
-- GTEP and PCM file-based workflows require a compatible external case
-  directory.
+- GTEP, PCM, and DART file-based workflows require a compatible external case
+  directory. DART also retains a self-contained typed in-memory API.
 - DART V1 uses lossless nodal PTDF networks, system-wide reserves, generator
   contingencies, and pay-as-bid reserve settlement. Line contingencies, zonal
   transport, demand response, and policy constraints are outside its current

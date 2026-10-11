@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Standard file-backed DART cases through `run_hope` and `validate_hope`,
+  including installed-system manifests, stable IDs, initial operational state,
+  native subhourly realization files, acceptance checks, and standard outputs.
+- Standalone RTS24 DART reference case with all compatible constraint families.
+
+### Changed
+
+- DART static generator and storage attributes now live in the canonical
+  `gendata.csv` and `storagedata.csv` inputs.
+- Shared model-mode validation and HOPE-AI tooling now recognize DART. The MCP
+  output summary reports DART acceptance, constraint coverage, settlement, and
+  solver status; dashboard requests return an explicit unsupported-mode error.
+
 ## [2.0.0] - 2026-10-01
 
 ### Breaking

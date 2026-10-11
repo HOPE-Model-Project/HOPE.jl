@@ -29,7 +29,7 @@ The **Holistic Optimization Program for Electricity (HOPE)** is a transparent an
 
 1. `GTEP`: a generation and transmission expansion planning mode for evaluating long-term investment and policy pathways;
 2. `PCM`: a production cost modeling mode for simulating power system operations and dispatch;
-3. `DART`: a module for individual-generator day-ahead and real-time SCUC/SCED, market operations, and settlement modeling;
+3. `DART`: a model mode and typed API for individual-generator day-ahead and real-time SCUC/SCED, market operations, and settlement modeling;
 4. `OPF`: an optimal power flow mode, under development, that will support network-constrained power flow and related analyses; and
 5. `HOPE-AI`: an AI-agent module, under active development, envisioned as a multi-agent coordination layer that connects HOPE's planning, operations, markets, policy, data, and analytical capabilities into accessible modeling workflows. The current framework is powered by [PowerAgent](https://github.com/Power-Agent), with more specialized agents under development.
 
@@ -85,7 +85,7 @@ git clone https://github.com/HOPE-Model-Project/HOPEModelCases /path/to/HOPEMode
 ```
 
 Set `HOPE_MODELCASES_PATH` to that directory before running file-based GTEP,
-PCM, holistic, or EREC examples. In a source checkout, cloning to
+PCM, DART, holistic, or EREC examples. In a source checkout, cloning to
 `HOPE/ModelCases` also enables automatic discovery. Package installation never
 downloads or modifies the model-case repository.
 
@@ -146,6 +146,20 @@ HOPE.run_hope(case_path)
 Replace `case_path` with the location where you cloned HOPEModelCases. Results
 are written to the case's `output` directory; HOPE does not write into its
 installed package directory.
+
+The same API runs a standalone DART case:
+
+```julia
+using HOPE
+
+case_path = "/absolute/path/to/HOPEModelCases/RTS24_DART_case"
+HOPE.validate_hope(case_path)
+HOPE.run_hope(case_path)
+```
+
+DART cases use `Settings/HOPE_model_settings.yml` with `model_mode: DART`,
+the same top-level case workflow as GTEP and PCM, and separate native
+five-minute load, wind, and solar realization files when available.
 
 ## Detailed source-checkout workflow
 

@@ -256,6 +256,7 @@ end
         pmax_mw = 100.0,
         startup_limit_mw = 5.0,
         shutdown_limit_mw = 30.0,
+        ramp_down_mw_per_hour = 12.0,
         real_time_ramp_up_mw_per_hour = 60.0,
         real_time_ramp_down_mw_per_hour = 60.0,
     )
@@ -272,6 +273,36 @@ end
     )
     ramp = solve_dart_sced(data, forecast, state([1], [10.0]), [1]; config = config)
     @test ramp.generation_mw[1, 1] ≈ 15.0 atol = 1e-6
+
+    availability_drop_forecast = DARTForecast(
+        interval_hours = 1 / 12,
+        load_mw = reshape([50.0, 49.0], 1, :),
+        availability = fill(0.5, 1, 2),
+    )
+    availability_drop = solve_dart_sced(
+        data,
+        availability_drop_forecast,
+        state([1], [100.0]),
+        ones(Int, 1, 2);
+        config = config,
+    )
+    @test isapprox(vec(availability_drop.generation_mw), [50.0, 49.0]; atol = 1e-6)
+
+    day_ahead_availability_drop = solve_dart_scuc(
+        data,
+        DARTForecast(
+            interval_hours = 1.0,
+            load_mw = reshape([50.0, 38.0], 1, :),
+            availability = fill(0.5, 1, 2),
+        ),
+        state([1], [100.0]);
+        config = config,
+    )
+    @test isapprox(
+        vec(day_ahead_availability_drop.generation_mw),
+        [50.0, 38.0];
+        atol = 1e-6,
+    )
 
     startup = solve_dart_sced(data, forecast, state([0], [0.0]), [1]; config = config)
     @test startup.generation_mw[1, 1] ≈ 5.0 atol = 1e-6

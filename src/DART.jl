@@ -438,6 +438,18 @@ function _available_pmax(data, forecast, config, g, t)
            _for_factor(generator, config)
 end
 
+# A drop in available Pmax is forced output loss, not operator-controlled
+# ramp-down. Preserve the configured ramp for any additional downward movement.
+
+function _availability_ramp_down_allowance(data, forecast, state, config, g, t)
+    current_pmax = _available_pmax(data, forecast, config, g, t)
+    if t == 1
+        return max(state.generation_mw[g] - current_pmax, 0.0)
+    end
+    previous_pmax = _available_pmax(data, forecast, config, g, t - 1)
+    return max(previous_pmax - current_pmax, 0.0)
+end
+
 function _effective_commitment(forecast, commitment, g, t)
     return forecast.generator_in_service[g, t] ? commitment[g, t] : 0.0
 end
@@ -1039,13 +1051,17 @@ function build_dart_scuc_model(
         end
         observed_trip = previous_service && !current_service
         if isfinite(generator.ramp_down_mw_per_hour) && !observed_trip
+            availability_drop =
+                _availability_ramp_down_allowance(data, forecast, state, config, g, t)
             @constraint(
                 model,
                 previous_generation - generation[g, t] + downward_reserve <=
                 generator.ramp_down_mw_per_hour *
                 _for_factor(generator, config) *
                 dt *
-                current_effective_commitment + generator.shutdown_limit_mw * shutdown[g, t]
+                current_effective_commitment +
+                generator.shutdown_limit_mw * shutdown[g, t] +
+                availability_drop
             )
         end
     end
@@ -1170,10 +1186,12 @@ function build_dart_sced_model(
                     previous_generation - generation[g, t] <= generator.shutdown_limit_mw
                 )
             elseif isfinite(generator.real_time_ramp_down_mw_per_hour)
+                availability_drop =
+                    _availability_ramp_down_allowance(data, forecast, state, config, g, t)
                 @constraint(
                     model,
                     previous_generation - generation[g, t] <=
-                    generator.real_time_ramp_down_mw_per_hour * dt
+                    generator.real_time_ramp_down_mw_per_hour * dt + availability_drop
                 )
             end
         end

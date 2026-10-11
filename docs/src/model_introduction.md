@@ -9,7 +9,7 @@ HOPE's core optimization models and workflows are:
 
 1. the `GTEP` generation and transmission expansion planning model;
 2. the `PCM` production cost model for system operation;
-3. the `DART` module for in-memory day-ahead and real-time SCUC/SCED and settlement modeling;
+3. the `DART` day-ahead and real-time SCUC/SCED model, with both file-backed and typed in-memory workflows;
 4. the holistic two-stage `GTEP`-to-`PCM` workflow; and
 5. the `EREC` postprocessing workflow.
 
@@ -63,6 +63,18 @@ Both `GTEP` and `PCM` support:
 
 ## DART Module
 
-The lightweight in-memory DART API provides individual-generator day-ahead
-SCUC, rolling real-time SCED, generator N-1 security, and two-settlement
-accounting. See [DART](@ref).
+DART provides individual-generator day-ahead SCUC, rolling real-time SCED,
+generator N-1 security, storage and reserve co-optimization, and two-settlement
+accounting. Standard cases use `Settings/HOPE_model_settings.yml` with
+`model_mode: DART`; the typed Julia API remains available for programmatic
+studies.
+
+DART currently requires a lossless nodal PTDF network. Compatible operating
+features include binary or continuous day-ahead commitment, hourly DA and
+subhourly RT chronology, four reserve products, generator contingencies,
+realized outages, storage, interchange, and settlement. Planning, investment,
+representative-day, aggregation, policy, and flexible-demand features are
+rejected during DART validation rather than silently ignored.
+
+See [DART](@ref), [DART Input Data](@ref dart-inputs), and
+[RTS24 DART Case](@ref).

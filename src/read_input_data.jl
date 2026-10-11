@@ -656,9 +656,10 @@ end
 
 Load all input data for a HOPE case from the directory `path`.
 
-`config_set` is the parsed `HOPE_model_settings.yml` dictionary; it controls the model
-mode (`"GTEP"` or `"PCM"`), the data subfolder (`DataCase`), and optional pre-processing
-such as resource aggregation and endogenous representative-day selection.
+`config_set` is the parsed `HOPE_model_settings.yml` dictionary. This legacy
+table loader handles the `"GTEP"` and `"PCM"` modes, their `DataCase` folders,
+and optional preprocessing such as resource aggregation and representative-day
+selection. Standard `"DART"` cases use `load_dart_case` instead.
 
 Returns a `Dict` whose keys include `"Gendata"`, `"Loaddata"`, `"Zonedata"`,
 `"Linedata"`, and other model-mode-specific tables.

@@ -98,6 +98,29 @@ Note:
 
 **(7)** For future runs, you can usually skip steps 4 and 5 and just follow steps 1, 2, 3, and 6.
 
+## Run a DART Case
+
+DART uses the same top-level API and settings filename as GTEP and PCM:
+
+```julia
+using HOPE
+
+case_path = "ModelCases/RTS24_DART_case"
+validation = HOPE.validate_hope(case_path)
+results = HOPE.run_hope(case_path)
+```
+
+`validate_hope` checks the manifest, stable IDs, input hashes, installed
+network, native real-time chronology, initial state, settings compatibility,
+and enabled constraint families without solving or writing output.
+
+DART writes separate day-ahead and real-time dispatch, flow, storage, and
+solver-status CSVs together with `acceptance_summary.csv`,
+`constraint_coverage.csv`, and `settlement_summary.csv`.
+
+See [DART](@ref), [DART Input Data](@ref dart-inputs), and
+[RTS24 DART Case](@ref).
+
 ## Reuse a Saved Baseline for EREC
 
 For `GTEP` studies, you can ask HOPE to save a machine-readable baseline snapshot together with the normal run outputs. Add this line in `Settings/HOPE_model_settings.yml`:

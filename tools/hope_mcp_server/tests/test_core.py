@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -11,6 +12,8 @@ sys.path.insert(0, str(PACKAGE_ROOT / "src"))
 
 from hope_mcp_server.core import (
     _Job,
+    _MODEL_MODE_OPTIONS,
+    _validate_settings_dict,
     _jobs,
     build_run_command,
     hope_cancel_job,
@@ -18,9 +21,11 @@ from hope_mcp_server.core import (
     hope_debug_solver_environment,
     hope_debug_solver_environment_async,
     hope_job_status,
+    hope_open_dashboard,
     hope_output_summary,
     hope_run_hope,
     julia_string_literal,
+    parse_dart_output_summary,
     setup_command,
 )
 from hope_mcp_server.server import create_mcp_server
@@ -70,6 +75,62 @@ class HopeCoreTests(unittest.TestCase):
         ]
         self.assertTrue(solar_builds)
         self.assertIn("system_cost.csv", result["available_output_files"])
+
+    def test_dart_mode_and_output_summary_are_supported(self) -> None:
+        self.assertIn("DART", _MODEL_MODE_OPTIONS)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            (output / "acceptance_summary.csv").write_text(
+                "all_solves_optimal,day_ahead_solves,real_time_solves\ntrue,2,24\n",
+                encoding="utf-8",
+            )
+            (output / "constraint_coverage.csv").write_text(
+                "constraint_family,enabled\na,true\nb,true\n",
+                encoding="utf-8",
+            )
+            (output / "day_ahead_solver.csv").write_text(
+                "termination_status,primal_status\nOPTIMAL,FEASIBLE_POINT\nOPTIMAL,FEASIBLE_POINT\n",
+                encoding="utf-8",
+            )
+            (output / "real_time_solver.csv").write_text(
+                "termination_status,primal_status\nOPTIMAL,FEASIBLE_POINT\n",
+                encoding="utf-8",
+            )
+            summary = parse_dart_output_summary(output)
+        self.assertEqual(summary["dart_acceptance"]["day_ahead_solves"], "2")
+        self.assertEqual(summary["dart_constraint_coverage"], {"enabled": 2, "total": 2})
+        self.assertEqual(
+            summary["dart_solver_status_counts"]["day_ahead"],
+            {"OPTIMAL / FEASIBLE_POINT": 2},
+        )
+
+    def test_dart_dashboard_returns_explicit_unsupported_error(self) -> None:
+        case_path = REPO_ROOT / "ModelCases" / "RTS24_DART_case"
+        if not case_path.is_dir():
+            self.skipTest("RTS24_DART_case is unavailable")
+        result = hope_open_dashboard("RTS24_DART_case")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "dashboard_unsupported_model_mode")
+        self.assertEqual(result["model_mode"], "DART")
+
+    def test_dart_settings_warnings_match_julia_compatibility_rules(self) -> None:
+        warnings = _validate_settings_dict(
+            {
+                "model_mode": "DART",
+                "resource_aggregation": 1,
+                "network_model": 2,
+                "transmission_loss": 1,
+                "unit_commitment": 2,
+                "debug": 1,
+                "reference_bus": 1,
+            }
+        )
+        joined = "\n".join(warnings)
+        self.assertIn("resource_aggregation", joined)
+        self.assertIn("network_model=3", joined)
+        self.assertIn("transmission_loss=0", joined)
+        self.assertIn("unit_commitment must be 0 or 1", joined)
+        self.assertIn("debug=0", joined)
 
     def test_invalid_case_id_returns_allowed_values_error(self) -> None:
         result = hope_case_info("not_a_case")

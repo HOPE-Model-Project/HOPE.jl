@@ -509,14 +509,58 @@ def parse_storage_builds(output_dir: Path) -> list[dict[str, Any]]:
     return builds
 
 
+def _first_csv_row(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    rows = read_csv_rows(path)
+    return rows[0] if rows else None
+
+
+def _solver_status_counts(path: Path) -> dict[str, int]:
+    if not path.is_file():
+        return {}
+    counts: dict[str, int] = {}
+    for row in read_csv_rows(path):
+        termination = (row.get("termination_status") or "UNKNOWN").strip()
+        primal = (row.get("primal_status") or "UNKNOWN").strip()
+        label = f"{termination} / {primal}"
+        counts[label] = counts.get(label, 0) + 1
+    return counts
+
+
+def parse_dart_output_summary(output_dir: Path) -> dict[str, Any]:
+    """Read compact DART acceptance, coverage, settlement, and solver summaries."""
+    coverage_path = output_dir / "constraint_coverage.csv"
+    coverage = read_csv_rows(coverage_path) if coverage_path.is_file() else []
+    enabled = [
+        row for row in coverage
+        if str(row.get("enabled", "")).strip().lower() == "true"
+    ]
+    return {
+        "dart_acceptance": _first_csv_row(output_dir / "acceptance_summary.csv"),
+        "dart_settlement": _first_csv_row(output_dir / "settlement_summary.csv"),
+        "dart_constraint_coverage": {
+            "enabled": len(enabled),
+            "total": len(coverage),
+        } if coverage else None,
+        "dart_solver_status_counts": {
+            "day_ahead": _solver_status_counts(output_dir / "day_ahead_solver.csv"),
+            "real_time": _solver_status_counts(output_dir / "real_time_solver.csv"),
+        },
+    }
+
+
 def build_output_summary_payload(case_id: str, case_path: Path) -> dict[str, Any]:
     output_dir = output_dir_for_case(case_path)
     output_files = list_top_level_output_csvs(output_dir)
     total_system_cost, zone_costs = parse_system_cost_summary(output_dir)
+    settings = read_yaml(settings_path_for_case(case_path))
+    model_mode = str(settings.get("model_mode", "")).upper()
 
-    return {
+    payload = {
         "case_id": case_id,
         "case_path": str(case_path),
+        "model_mode": model_mode,
         "output_path": str(output_dir),
         "output_exists": output_dir.is_dir(),
         "available_output_files": output_files,
@@ -526,7 +570,9 @@ def build_output_summary_payload(case_id: str, case_path: Path) -> dict[str, Any
         "new_generation_builds": parse_generation_builds(output_dir),
         "new_storage_builds": parse_storage_builds(output_dir),
     }
-
+    if model_mode == "DART":
+        payload.update(parse_dart_output_summary(output_dir))
+    return payload
 
 def hope_case_info(case_id: str = "md_gtep_clean") -> dict[str, Any]:
     case_path, error = resolve_case(case_id)
@@ -946,6 +992,8 @@ _INT_SETTING_KEYS = {
     "network_model": (0, 1, 2, 3),
     "unit_commitment": (0, 1, 2),
     "debug": (0, 1, 2),
+    "clean_energy_policy": (0, 1, 2),
+    "save_postprocess_snapshot": (0, 1, 2),
 }
 
 _BINARY_SETTING_KEYS = (
@@ -955,15 +1003,13 @@ _BINARY_SETTING_KEYS = (
     "flexible_demand",
     "inv_dcs_bin",
     "summary_table",
-    "save_postprocess_snapshot",
-    "clean_energy_policy",
     "transmission_expansion",
     "transmission_loss",
     "write_shadow_prices",
 )
 
 _SOLVER_OPTIONS = ("cbc", "clp", "highs", "scip", "gurobi", "cplex")
-_MODEL_MODE_OPTIONS = ("GTEP", "PCM")
+_MODEL_MODE_OPTIONS = ("GTEP", "PCM", "DART")
 
 # Known contradictions: (key_a, value_a, key_b, value_b, message)
 _CONTRADICTIONS = [
@@ -1076,14 +1122,37 @@ def _validate_settings_dict(settings: dict[str, Any]) -> list[str]:
             except (TypeError, ValueError):
                 pass
 
-    # PCM-only flags in GTEP mode
-    model_mode = settings.get("model_mode", "")
-    if model_mode == "GTEP":
-        for key in ("unit_commitment", "write_shadow_prices"):
+    # Mode-specific compatibility checks. Julia's validate_hope remains the
+    # authoritative validator; these warnings provide fast MCP feedback.
+    model_mode = str(settings.get("model_mode", "")).upper()
+    if model_mode == "GTEP" and settings.get("unit_commitment", 0):
+        warnings.append(
+            "unit_commitment has no effect in GTEP mode (model_mode='GTEP')."
+        )
+    if model_mode == "DART":
+        unavailable = {
+            "resource_aggregation": "resource aggregation",
+            "endogenous_rep_day": "representative days",
+            "external_rep_day": "representative days",
+            "flexible_demand": "flexible demand",
+            "clean_energy_policy": "clean-energy policy",
+            "carbon_policy": "carbon policy",
+            "planning_reserve_mode": "planning reserve",
+            "inv_dcs_bin": "investment decisions",
+            "transmission_expansion": "transmission expansion",
+            "save_postprocess_snapshot": "GTEP postprocessing snapshots",
+        }
+        for key, label in unavailable.items():
             if settings.get(key, 0):
-                warnings.append(
-                    f"{key}=1 has no effect in GTEP mode (model_mode='GTEP')."
-                )
+                warnings.append(f"{key} enables {label}, which is unavailable in DART.")
+        if settings.get("network_model", 3) != 3:
+            warnings.append("DART requires network_model=3 (nodal PTDF).")
+        if settings.get("transmission_loss", 0) != 0:
+            warnings.append("DART requires transmission_loss=0.")
+        if settings.get("unit_commitment", 1) not in (0, 1):
+            warnings.append("DART unit_commitment must be 0 or 1.")
+        if settings.get("debug", 0) != 0:
+            warnings.append("DART rolling debug is unavailable; set debug=0.")
 
     # Nodal model without reference_bus
     if settings.get("network_model", 0) in (2, 3) and not settings.get("reference_bus"):
@@ -1880,10 +1949,19 @@ def hope_open_dashboard(
         runner_script = dashboard_dir / "run_dashboard.py"
         default_port = 8050
         app_label = "PCM Dashboard"
-    else:
+    elif model_mode == "GTEP":
         runner_script = dashboard_dir / "run_gtep_dashboard.py"
         default_port = 8051
         app_label = "GTEP Dashboard"
+    else:
+        return error_result(
+            "dashboard_unsupported_model_mode",
+            f"No local dashboard is implemented for model_mode={model_mode}. "
+            "DART outputs remain available through hope_output_summary and hope_read_output.",
+            case_id=case_id,
+            model_mode=model_mode,
+            supported_model_modes=["GTEP", "PCM"],
+        )
 
     if not runner_script.is_file():
         return error_result(

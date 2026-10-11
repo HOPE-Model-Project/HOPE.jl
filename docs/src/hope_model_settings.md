@@ -12,7 +12,7 @@ The `HOPE_model_settings.yml` file configures model switches and run controls.
 |**Parameter Name** | **Example**| **Description**|
 | :------------ | :-----------|:-----------|
 |`DataCase:` | `Data_100RPS/`| Input data folder under the case directory.|
-|`model_mode:`| `GTEP` | File-based model selector: `GTEP` or `PCM`.|
+|`model_mode:`| `GTEP` | File-based model selector: `GTEP`, `PCM`, or `DART`.|
 |`resource_aggregation:`| `1` | `1` aggregate resources before model build; `0` use the full input resource list.|
 |`representative_day!:`| `1` | Legacy representative-day switch. `1` endogenous representative-day clustering; `0` full chronology. Prefer `endogenous_rep_day` and `external_rep_day` for new cases.|
 |`endogenous_rep_day:`| `1` | `1` let HOPE cluster representative days from full chronology; `0` disable endogenous representative-day clustering.|
@@ -20,20 +20,20 @@ The `HOPE_model_settings.yml` file configures model switches and run controls.
 |`time_periods:`| `1 : (3, 20, 6, 20)` | Legacy fallback for endogenous representative-day seasons. New advanced endogenous rep-day cases should define this in `HOPE_rep_day_settings.yml`.|
 |`flexible_demand:`| `1` | `1` enable DR formulation; `0` disable.|
 |`inv_dcs_bin:`| `0` | `GTEP`: `1` binary investment decisions; `0` relaxed investments.|
-|`unit_commitment:`| `1` | `PCM`: `0` no UC; `1` integer UC; `2` convexified UC.|
+|`unit_commitment:`| `1` | `PCM`: `0` no UC; `1` integer UC; `2` convexified UC. `DART`: `0` continuous DA dispatch; `1` binary DA SCUC.|
 |`carbon_policy:`| `1` | `0` off; `1` emissions cap; `2` cap-and-trade style.|
 |`clean_energy_policy:`| `1` | `0` off; `1` RPS with REC trading; `2` local RPS without REC trading.|
 |`planning_reserve_mode:`| `1` | `GTEP`: `0` off; `1` system-level RA; `2` zonal RA.|
-|`operation_reserve_mode:`| `2` | `GTEP`: `0` off, `1` SPIN only. `PCM`: `0` off, `1` REG+SPIN, `2` REG+SPIN+NSPIN.|
-|`network_model:`| `3` | `PCM`: `0` no network, `1` zonal transport, `2` nodal DCOPF angle-based, `3` nodal DCOPF PTDF-based.|
-|`transmission_loss:`| `0` | `GTEP`/`PCM`: `0` lossless network; `1` piecewise-linear transmission losses using \|flow\|. In `PCM`, this is currently supported for `network_model = 1` and `2`, but not `3` (PTDF).|
-|`reference_bus:`| `1` | `PCM` nodal modes: reference bus for angle and nodal price decomposition.|
+|`operation_reserve_mode:`| `2` | `GTEP`: `0` off, `1` SPIN only. `PCM`/`DART`: `0` off, `1` REG+SPIN, `2` REG+SPIN+NSPIN.|
+|`network_model:`| `3` | `PCM`: `0` no network, `1` zonal transport, `2` nodal DCOPF angle-based, `3` nodal DCOPF PTDF-based. `DART` currently requires `3`.|
+|`transmission_loss:`| `0` | `GTEP`/`PCM`: `0` lossless network; `1` piecewise-linear transmission losses using \|flow\|. In `PCM`, this is supported for `network_model = 1` and `2`, but not `3`. `DART` requires `0`.|
+|`reference_bus:`| `1` | Reference-bus position for PCM nodal modes and the DART PTDF network.|
 |`storage_ld_duration_hours:`| `12` | `GTEP`: long-duration storage threshold (MWh/MW).|
-|`write_shadow_prices:`| `0` | `1` enables MILP dual-recovery re-solve (fix discrete vars, re-solve LP). In PCM this applies when `unit_commitment=1`; in GTEP when `inv_dcs_bin=1`.|
-|`summary_table:`| `0` | `PCM`: `1` generate `output/Analysis/Summary_*.csv`; `0` disable.|
+|`write_shadow_prices:`| `0` | `1` enables MILP dual-recovery re-solve in PCM/GTEP. DART performs the fixed-integer pricing solve required by settlement through its own workflow.|
+|`summary_table:`| `0` | `PCM`: `1` generate `output/Analysis/Summary_*.csv`; `0` disable. Retained for configuration compatibility in DART; DART always writes its standard result CSVs.|
 |`solver:`| `gurobi` | Solver name (`cbc`, `clp`, `glpk`, `gurobi`, `cplex`, etc.).|
-|`debug:` | `0` | `0` off; `1` conflict refiner; `2` penalty-based debug.|
-|`save_postprocess_snapshot:`| `1` | `0` do not save; `1` save minimal machine-readable snapshot in `output/postprocess_snapshot/` for later postprocessing such as EREC; `2` save full snapshot with additional solved-run details.|
+|`debug:` | `0` | `0` off; `1` conflict refiner; `2` penalty-based debug. DART currently requires `0`.|
+|`save_postprocess_snapshot:`| `1` | GTEP only: `0` do not save; `1` save a minimal postprocessing snapshot; `2` save a full snapshot. DART requires `0`.|
 
 ---
 
@@ -52,3 +52,69 @@ Notes:
   1. set `transmission_loss: 1`,
   2. add optional `Loss (%)` columns to the relevant line input tables,
   3. keep `transmission_loss: 0` in `PCM network_model = 3`, because PTDF mode is currently lossless.
+
+
+
+## DART compatibility rules
+
+DART is an operational market model with explicit chronological state. The
+following common planning/preprocessing features must be disabled:
+
+```yaml
+resource_aggregation: 0
+representative_day!: 0
+endogenous_rep_day: 0
+external_rep_day: 0
+flexible_demand: 0
+clean_energy_policy: 0
+carbon_policy: 0
+planning_reserve_mode: 0
+inv_dcs_bin: 0
+transmission_expansion: 0
+save_postprocess_snapshot: 0
+network_model: 3
+transmission_loss: 0
+debug: 0
+```
+
+`validate_hope` emits a warning and stops if an unavailable feature is enabled.
+This makes accidental reuse of a PCM/GTEP setting visible.
+
+## DART-specific settings
+
+All DART-only controls live under `dart_settings`:
+
+| Setting | Meaning |
+| :-- | :-- |
+| `availability_mode` | `physical_outages` or `deterministic_for_derating` |
+| `enforce_ramps` | Enforce DA hourly and RT subhourly ramp limits |
+| `include_storage` | Include installed storage and SOC chronology |
+| `real_time_reserve_requirements` | Enforce reserve requirements in RT as well as DA |
+| `silent` | Suppress detailed solver logs |
+| `files.initial_generator_state` | Initial unit commitment/output/duration state |
+| `files.initial_storage_state` | Initial storage SOC |
+| `files.real_time_load` | Native RT load file with `Minute` |
+| `files.real_time_wind` | Native RT wind file with `Minute` |
+| `files.real_time_solar` | Native RT solar file with `Minute` |
+| `time.binding_hours` | Number of consecutive hours retained as binding |
+| `time.day_ahead_lookahead_hours` | Hourly horizon in each DA SCUC |
+| `time.real_time_intervals_per_hour` | RT resolution; must divide 60 |
+| `time.real_time_lookahead_intervals` | Number of intervals in each rolling RT SCED |
+| `time.source_start_hour` | One-based start row in the hourly source series |
+| `security.contingency_generator_ids` | Stable IDs tested as generator N-1 outages |
+| `security.line_contingencies` | Must remain `false`; not implemented |
+| `security.allow_emergency_contingency_shed` | Permit penalized contingency shedding |
+| `security.maximum_security_variables` | Memory guard for contingency variables |
+| `realized_outage` | Exogenous RT equipment outage definition |
+| `interchange` | Balanced fixed injection/withdrawal schedule |
+| `terminal_storage.mode` | `none` or `initial` terminal SOC policy |
+| `solve_acceptance` | Policy for accepting solver time-limit incumbents |
+| `settlement.reserve_rule` | Currently `pay_as_bid` only |
+| `acceptance` | Post-solve quality gates; does not alter the optimization |
+
+Solver algorithm options remain in `Settings/<solver>_settings.yml`.
+`solve_acceptance` instead controls whether the DART workflow may continue
+after a non-optimal solver termination.
+
+See [DART Input Data](@ref dart-inputs) for the CSV contract and
+[RTS24 DART Case](@ref) for a complete settings example.

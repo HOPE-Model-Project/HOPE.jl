@@ -4,9 +4,11 @@ CurrentModule = HOPE.DART
 
 # DART
 
-DART is HOPE's lightweight day-ahead and real-time operations module. It is an
-in-memory API: callers construct typed Julia inputs and receive typed Julia
-results. It does not introduce another case-file schema.
+DART is HOPE's day-ahead and real-time operations module. It supports both the
+typed in-memory Julia API and the standard HOPE case workflow. A file-backed
+DART case uses `Settings/HOPE_model_settings.yml`, a `DataCase` directory,
+solver settings under `Settings/`, and an `output/` directory, matching PCM
+and GTEP wherever the mathematical differences allow.
 
 The V1 model contains:
 
@@ -35,6 +37,11 @@ The implementation is contained in `src/DART.jl`. The main entry points are
 | SEC-1--SEC-5 | One corrective scenario per eligible generator |
 | RT-1--RT-3 | Fixed DA commitment and energy-only real-time ramping |
 | COUP-1 | Binding RT dispatch and SOC are carried into the next solve |
+
+Ramp-down constraints distinguish dispatch movement from an exogenous reduction
+in available Pmax. A falling availability cap receives enough allowance for the
+forced output loss; any additional downward movement remains subject to the
+configured DA or RT ramp rate. An explicit in-service trip remains fully exempt.
 
 V1 deliberately uses system-wide reserve requirements, nodal load shedding,
 generator contingencies, and the lossless PTDF network option. Line outages,
@@ -104,3 +111,62 @@ From the HOPE repository root, run it with:
 ```bash
 julia --project=. ModelCases/DART_two_bus_example.jl
 ```
+
+## Standard HOPE case workflow
+
+Set `model_mode: DART` in `Settings/HOPE_model_settings.yml`, then call:
+
+```julia
+using HOPE
+validate_hope("ModelCases/RTS24_DART_case")
+results = run_hope("ModelCases/RTS24_DART_case")
+```
+
+`validate_dart_settings` warns about and rejects enabled planning-only features
+that are incompatible with DART, including resource aggregation,
+representative days, policy constraints, planning reserves, investment,
+transmission expansion, and flexible demand. This prevents a setting from
+being silently ignored. DART currently requires a lossless nodal PTDF network, supports binary or relaxed
+day-ahead commitment, and supports the normal HOPE reserve modes.
+
+## Installed-system conversion
+
+HOPE provides a narrow installed-system conversion layer for DART cases:
+
+- `load_operational_snapshot` validates a manifest, source SHA-256 hashes, stable
+  IDs, calendar, dimensions, bus references, and network connectivity.
+- `build_dart_system` maps nameplate assets and PTDF data under an explicit
+  common-subset, deterministic-derated, or physical-outage profile.
+- `build_dart_forecasts` creates hourly DA and synthetic repeated five-minute RT
+  trajectories with explicit ordered generator and bus IDs. In the standard
+  file-backed workflow, configured native load, wind, and solar RT files
+  replace those repeated values. Native files must provide `Month`, `Day`,
+  `Hours`, and an explicit `Minute` column aligned to the configured RT step.
+  If no native files are configured, HOPE warns before using the repeated-hourly
+  fallback; if configured files omit `Minute`, validation warns and rejects
+  them. Set `include_real_time_reserve_requirements=false` for DA procurement
+  with RT reserve variables retained for contingency response.
+- `build_dart_initial_state` creates a documented warm-up seed; an evaluation
+  workflow should replace it with the final realized state of a warm-up run.
+- `select_dart_windows` identifies deterministic peak-net-load, largest-ramp, and
+  low-renewable hours.
+
+The converter reads immutable physical inputs, not PCM report CSV files. It
+rejects disconnected networks, asymmetric line ratings, nonzero interchange,
+must-run semantics, and unverified quick-start NSPIN capability rather than
+silently changing them.
+
+See [DART Input Data](@ref dart-inputs) for the file schema and validation
+rules.
+
+The `RTS24_DART_case` in ModelCases is a standalone standard case with all 19
+compatible DART constraint families enabled. It demonstrates manifest and ID
+validation, rolling DA/RT operation, physical outage realization, strict
+security, storage, reserves, interchange, and settlements:
+
+```bash
+julia --project=. ModelCases/RTS24_DART_case/run_case.jl validate
+julia --project=. ModelCases/RTS24_DART_case/run_case.jl run
+```
+
+See [RTS24 DART Case](@ref) for the complete reference-case walkthrough.

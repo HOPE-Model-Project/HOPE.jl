@@ -117,6 +117,6 @@ result = solve_dart_scuc(data, forecast, default_dart_state(data))
 result.generation_mw
 ```
 
-The expected dispatch is 40 MW. Larger GTEP, PCM, holistic, and EREC examples
-are maintained separately in
+The expected dispatch is 40 MW. Larger GTEP, PCM, DART, holistic, and EREC
+examples are maintained separately in
 [HOPEModelCases](https://github.com/HOPE-Model-Project/HOPEModelCases).

@@ -335,7 +335,7 @@ def register_write_tools(mcp: FastMCP) -> None:
         name="hope_run_hope",
         description=(
             "Launch a HOPE single-case run as a background job. Returns a job_id immediately. "
-            "Poll with hope_job_status until done. Works for both GTEP and PCM model modes. "
+            "Poll with hope_job_status until done. Works for GTEP, PCM, and DART model modes. "
             "Pass any ModelCases directory name as case_id."
         ),
     )
@@ -349,9 +349,9 @@ def register_write_tools(mcp: FastMCP) -> None:
             "Pass a 'changes' dict mapping setting keys to new values "
             "(e.g., {'carbon_policy': 2, 'solver': 'highs', 'network_model': 1}). "
             "Validates values, backs up the original file, and returns applied/rejected changes plus warnings. "
-            "Key options - model_mode: GTEP|PCM; solver: cbc|clp|highs|scip|gurobi|cplex; "
+            "Key options - model_mode: GTEP|PCM|DART; solver: cbc|clp|highs|scip|gurobi|cplex; "
             "carbon_policy: 0|1|2; network_model: 0|1|2|3; unit_commitment: 0|1|2; "
-            "clean_energy_policy: 0|1; planning_reserve_mode: 0|1|2; and any binary (0/1) setting."
+            "clean_energy_policy: 0|1|2; planning_reserve_mode: 0|1|2; and any binary (0/1) setting."
         ),
     )
     def hope_update_settings_tool(
@@ -404,7 +404,7 @@ def register_write_tools(mcp: FastMCP) -> None:
         description=(
             "Launch the local HOPE Dash dashboard for a completed case run and return its URL. "
             "Automatically picks the GTEP dashboard (port 8051) for GTEP cases and the PCM dashboard "
-            "(port 8050) for PCM cases. "
+            "(port 8050) for PCM cases. DART has no dashboard yet and returns an explicit unsupported-mode error. "
             "If a dashboard is already running on the target port, returns the existing URL immediately. "
             "After the browser URL opens, select the matching case from the dropdown in the UI. "
             "Requires Python with dash, plotly, pandas installed "

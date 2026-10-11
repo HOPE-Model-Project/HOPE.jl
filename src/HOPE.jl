@@ -12,6 +12,7 @@ using Clustering
 using Distances
 using Combinatorics
 using Statistics
+using SHA
 
 ##using solver##
 # Open-source solvers are loaded unconditionally.
@@ -43,6 +44,8 @@ include("write_output.jl")#write output module
 include("solver_config.jl")#setting solver parameters
 include("DART.jl")#day-ahead and real-time operations
 using .DART
+include("operational_snapshot.jl") # installed-system snapshot and DART conversion
+include("dart_workflow.jl")        # standard DART case configuration and runner
 include("solve.jl")                #solve model function
 include("run.jl")                  #run module
 include("erec.jl")                 #EREC postprocessing module
@@ -64,6 +67,7 @@ export DART
 export DARTConfig
 export DARTDispatchResult
 export DARTForecast
+export DARTForecastSet
 export DARTGenerator
 export DARTNetwork
 export DARTReserveProduct
@@ -72,6 +76,14 @@ export DARTSettlementResult
 export DARTState
 export DARTStorage
 export DARTSystemData
+export OperationalBranch
+export OperationalBus
+export OperationalGenerator
+export OperationalSnapshot
+export OperationalStorage
+export build_dart_forecasts
+export build_dart_initial_state
+export build_dart_system
 export default_dart_reserve_products
 export default_dart_state
 export default_aggregation_settings
@@ -80,13 +92,20 @@ export default_rep_day_settings
 export initiate_solver
 export build_endogenous_rep_periods
 export load_data
+export load_dart_case
 export load_aggregation_settings
+export load_operational_snapshot
 export load_erec_settings
 export load_rep_day_settings
 export load_postprocess_snapshot
 export resolve_rep_day_time_periods
 export run_dart_rolling
+export run_dart_case
 export run_hope
+export validate_dart_case
+export validate_dart_settings
+export validate_hope
+export select_dart_windows
 export run_hope_holistic
 export run_hope_holistic_fresh
 export solve_model
