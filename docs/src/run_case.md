@@ -163,10 +163,10 @@ See [EREC Postprocessing](EREC.md) for the recommended `HOPE_erec_settings.yml` 
 
 HOPE supports a two-stage `GTEP -> PCM` workflow through two related entry points:
 
-- `HOPE.run_hope_holistic(gtep_case, pcm_case)` runs the paired cases directly in place.
+- `HOPE.run_hope_holistic(gtep_case, pcm_case)` runs the paired cases while treating both source input folders as read-only.
 - `HOPE.run_hope_holistic_fresh(gtep_case, pcm_case)` first creates fresh case clones, skips old `output/` trees, and then runs the same two-stage workflow on those clones.
 
-For most repeatable workflows, `HOPE.run_hope_holistic_fresh(...)` is the preferred option because it avoids stale outputs from earlier runs and preserves the original source cases as reusable baselines.
+For most repeatable workflows, `HOPE.run_hope_holistic_fresh(...)` remains useful because it gives each run an isolated workspace and avoids stale output trees. The direct workflow also preserves the original input CSV files; it writes only normal model outputs and handoff artifacts.
 
 Example:
 
@@ -181,10 +181,31 @@ result = HOPE.run_hope_holistic_fresh(
 
 Key requirements:
 
-- The `GTEP` and `PCM` cases must use the same topology. In practice that means the same `zonedata.Zone_id` set, the same transmission corridors in `linedata`, and internally consistent zone labels across `zonedata`, `gendata`, `storagedata`, and the zonal time-series inputs.
-- `GTEP` is the expansion stage and `PCM` is the dispatch stage. HOPE first solves `GTEP`, then updates the paired `PCM` system with the `GTEP` decisions on new builds, retirements, storage additions, and transmission expansion before running chronological dispatch.
+- The `GTEP` and `PCM` cases must use the same configured spatial topology. The default `holistic_spatial_basis: zone` requires matching `zonedata.Zone_id` and zonal `linedata` corridors. For a bus-resolved pair, set `holistic_spatial_basis: bus` in both cases: GTEP represents each physical bus as a zone, while PCM is validated through `busdata`, `branchdata`, `Bus_id`, and `load_timeseries_nodal`.
+- `GTEP` is the expansion stage and `PCM` is the dispatch stage. HOPE first solves `GTEP`, then realizes new builds, retirements, storage additions, and transmission expansion in a copy of the paired `PCM` inputs before running chronological dispatch.
 
 If the pair is not topology-matched, HOPE stops before the `GTEP` solve and reports the mismatch directly. This is preferable to an implicit zone remap because the holistic workflow is intended to dispatch the same system that the expansion model planned.
+
+No new columns or settings are required for an existing compatible case. HOPE
+validates the historical row-based mapping before using it and can fall back to
+an unambiguous aggregate resource mapping. For stronger identity guarantees,
+cases may optionally provide:
+
+- `Asset_ID` on existing GTEP and PCM generator rows;
+- `Candidate_ID` on candidate generator and storage rows; and
+- `Corridor_ID` on candidate and realized transmission rows.
+
+When IDs are supplied, they must be nonblank and unique in their table. New
+generator and storage builds inherit compatible operating parameters from their
+candidate rows. Parallel zonal corridors share an expansion in proportion to
+their existing directional ratings; ambiguous multi-branch nodal mappings stop
+with an error unless `Corridor_ID` resolves the target.
+
+After a successful PCM solve, HOPE writes the realized handoff under
+`output_holistic/realized_inputs/` (or the actual timestamped backup output
+selected by the standard output writer). It contains `gendata.csv`,
+`storagedata.csv`, `linedata.csv`, optional nodal `branchdata.csv`, mapping audit CSVs, and
+`handoff_manifest.yml` with source hashes and transfer totals.
 
 If you want to validate a pair before solving, you can also use the generic audit helper:
 

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Auditable GTEP-to-PCM realization with optional `Asset_ID`, `Candidate_ID`, and
+  `Corridor_ID`, retirement and build-transfer audits, source hashes, and a
+  handoff manifest. Existing cases remain valid without these optional columns.
+- Optional `holistic_spatial_basis: bus` validation for bus-as-zone GTEP and
+  nodal PCM pairs, including explicit candidate-bus realization and updates to
+  PCM `branchdata` for corridor-ID transmission builds.
 - Standard file-backed DART cases through `run_hope` and `validate_hope`,
   including installed-system manifests, stable IDs, initial operational state,
   native subhourly realization files, acceptance checks, and standard outputs.
@@ -16,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Holistic runs preserve the source PCM input case. Realized PCM inputs are now
+  written beside the PCM results under `realized_inputs/`; candidate operating
+  parameters are retained, retirements are transferred, and parallel zonal line
+  additions are allocated explicitly instead of selecting one row silently.
 - DART static generator and storage attributes now live in the canonical
   `gendata.csv` and `storagedata.csv` inputs.
 - Shared model-mode validation and HOPE-AI tooling now recognize DART. The MCP

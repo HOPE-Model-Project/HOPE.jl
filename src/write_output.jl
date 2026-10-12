@@ -1106,6 +1106,18 @@ function _write_output_impl(
         rename!(C_gen_df, :Capacity_RET => Symbol("Capacity_RET (MW)"))
         rename!(C_gen_df, :Capacity => Symbol("Capacity_FIN (MW)"))
 
+        if "Asset_ID" in names(Gendata)
+            C_gen_df[!, :Asset_ID] = vcat(
+                string.(Gendata[!, "Asset_ID"]),
+                fill(missing, Num_Cgen),
+            )
+        end
+        if "Candidate_ID" in names(Gendata_candidate)
+            C_gen_df[!, :Candidate_ID] = vcat(
+                fill(missing, Num_Egen),
+                string.(Gendata_candidate[!, "Candidate_ID"]),
+            )
+        end
         CSV.write(joinpath(outpath, "capacity.csv"), C_gen_df, header = true)
         ##Transmission line-----------------------------------------------------------------------------------------------------------
         C_line_df = DataFrame(
@@ -1130,6 +1142,9 @@ function _write_output_impl(
             :ForwardCapacity => Symbol(FORWARD_LINE_CAPACITY_COLUMN),
             :ReverseCapacity => Symbol(REVERSE_LINE_CAPACITY_COLUMN),
         )
+        if "Corridor_ID" in names(Linedata_candidate)
+            C_line_df[!, :Corridor_ID] = string.(Linedata_candidate[!, "Corridor_ID"])
+        end
         CSV.write(joinpath(outpath, "line.csv"), C_line_df, header = true)
 
         #Power flow OutputDF
@@ -1299,6 +1314,18 @@ function _write_output_impl(
         rename!(C_es_df, :Capacity => Symbol("Capacity (MW)"))
         rename!(C_es_df, :EnergyCapacity => Symbol("EnergyCapacity (MWh)"))
 
+        if "Asset_ID" in names(Storagedata)
+            C_es_df[!, :Asset_ID] = vcat(
+                string.(Storagedata[!, "Asset_ID"]),
+                fill(missing, Num_Csto),
+            )
+        end
+        if "Candidate_ID" in names(Estoragedata_candidate)
+            C_es_df[!, :Candidate_ID] = vcat(
+                fill(missing, Num_sto),
+                string.(Estoragedata_candidate[!, "Candidate_ID"]),
+            )
+        end
         CSV.write(joinpath(outpath, "es_capacity.csv"), C_es_df, header = true)
         ##Demand response program---------------------------------------------------------------------------------------------------------------------
         if flexible_demand == 1

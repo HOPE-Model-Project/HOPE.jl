@@ -510,49 +510,24 @@ function extract_new_storage_rows(es_capacity_df::DataFrame)
 end
 
 function apply_line_builds!(linedata::DataFrame, line_builds::DataFrame)
-    nrow(line_builds) == 0 && return linedata
-    for row in eachrow(line_builds)
-        from_zone = string(row[:From_zone])
-        to_zone = string(row[:To_zone])
-        build_forward = to_float_output(row[Symbol(FORWARD_LINE_CAPACITY_COLUMN)], 0.0)
-        build_reverse = to_float_output(row[Symbol(REVERSE_LINE_CAPACITY_COLUMN)], 0.0)
-        reverse_orientation = false
-        matches = findall(
-            i ->
-                string(linedata[i, "From_zone"]) == from_zone &&
-                    string(linedata[i, "To_zone"]) == to_zone,
-            1:nrow(linedata),
-        )
-        if isempty(matches)
-            reverse_matches = findall(
-                i ->
-                    string(linedata[i, "From_zone"]) == to_zone &&
-                        string(linedata[i, "To_zone"]) == from_zone,
-                1:nrow(linedata),
-            )
-            matches = reverse_matches
-            reverse_orientation = !isempty(reverse_matches)
-        end
-        if isempty(matches)
-            continue
-        end
-        target = first(matches)
-        forward_add = reverse_orientation ? build_reverse : build_forward
-        reverse_add = reverse_orientation ? build_forward : build_reverse
-        linedata[target, Symbol(FORWARD_LINE_CAPACITY_COLUMN)] =
-            to_float_output(linedata[target, Symbol(FORWARD_LINE_CAPACITY_COLUMN)], 0.0) +
-            forward_add
-        linedata[target, Symbol(REVERSE_LINE_CAPACITY_COLUMN)] =
-            to_float_output(linedata[target, Symbol(REVERSE_LINE_CAPACITY_COLUMN)], 0.0) +
-            reverse_add
-    end
-    return linedata
+    updated, _ = apply_line_builds_with_audit!(linedata, line_builds)
+    return updated
 end
 
 time_series_zone_columns(df::DataFrame) = Set(
     String(col) for
     col in names(df) if !(String(col) in ["Time Period", "Month", "Day", "Hours", "NI"])
 )
+
+function holistic_spatial_basis(config::Dict)
+    basis = lowercase(strip(string(get(config, "holistic_spatial_basis", "zone"))))
+    basis in ("zone", "bus") || throw(
+        ArgumentError(
+            "holistic_spatial_basis must be either 'zone' or 'bus'; found $(basis).",
+        ),
+    )
+    return basis
+end
 
 function corridor_signature_set(linedata::DataFrame)
     from_col = hasproperty(linedata, :From_zone) ? :From_zone : Symbol("From_zone")
@@ -576,35 +551,50 @@ function collect_case_topology(
     config::Dict,
     input_data::Dict,
 )
-    zones = Set(String.(input_data["Zonedata"][!, "Zone_id"]))
-    load_zones =
-        haskey(input_data, "Loaddata") ? time_series_zone_columns(input_data["Loaddata"]) :
+    basis = holistic_spatial_basis(config)
+    use_pcm_nodal =
+        basis == "bus" && uppercase(string(config["model_mode"])) == "PCM"
+    node_table = use_pcm_nodal ? get(input_data, "Busdata", nothing) : input_data["Zonedata"]
+    node_table === nothing && throw(
+        ArgumentError("PCM bus-basis holistic validation requires busdata."),
+    )
+    node_column = use_pcm_nodal ? "Bus_id" : "Zone_id"
+    nodes = Set(String.(node_table[!, node_column]))
+    load_table = use_pcm_nodal ? get(input_data, "NodalLoaddata", nothing) : get(input_data, "Loaddata", nothing)
+    load_nodes = load_table === nothing ? Set{String}() : time_series_zone_columns(load_table)
+    reference_column = use_pcm_nodal ? "Bus_id" : "Zone"
+    generator_nodes =
+        haskey(input_data, "Gendata") ? zone_reference_set(input_data["Gendata"], reference_column) :
         Set{String}()
-    generator_zones =
-        haskey(input_data, "Gendata") ? zone_reference_set(input_data["Gendata"], "Zone") :
-        Set{String}()
-    storage_zones =
+    storage_nodes =
         haskey(input_data, "Storagedata") ?
-        zone_reference_set(input_data["Storagedata"], "Zone") : Set{String}()
-    line_from_zones =
-        haskey(input_data, "Linedata") ?
-        zone_reference_set(input_data["Linedata"], "From_zone") : Set{String}()
-    line_to_zones =
-        haskey(input_data, "Linedata") ?
-        zone_reference_set(input_data["Linedata"], "To_zone") : Set{String}()
-    line_zones = union(line_from_zones, line_to_zones)
-    corridors =
-        haskey(input_data, "Linedata") ? corridor_signature_set(input_data["Linedata"]) :
-        Set{String}()
+        zone_reference_set(input_data["Storagedata"], reference_column) : Set{String}()
+    line_table =
+        use_pcm_nodal && haskey(input_data, "Branchdata") ? input_data["Branchdata"] :
+        get(input_data, "Linedata", nothing)
+    from_column = use_pcm_nodal ? "from_bus" : "From_zone"
+    to_column = use_pcm_nodal ? "to_bus" : "To_zone"
+    line_from_nodes =
+        line_table === nothing ? Set{String}() : zone_reference_set(line_table, from_column)
+    line_to_nodes =
+        line_table === nothing ? Set{String}() : zone_reference_set(line_table, to_column)
+    line_nodes = union(line_from_nodes, line_to_nodes)
+    corridor_table = line_table === nothing ? DataFrame() : rename(
+        select(line_table, from_column, to_column),
+        from_column => "From_zone",
+        to_column => "To_zone",
+    )
+    corridors = line_table === nothing ? Set{String}() : corridor_signature_set(corridor_table)
     return Dict(
         "label" => case_label,
         "case_path" => case_path,
         "model_mode" => String(config["model_mode"]),
-        "zones" => zones,
-        "load_zones" => load_zones,
-        "generator_zones" => generator_zones,
-        "storage_zones" => storage_zones,
-        "line_zones" => line_zones,
+        "basis" => basis,
+        "zones" => nodes,
+        "load_zones" => load_nodes,
+        "generator_zones" => generator_nodes,
+        "storage_zones" => storage_nodes,
+        "line_zones" => line_nodes,
         "corridors" => corridors,
     )
 end
@@ -656,8 +646,21 @@ function validate_holistic_case_pair!(
     pcm_topology = collect_case_topology("PCM", pcm_case, pcm_config, pcm_input)
 
     messages = String[]
+    uppercase(string(gtep_config["model_mode"])) == "GTEP" || push!(
+        messages,
+        "Holistic first-stage case must use model_mode: GTEP; found $(gtep_config["model_mode"]).",
+    )
+    uppercase(string(pcm_config["model_mode"])) == "PCM" || push!(
+        messages,
+        "Holistic second-stage case must use model_mode: PCM; found $(pcm_config["model_mode"]).",
+    )
     append!(messages, validate_internal_topology_messages(gtep_topology))
     append!(messages, validate_internal_topology_messages(pcm_topology))
+
+    gtep_topology["basis"] == pcm_topology["basis"] || push!(
+        messages,
+        "Holistic pair mismatch: GTEP uses $(gtep_topology["basis"])-basis validation while PCM uses $(pcm_topology["basis"])-basis validation.",
+    )
 
     zone_only_in_gtep = setdiff(gtep_topology["zones"], pcm_topology["zones"])
     zone_only_in_pcm = setdiff(pcm_topology["zones"], gtep_topology["zones"])
@@ -693,8 +696,8 @@ function validate_holistic_case_pair!(
         details = join(messages, "\n")
         throw(
             ArgumentError(
-                "run_hope_holistic requires a matched GTEP/PCM pair with consistent zonal topology.\n" *
-                "GTEP should define expansion decisions on the same zones/corridors that PCM dispatches.\n" *
+                "run_hope_holistic requires a matched GTEP/PCM pair with a consistent configured spatial basis.\n" *
+                "GTEP should define expansion decisions on the same zones or buses/corridors that PCM dispatches.\n" *
                 "Please fix the reported mismatches or provide a harmonized paired case.\n\n" *
                 details,
             ),
@@ -945,9 +948,14 @@ end
 Run the two-stage holistic GTEP→PCM workflow.
 
 1. The GTEP stage solves the expansion planning problem for `GTEP_case`.
-2. New capacity decisions (generators, storage, transmission lines) are injected
-   into the `PCM_case` input data.
+2. Retirements and new generator, storage, and transmission decisions are
+   realized in an in-memory copy of the PCM inputs.
 3. The PCM stage solves the production cost problem with the updated fleet.
+4. Realized inputs, mapping audits, and a handoff manifest are written under the
+   PCM output directory in `realized_inputs/`.
+
+The source GTEP and PCM input directories are not modified. Stable identity
+columns are optional; legacy cases use validated row or aggregate mappings.
 
 Both case directories must share a consistent zonal topology; mismatches raise an
 `ArgumentError` before any solve is attempted.
@@ -1026,42 +1034,19 @@ function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
         pcm_config,
         "run_hope_holistic_pcm_reload_done",
     )
-    updated_pcm_input = prepare_pcm_inputs_from_gtep(gtep_output, pcm_input, pcm_config)
+    updated_pcm_input = prepare_pcm_inputs_from_gtep_linked(
+        gtep_output,
+        gtep_input,
+        gtep_config,
+        pcm_input,
+        pcm_config,
+    )
     holistic_debug_stage_log_pair(
         gtep_config,
         pcm_config,
         "run_hope_holistic_pcm_prepare_done",
     )
-    holistic_debug_stage_log_pair(
-        gtep_config,
-        pcm_config,
-        "run_hope_holistic_pcm_input_persist_start",
-    )
-    persisted_pcm_input_paths =
-        persist_pcm_inputs_for_holistic(pcm_path, pcm_config, updated_pcm_input)
-    holistic_debug_stage_log_pair(
-        gtep_config,
-        pcm_config,
-        "run_hope_holistic_pcm_input_persist_done",
-    )
-
-    transfer_summary = Dict(
-        "new_generation_rows" =>
-            nrow(extract_new_generation_rows(gtep_output["capacity"])),
-        "new_storage_rows" =>
-            nrow(extract_new_storage_rows(gtep_output["es_capacity"])),
-        "new_line_rows" => nrow(
-            filter(
-                row ->
-                    to_float_output(row["New_Build"], 0.0) > 0 &&
-                        max(
-                            to_float_output(row[Symbol(FORWARD_LINE_CAPACITY_COLUMN)], 0.0),
-                            to_float_output(row[Symbol(REVERSE_LINE_CAPACITY_COLUMN)], 0.0),
-                        ) > 0,
-                gtep_output["line"],
-            ),
-        ),
-    )
+    transfer_summary = holistic_transfer_summary(updated_pcm_input)
     gtep_results["output"] = gtep_output
 
     println("Second stage: solving 'PCM' mode with GTEP-informed capacities")
@@ -1099,6 +1084,24 @@ function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
     )
     pcm_output = pcm_output_write.results
     actual_pcm_outpath = pcm_output_write.actual_outpath
+    holistic_debug_stage_log_pair(
+        gtep_config,
+        pcm_config,
+        "run_hope_holistic_pcm_input_persist_start",
+    )
+    persisted_pcm_input_paths = persist_realized_pcm_inputs_for_holistic(
+        actual_pcm_outpath,
+        pcm_config,
+        updated_pcm_input;
+        gtep_case_path = gtep_path,
+        pcm_case_path = pcm_path,
+        gtep_config = gtep_config,
+    )
+    holistic_debug_stage_log_pair(
+        gtep_config,
+        pcm_config,
+        "run_hope_holistic_pcm_input_persist_done",
+    )
     holistic_debug_stage_log_pair(
         gtep_config,
         pcm_config,

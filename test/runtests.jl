@@ -14,6 +14,7 @@ using Test
     include("test-erec-settings.jl")
     include("test-erec-snapshot.jl")
     include("test-holistic.jl")
+    include("test-holistic-linkage.jl")
     include("test-lmp-sign-regression.jl")
     include("test-pcm-constraints.jl")
     include("test-dart.jl")

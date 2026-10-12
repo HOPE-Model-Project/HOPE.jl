@@ -692,6 +692,7 @@ function load_data(config_set::Dict, path::AbstractString)
             #technology
             println("Reading technology")
             gendata_raw = DataFrame(XLSX.readtable(xlsx_path, "gendata"))
+            input_data["GendataRaw"] = copy(gendata_raw)
             if resource_aggregation_enabled(config_set)
                 input_data["Gendata"] = aggregate_gendata_gtep(gendata_raw, config_set)
             else
@@ -821,6 +822,7 @@ function load_data(config_set::Dict, path::AbstractString)
             #technology
             println("Reading technology")
             gendata_raw = CSV.read(joinpath(folderpath, "gendata.csv"), DataFrame)
+            input_data["GendataRaw"] = copy(gendata_raw)
             if resource_aggregation_enabled(config_set)
                 input_data["Gendata"] = aggregate_gendata_gtep(gendata_raw, config_set)
             else

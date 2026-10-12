@@ -50,6 +50,7 @@ include("solve.jl")                #solve model function
 include("run.jl")                  #run module
 include("erec.jl")                 #EREC postprocessing module
 include("debug.jl")                #debug function
+include("holistic_linkage.jl")     #auditable multi-resolution GTEP-PCM linkage
 include("run_holistic.jl")         #Holistic assessment: GTEP-PCM two stage
 
 #export HOPE functions

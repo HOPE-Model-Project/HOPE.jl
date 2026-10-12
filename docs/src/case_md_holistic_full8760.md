@@ -29,7 +29,7 @@ The final `v20260406g` pair is the first Maryland full-year holistic benchmark i
 
 - the GTEP and PCM stages start from the same Maryland-only baseline
 - the load file preserves the original `NI` net-import semantics used by HOPE
-- the holistic handoff persists the updated PCM input files before the PCM solve
+- current HOPE releases realize the handoff in memory and persist an auditable copy beside the PCM outputs without modifying the source case
 - the preserved reference solve completes end to end with zero annual load shedding in both stages
 
 ## Review Focus
@@ -38,7 +38,7 @@ This page is meant to support review of four specific claims:
 
 - the benchmark is a true shared-baseline GTEP-to-PCM pair rather than two loosely related MD cases
 - the Maryland-only reduction kept the intended topology, load, and policy semantics
-- the holistic handoff is reflected not only in-memory but also in the persisted PCM case inputs
+- new runs record the in-memory handoff in `output_holistic/realized_inputs/`, including mapping audits and a manifest
 - the preserved successful pair is stable enough to use as the repo's main small full-function holistic regression benchmark
 
 ## Model Setup Snapshot
@@ -120,6 +120,7 @@ Reference output directories:
 
 - GTEP output: `output/`
 - PCM output: `output_holistic/`
+- realized PCM handoff for new runs: `output_holistic/realized_inputs/`
 
 ## GTEP Stage Results
 
