@@ -13,7 +13,7 @@ The `HOPE_model_settings.yml` file configures model switches and run controls.
 | :------------ | :-----------|:-----------|
 |`DataCase:` | `Data_100RPS/`| Input data folder under the case directory.|
 |`model_mode:`| `GTEP` | File-based model selector: `GTEP`, `PCM`, or `DART`.|
-|`holistic_spatial_basis:`| `zone` | Optional GTEP-to-PCM validation basis: `zone` preserves legacy zonal matching; `bus` validates a bus-as-zone GTEP case against PCM `busdata`, `branchdata`, and nodal load. Set the same value in both paired cases.|
+|`holistic_spatial_basis:`| `zone` | Optional GTEP-to-PCM validation basis: GTEP uses `zone` or `bus`; PCM may use `auto` to inherit the paired GTEP basis. `zone` preserves legacy zonal matching, while `bus` validates a bus-as-zone GTEP case against PCM `busdata`, `branchdata`, and nodal load.|
 |`resource_aggregation:`| `1` | `1` aggregate resources before model build; `0` use the full input resource list.|
 |`representative_day!:`| `1` | Legacy representative-day switch. `1` endogenous representative-day clustering; `0` full chronology. Prefer `endogenous_rep_day` and `external_rep_day` for new cases.|
 |`endogenous_rep_day:`| `1` | `1` let HOPE cluster representative days from full chronology; `0` disable endogenous representative-day clustering.|

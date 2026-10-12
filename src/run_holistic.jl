@@ -521,9 +521,9 @@ time_series_zone_columns(df::DataFrame) = Set(
 
 function holistic_spatial_basis(config::Dict)
     basis = lowercase(strip(string(get(config, "holistic_spatial_basis", "zone"))))
-    basis in ("zone", "bus") || throw(
+    basis in ("zone", "bus", "auto") || throw(
         ArgumentError(
-            "holistic_spatial_basis must be either 'zone' or 'bus'; found $(basis).",
+            "holistic_spatial_basis must be 'zone', 'bus', or 'auto'; found $(basis).",
         ),
     )
     return basis
@@ -549,9 +549,10 @@ function collect_case_topology(
     case_label::AbstractString,
     case_path::AbstractString,
     config::Dict,
-    input_data::Dict,
+    input_data::Dict;
+    spatial_basis::AbstractString = holistic_spatial_basis(config),
 )
-    basis = holistic_spatial_basis(config)
+    basis = String(spatial_basis)
     use_pcm_nodal =
         basis == "bus" && uppercase(string(config["model_mode"])) == "PCM"
     node_table = use_pcm_nodal ? get(input_data, "Busdata", nothing) : input_data["Zonedata"]
@@ -642,8 +643,18 @@ function validate_holistic_case_pair!(
     pcm_config::Dict,
     pcm_input::Dict,
 )
-    gtep_topology = collect_case_topology("GTEP", gtep_case, gtep_config, gtep_input)
-    pcm_topology = collect_case_topology("PCM", pcm_case, pcm_config, pcm_input)
+    gtep_basis = holistic_spatial_basis(gtep_config)
+    gtep_basis == "auto" && throw(
+        ArgumentError("GTEP holistic_spatial_basis must be explicitly 'zone' or 'bus'."),
+    )
+    pcm_basis_configured = holistic_spatial_basis(pcm_config)
+    pcm_basis = pcm_basis_configured == "auto" ? gtep_basis : pcm_basis_configured
+    gtep_topology = collect_case_topology(
+        "GTEP", gtep_case, gtep_config, gtep_input; spatial_basis = gtep_basis,
+    )
+    pcm_topology = collect_case_topology(
+        "PCM", pcm_case, pcm_config, pcm_input; spatial_basis = pcm_basis,
+    )
 
     messages = String[]
     uppercase(string(gtep_config["model_mode"])) == "GTEP" || push!(

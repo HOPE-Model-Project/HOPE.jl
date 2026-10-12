@@ -655,8 +655,14 @@ function apply_line_builds_with_audit!(
         "to_bus" : "To_zone"
 
     for build_row = 1:nrow(line_builds)
-        from_zone = string(line_builds[build_row, "From_zone"])
-        to_zone = string(line_builds[build_row, "To_zone"])
+        build_from_column =
+            network_model in (2, 3) && _holistic_has_column(line_builds, "PCM_from_bus") ?
+            "PCM_from_bus" : "From_zone"
+        build_to_column =
+            network_model in (2, 3) && _holistic_has_column(line_builds, "PCM_to_bus") ?
+            "PCM_to_bus" : "To_zone"
+        from_zone = string(line_builds[build_row, build_from_column])
+        to_zone = string(line_builds[build_row, build_to_column])
         corridor_id = _holistic_id(
             line_builds,
             build_row,
@@ -878,6 +884,13 @@ function prepare_pcm_inputs_from_gtep_linked(
        !_holistic_has_column(line_builds, HOLISTIC_CORRIDOR_ID)
         line_builds[!, HOLISTIC_CORRIDOR_ID] =
             gtep_input["Linedata_candidate"][built_line_indices, HOLISTIC_CORRIDOR_ID]
+    end
+    for column in ("PCM_from_bus", "PCM_to_bus")
+        if _holistic_has_column(gtep_input["Linedata_candidate"], column) &&
+           !_holistic_has_column(line_builds, column)
+            line_builds[!, column] =
+                gtep_input["Linedata_candidate"][built_line_indices, column]
+        end
     end
     network_model_raw = get(pcm_config, "network_model", 1)
     network_model =

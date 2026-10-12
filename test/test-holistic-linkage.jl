@@ -337,7 +337,7 @@ using DataFrames
             ),
         )
         gtep_config = Dict("model_mode" => "GTEP", "holistic_spatial_basis" => "bus")
-        pcm_config = Dict("model_mode" => "PCM", "holistic_spatial_basis" => "bus")
+        pcm_config = Dict("model_mode" => "PCM", "holistic_spatial_basis" => "auto")
         @test isnothing(HOPE.validate_holistic_case_pair!(
             "gtep",
             gtep_config,
@@ -458,5 +458,30 @@ using DataFrames
             paths = HOPE.persist_realized_pcm_inputs_for_holistic(tmpdir, pcm_config, updated)
             @test isfile(paths["branchdata"])
         end
+    end
+
+    @testset "Aggregated line decisions can target explicit PCM branches" begin
+        branches = DataFrame(
+            :From_zone => ["Z1"], :To_zone => ["Z2"],
+            :from_bus => ["B1"], :to_bus => ["B2"],
+            Symbol("Forward Capacity (MW)") => [100.0],
+            Symbol("Reverse Capacity (MW)") => [80.0],
+            :Corridor_ID => ["C1"],
+        )
+        builds = DataFrame(
+            :From_zone => ["Z1"], :To_zone => ["Z2"],
+            :PCM_from_bus => ["B1"], :PCM_to_bus => ["B2"],
+            Symbol("Forward Capacity (MW)") => [25.0],
+            Symbol("Reverse Capacity (MW)") => [15.0],
+            :Corridor_ID => ["C1"],
+        )
+        updated, audit = HOPE.apply_line_builds_with_audit!(
+            branches,
+            builds;
+            network_model = 2,
+        )
+        @test updated[1, Symbol("Forward Capacity (MW)")] == 125.0
+        @test updated[1, Symbol("Reverse Capacity (MW)")] == 95.0
+        @test audit.MappingMode == ["corridor_id"]
     end
 end

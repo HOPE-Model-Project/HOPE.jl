@@ -181,7 +181,7 @@ result = HOPE.run_hope_holistic_fresh(
 
 Key requirements:
 
-- The `GTEP` and `PCM` cases must use the same configured spatial topology. The default `holistic_spatial_basis: zone` requires matching `zonedata.Zone_id` and zonal `linedata` corridors. For a bus-resolved pair, set `holistic_spatial_basis: bus` in both cases: GTEP represents each physical bus as a zone, while PCM is validated through `busdata`, `branchdata`, `Bus_id`, and `load_timeseries_nodal`.
+- The `GTEP` and `PCM` cases must use the same resolved spatial topology. The default `holistic_spatial_basis: zone` requires matching `zonedata.Zone_id` and zonal `linedata` corridors. A GTEP case may select `bus`, where each physical bus is represented as a GTEP zone and PCM is validated through `busdata`, `branchdata`, `Bus_id`, and `load_timeseries_nodal`. Set PCM to `holistic_spatial_basis: auto` when one nodal PCM case should inherit either resolution from different paired GTEP cases.
 - `GTEP` is the expansion stage and `PCM` is the dispatch stage. HOPE first solves `GTEP`, then realizes new builds, retirements, storage additions, and transmission expansion in a copy of the paired `PCM` inputs before running chronological dispatch.
 
 If the pair is not topology-matched, HOPE stops before the `GTEP` solve and reports the mismatch directly. This is preferable to an implicit zone remap because the holistic workflow is intended to dispatch the same system that the expansion model planned.
