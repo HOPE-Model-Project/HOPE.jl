@@ -1,0 +1,68 @@
+name: Holistic linkage integration
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/HolisticIntegration.yml"
+      - "Project.toml"
+      - "Manifest.toml"
+      - "src/GTEP.jl"
+      - "src/PCM.jl"
+      - "src/holistic_coverage.jl"
+      - "src/holistic_linkage.jl"
+      - "src/run_holistic.jl"
+      - "src/write_output.jl"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/HolisticIntegration.yml"
+      - "Project.toml"
+      - "Manifest.toml"
+      - "src/GTEP.jl"
+      - "src/PCM.jl"
+      - "src/holistic_coverage.jl"
+      - "src/holistic_linkage.jl"
+      - "src/run_holistic.jl"
+      - "src/write_output.jl"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  restricted-maryland-linkage:
+    name: Restricted Maryland GTEP-to-PCM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out HOPE
+        uses: actions/checkout@v6
+
+      - name: Check out HOPE ModelCases
+        uses: actions/checkout@v6
+        with:
+          repository: HOPE-Model-Project/HOPEModelCases
+          ref: main
+          path: ModelCases
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "1"
+
+      - name: Use Julia cache
+        uses: julia-actions/cache@v2
+
+      - name: Build HOPE
+        uses: julia-actions/julia-buildpkg@v1
+
+      - name: Run restricted holistic benchmark
+        run: julia --project=. ModelCases/MD_GTEP_restricted_linkage_case/run_holistic_pair.jl
