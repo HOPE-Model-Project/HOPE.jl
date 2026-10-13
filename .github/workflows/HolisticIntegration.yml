@@ -52,6 +52,7 @@ jobs:
           repository: HOPE-Model-Project/HOPEModelCases
           ref: main
           path: ModelCases
+          lfs: true
 
       - name: Set up Julia
         uses: julia-actions/setup-julia@v2
