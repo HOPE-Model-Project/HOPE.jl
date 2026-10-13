@@ -324,6 +324,65 @@ mathematics:
 
 No workflow should imply that the sequence is mandatory for a standalone study.
 
+## Capability and cross-model test strategy
+
+A setting being present or switched on is not sufficient evidence that a model
+capability or cross-model handoff works. Each benchmark claim should be evaluated
+at six levels:
+
+1. **Configured:** the feature is enabled with a valid model-mode setting.
+2. **Populated:** all required input fields and time series contain meaningful,
+   non-default data.
+3. **Exercised:** the corresponding variables and constraints are instantiated
+   and the test produces a nonzero or otherwise observable response.
+4. **Restrictive:** at least one deliberately stressed scenario makes the
+   constraint binding or changes the result relative to a controlled baseline.
+5. **Transferred:** any state or decision that belongs in a downstream model is
+   represented in a typed handoff artifact with identity and provenance.
+6. **Consumed:** the downstream model demonstrably uses the transferred value and
+   satisfies conservation, topology, chronology, and source-immutability checks.
+
+No single "all features" case can cover the full HOPE configuration space. Some
+settings are mutually exclusive, such as system versus zonal planning reserve,
+alternative policy modes, representative-period methods, PCM network
+formulations, and PCM unit-commitment modes. Combining every compatible feature
+in one large case also makes failures difficult to localize.
+
+Use three complementary test layers instead:
+
+- **Contract fixtures:** small deterministic unit tests for retirements, new
+  generation, storage, transmission, stable IDs, parameter mapping, topology,
+  temporal state, manifests, hashes, and failure behavior.
+- **Restricted integration benchmarks:** short, physically consistent cases in
+  which selected capacity, retirement, transmission, commitment, reserve, loss,
+  policy, and flexibility constraints are intentionally active and observable.
+  These test model interaction, not the economic realism of one optimum.
+- **Reference studies:** larger realistic cases used to assess numerical health,
+  performance, and scientific usefulness without requiring every optional
+  constraint to bind.
+
+Each integration benchmark should publish a machine-readable coverage report.
+For every claimed feature, the report should record its configured value, input
+evidence, activation or binding evidence, upstream artifact field, downstream
+consumer, assertions, and result. This capability report can later be consumed
+by an agent, but it must be generated and validated by deterministic code.
+
+Cross-model tests should distinguish three semantic classes:
+
+- **Transferred physical state:** installed capacity, retirements, realized unit
+  parameters, storage, branches, ratings, locations, and stable identities.
+- **Recomputed downstream state:** commitment, dispatch, reserves, storage state,
+  prices, and other endogenous operating decisions unless an explicit boundary
+  state is selected.
+- **Model-local assumptions:** policy interpretation, temporal reduction,
+  aggregation, network formulation, security criteria, and solver controls.
+  These require compatibility checks and provenance but should not be silently
+  copied as though they were physical assets.
+
+This distinction prevents an agent or adapter from interpreting a GTEP setting
+as a PCM result, while still requiring the two cases to declare compatible
+assumptions where scientific consistency depends on them.
+
 ## Decisions already reflected in the current DART work
 
 - DART uses the common `Settings/HOPE_model_settings.yml` workflow with

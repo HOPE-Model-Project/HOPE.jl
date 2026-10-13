@@ -24,6 +24,7 @@ pages = OrderedDict(
     "Example Cases" => [
         "PJM MD100 GTEP Case" => "case_pjm_md100_gtep.md",
         "Maryland Full-Year Holistic Case" => "case_md_holistic_full8760.md",
+        "Maryland Restricted Linkage Benchmark" => "case_md_restricted_linkage.md",
         "USA 64-Zone GTEP Case" => "case_usa64_gtep.md",
         "RTS24 PCM Multizone4 Congested 1-Month Case" => "case_rts24_pcm_multizone4.md",
         "RTS24 DART Case" => "case_rts24_dart.md",

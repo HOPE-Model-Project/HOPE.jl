@@ -147,24 +147,32 @@ with $F^{forward}_l=F^{reverse}_l$.
 
 ### 4. [GTEP-C4] Generator operating limits (with SPIN headroom)
 
-Energy and SPIN are co-limited by available capacity.
+Minimum output applies to energy dispatch. Energy and SPIN are co-limited by
+available capacity, so reserve cannot substitute for a unit's minimum-energy
+requirement.
 
 For existing non-retirement units $g\in G^{E}\setminus G^{RET}$:
 
 ```math
-P^{min}_g \le p_{g,h} + r^{SPIN}_{g,h} \le P^{max}_g \cdot AF_{g,h}
+P^{min}_g \le p_{g,h},
+\qquad
+p_{g,h} + r^{SPIN}_{g,h} \le P^{max}_g \cdot AF_{g,h}
 ```
 
 For retirement-eligible existing units $g\in G^{RET}$:
 
 ```math
-P^{min}_g(1-x^{RET}_g) \le p_{g,h} + r^{SPIN}_{g,h} \le P^{max}_g AF_{g,h}(1-x^{RET}_g)
+P^{min}_g(1-x^{RET}_g) \le p_{g,h},
+\qquad
+p_{g,h} + r^{SPIN}_{g,h} \le P^{max}_g AF_{g,h}(1-x^{RET}_g)
 ```
 
 For candidate units $g\in G^{+}$:
 
 ```math
-P^{min}_g x_g \le p_{g,h} + r^{SPIN}_{g,h} \le P^{max}_g AF_{g,h} x_g
+P^{min}_g x_g \le p_{g,h},
+\qquad
+p_{g,h} + r^{SPIN}_{g,h} \le P^{max}_g AF_{g,h} x_g
 ```
 
 Must-run generators are enforced at available maximum output (with candidate/retirement status applied consistently in code).
@@ -208,7 +216,8 @@ Activated by `planning_reserve_mode`:
 System RA mode (`planning_reserve_mode = 1`):
 
 ```math
-\sum_{g\in G^{E}} CC_gP^{max}_g
+\sum_{g\in G^{E}\setminus G^{RET}} CC_gP^{max}_g
+\; + \sum_{g\in G^{RET}} CC_gP^{max}_g(1-x^{RET}_g)
 +\sum_{g\in G^{+}} CC_gP^{max}_g x_g
 +\sum_{s\in S^{E}} CC_sSCAP_s
 +\sum_{s\in S^{+}} CC_sSCAP_s z_s
@@ -219,7 +228,8 @@ System RA mode (`planning_reserve_mode = 1`):
 Zonal RA mode (`planning_reserve_mode = 2`), for each zone $i$:
 
 ```math
-\sum_{g\in G_i\cap G^{E}} CC_gP^{max}_g
+\sum_{g\in (G_i\cap G^{E})\setminus G^{RET}} CC_gP^{max}_g
+\; + \sum_{g\in G_i\cap G^{RET}} CC_gP^{max}_g(1-x^{RET}_g)
 +\sum_{g\in G_i\cap G^{+}} CC_gP^{max}_g x_g
 +\sum_{s\in S_i\cap S^{E}} CC_sSCAP_s
 +\sum_{s\in S_i\cap S^{+}} CC_sSCAP_s z_s

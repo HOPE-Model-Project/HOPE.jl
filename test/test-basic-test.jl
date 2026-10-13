@@ -59,3 +59,21 @@
     @test output_dir == output_dir2
     @test endswith(output_dir, joinpath("ModelCases", "MD_GTEP_clean_case", "output"))
 end
+
+@testset "Partial output tree merge" begin
+    mktempdir() do root
+        source = joinpath(root, "output_tmp")
+        destination = joinpath(root, "output")
+        mkpath(joinpath(source, "Analysis"))
+        mkpath(destination)
+        write(joinpath(destination, "already_moved.csv"), "moved")
+        write(joinpath(source, "remaining.csv"), "remaining")
+        write(joinpath(source, "Analysis", "summary.csv"), "summary")
+
+        HOPE.copy_directory_tree(source, destination)
+
+        @test read(joinpath(destination, "already_moved.csv"), String) == "moved"
+        @test read(joinpath(destination, "remaining.csv"), String) == "remaining"
+        @test read(joinpath(destination, "Analysis", "summary.csv"), String) == "summary"
+    end
+end

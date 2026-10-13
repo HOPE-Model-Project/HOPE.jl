@@ -42,14 +42,28 @@ integrations use Julia package extensions, so they require Julia 1.9 or later.
 **Step 2 — Install the solver and its Julia package.**
 
 For Gurobi, download and install the Gurobi solver from
-[gurobi.com](https://www.gurobi.com/downloads/), set the `GRB_LICENSE_FILE`
-environment variable to point to your `gurobi.lic` file, then add the Julia package:
+[gurobi.com](https://www.gurobi.com/downloads/) and activate a valid license.
+Then add both HOPE and the optional wrapper to the environment used by your
+study:
 
 ```julia
 import Pkg
-Pkg.activate(".")   # activate the HOPE project environment
-Pkg.add("Gurobi")   # substitute "SCIP" or "CPLEX" as needed
+Pkg.activate("my-study")
+Pkg.add(["HOPE", "Gurobi"])   # substitute "SCIP" or "CPLEX" as needed
 ```
+
+When developing from a cloned HOPE repository, keep its `Project.toml`
+unchanged by installing the optional wrapper in Julia's version environment:
+
+```julia
+import Pkg
+Pkg.activate()       # activates @v#.#
+Pkg.add("Gurobi")
+```
+
+Julia's standard stacked `LOAD_PATH` then makes the wrapper available when the
+repository is run with `julia --project=.`. The native solver installation and
+the Julia wrapper are separate requirements.
 
 **Step 3 — Set the solver** in the case settings file.
 

@@ -553,20 +553,22 @@ function collect_case_topology(
     spatial_basis::AbstractString = holistic_spatial_basis(config),
 )
     basis = String(spatial_basis)
-    use_pcm_nodal =
-        basis == "bus" && uppercase(string(config["model_mode"])) == "PCM"
-    node_table = use_pcm_nodal ? get(input_data, "Busdata", nothing) : input_data["Zonedata"]
-    node_table === nothing && throw(
-        ArgumentError("PCM bus-basis holistic validation requires busdata."),
-    )
+    use_pcm_nodal = basis == "bus" && uppercase(string(config["model_mode"])) == "PCM"
+    node_table =
+        use_pcm_nodal ? get(input_data, "Busdata", nothing) : input_data["Zonedata"]
+    node_table === nothing &&
+        throw(ArgumentError("PCM bus-basis holistic validation requires busdata."))
     node_column = use_pcm_nodal ? "Bus_id" : "Zone_id"
     nodes = Set(String.(node_table[!, node_column]))
-    load_table = use_pcm_nodal ? get(input_data, "NodalLoaddata", nothing) : get(input_data, "Loaddata", nothing)
-    load_nodes = load_table === nothing ? Set{String}() : time_series_zone_columns(load_table)
+    load_table =
+        use_pcm_nodal ? get(input_data, "NodalLoaddata", nothing) :
+        get(input_data, "Loaddata", nothing)
+    load_nodes =
+        load_table === nothing ? Set{String}() : time_series_zone_columns(load_table)
     reference_column = use_pcm_nodal ? "Bus_id" : "Zone"
     generator_nodes =
-        haskey(input_data, "Gendata") ? zone_reference_set(input_data["Gendata"], reference_column) :
-        Set{String}()
+        haskey(input_data, "Gendata") ?
+        zone_reference_set(input_data["Gendata"], reference_column) : Set{String}()
     storage_nodes =
         haskey(input_data, "Storagedata") ?
         zone_reference_set(input_data["Storagedata"], reference_column) : Set{String}()
@@ -580,12 +582,15 @@ function collect_case_topology(
     line_to_nodes =
         line_table === nothing ? Set{String}() : zone_reference_set(line_table, to_column)
     line_nodes = union(line_from_nodes, line_to_nodes)
-    corridor_table = line_table === nothing ? DataFrame() : rename(
-        select(line_table, from_column, to_column),
-        from_column => "From_zone",
-        to_column => "To_zone",
-    )
-    corridors = line_table === nothing ? Set{String}() : corridor_signature_set(corridor_table)
+    corridor_table =
+        line_table === nothing ? DataFrame() :
+        rename(
+            select(line_table, from_column, to_column),
+            from_column => "From_zone",
+            to_column => "To_zone",
+        )
+    corridors =
+        line_table === nothing ? Set{String}() : corridor_signature_set(corridor_table)
     return Dict(
         "label" => case_label,
         "case_path" => case_path,
@@ -650,10 +655,18 @@ function validate_holistic_case_pair!(
     pcm_basis_configured = holistic_spatial_basis(pcm_config)
     pcm_basis = pcm_basis_configured == "auto" ? gtep_basis : pcm_basis_configured
     gtep_topology = collect_case_topology(
-        "GTEP", gtep_case, gtep_config, gtep_input; spatial_basis = gtep_basis,
+        "GTEP",
+        gtep_case,
+        gtep_config,
+        gtep_input;
+        spatial_basis = gtep_basis,
     )
     pcm_topology = collect_case_topology(
-        "PCM", pcm_case, pcm_config, pcm_input; spatial_basis = pcm_basis,
+        "PCM",
+        pcm_case,
+        pcm_config,
+        pcm_input;
+        spatial_basis = pcm_basis,
     )
 
     messages = String[]
@@ -954,7 +967,7 @@ function run_hope_holistic_fresh(
 end
 
 """
-    run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString) -> Dict
+    _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractString) -> Dict
 
 Run the two-stage holistic GTEP→PCM workflow.
 
@@ -974,7 +987,7 @@ Both case directories must share a consistent zonal topology; mismatches raise a
 Returns a `Dict` with keys `"gtep_output"` and `"pcm_output"` containing the respective
 result dictionaries.
 """
-function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
+function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractString)
     println("Run Holistic Assessment: 'GTEP-PCM' mode!")
     gtep_path, gtep_config =
         load_case_config_for_holistic(GTEP_case; context = "run_hope_holistic")
@@ -1014,6 +1027,8 @@ function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
     )
 
     println("First stage: solving 'GTEP' mode!")
+    source_gtep_hashes_before = _holistic_source_hashes(gtep_path, gtep_config)
+    source_pcm_hashes_before = _holistic_source_hashes(pcm_path, pcm_config)
     holistic_debug_stage_log_pair(
         gtep_config,
         pcm_config,
@@ -1026,6 +1041,7 @@ function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
         "run_hope_holistic_gtep_run_done",
     )
     gtep_output = gtep_results["output"]
+    gtep_activity = holistic_model_activity_metrics(gtep_results["solved_model"], "gtep")
     release_gtep_state_for_pcm!(gtep_results)
     holistic_debug_stage_log_pair(
         gtep_config,
@@ -1074,6 +1090,7 @@ function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
         "run_hope_holistic_pcm_model_build_done",
     )
     solved_pcm_model = solve_model(pcm_config, updated_pcm_input, pcm_model)
+    pcm_activity = holistic_model_activity_metrics(solved_pcm_model, "pcm")
     holistic_debug_stage_log_pair(
         gtep_config,
         pcm_config,
@@ -1108,6 +1125,8 @@ function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
         pcm_case_path = pcm_path,
         gtep_config = gtep_config,
     )
+    source_gtep_hashes_after = _holistic_source_hashes(gtep_path, gtep_config)
+    source_pcm_hashes_after = _holistic_source_hashes(pcm_path, pcm_config)
     holistic_debug_stage_log_pair(
         gtep_config,
         pcm_config,
@@ -1131,5 +1150,42 @@ function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
         "pcm_solved_model" => solved_pcm_model,
         "pcm_output" => pcm_output,
         "transfer_summary" => transfer_summary,
+        "gtep_activity" => gtep_activity,
+        "pcm_activity" => pcm_activity,
+        "source_gtep_hashes_before" => source_gtep_hashes_before,
+        "source_gtep_hashes_after" => source_gtep_hashes_after,
+        "source_pcm_hashes_before" => source_pcm_hashes_before,
+        "source_pcm_hashes_after" => source_pcm_hashes_after,
     )
+end
+
+"""
+    run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString) -> Dict
+
+Run the two-stage holistic GTEP-to-PCM workflow. Optional solver extensions are
+loaded before entering the compiled workflow so dynamically selected Gurobi,
+CPLEX, and SCIP methods are visible during both model-construction stages.
+"""
+function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
+    _, gtep_config = load_case_config_for_holistic(GTEP_case; context = "run_hope_holistic")
+    _, pcm_config = load_case_config_for_holistic(PCM_case; context = "run_hope_holistic")
+    solver_names = unique(
+        lowercase.(
+            String[
+                string(get(gtep_config, "solver", "")),
+                string(get(pcm_config, "solver", "")),
+            ],
+        ),
+    )
+    optional_solver_requested = false
+    for solver_name in solver_names
+        if haskey(OPTIONAL_SOLVER_PACKAGES, solver_name)
+            optional_solver_requested = true
+            _ensure_optional_solver_loaded(solver_name)
+        end
+    end
+    if optional_solver_requested
+        return Base.invokelatest(_run_hope_holistic_impl, GTEP_case, PCM_case)
+    end
+    return _run_hope_holistic_impl(GTEP_case, PCM_case)
 end

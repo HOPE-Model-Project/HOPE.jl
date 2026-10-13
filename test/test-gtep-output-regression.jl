@@ -71,3 +71,31 @@
               system_cost[!, Symbol("Inv_cost (\$)")]
     end
 end
+
+@testset "GTEP reserve headroom and retirement adequacy regression" begin
+    mktempdir() do tmpdir
+        tables = build_tiny_erec_case_tables()
+        tables["gendata.csv"][!, :Flag_RET] .= 1
+        tables["gendata.csv"][!, :CC] .= 0.8
+        tables["single_parameter.csv"][!, :spin_requirement] .= 0.03
+        case_dir = write_tiny_erec_case(
+            joinpath(tmpdir, "reserve_retirement_case");
+            tables = tables,
+        )
+        config = YAML.load_file(joinpath(case_dir, "Settings", "HOPE_model_settings.yml"))
+        config["operation_reserve_mode"] = 1
+        config["planning_reserve_mode"] = 1
+        input = HOPE.load_data(config, case_dir)
+        optimizer = HOPE.initiate_solver(case_dir, "highs")
+        model = HOPE.create_GTEP_model(config, input, optimizer)
+
+        retirement_lb = JuMP.constraint_by_name(model, "CLe_RET_LB_con[1,1,1]")
+        @test retirement_lb !== nothing
+        @test JuMP.normalized_coefficient(retirement_lb, model[:p][1, 1]) == -1.0
+        @test JuMP.normalized_coefficient(retirement_lb, model[:r_G_SPIN][1, 1]) == 0.0
+
+        reserve_adequacy = JuMP.constraint_by_name(model, "RA_con")
+        @test reserve_adequacy !== nothing
+        @test JuMP.normalized_coefficient(reserve_adequacy, model[:x_RET][1]) == -80.0
+    end
+end

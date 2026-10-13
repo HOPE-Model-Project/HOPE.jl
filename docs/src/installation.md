@@ -76,17 +76,20 @@ A normal package installation includes the open-source solvers
 Commercial solver packages such as [Gurobi](https://www.gurobi.com/),
 [SCIP](https://scipopt.org/), and
 [CPLEX](https://www.ibm.com/products/ilog-cplex-optimization-studio) are **not**
-installed by `Pkg.instantiate()` by default. If needed, add them manually while the HOPE
-project is active:
+installed by `Pkg.instantiate()` by default. In an application or study
+environment, install HOPE and the desired wrapper together:
 
 ```julia
 import Pkg
-Pkg.activate(".")
-Pkg.add("Gurobi")   # or "SCIP" / "CPLEX"
+Pkg.activate("my-study")
+Pkg.add(["HOPE", "Gurobi"])   # or "SCIP" / "CPLEX"
 ```
 
-When you do this from an active HOPE environment, the commercial solver package is added
-to the **HOPE project environment**, not just Julia's global default environment.
+For development from a cloned HOPE repository, install the optional wrapper in
+Julia's version environment (`Pkg.activate()` with no path, followed by
+`Pkg.add("Gurobi")`) and continue running HOPE with `julia --project=.`. This
+keeps HOPE's registered `Project.toml` unchanged while allowing its package
+extension to activate through Julia's stacked environment.
 
 ## 6. Minimal self-contained example
 

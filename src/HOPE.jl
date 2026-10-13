@@ -51,6 +51,7 @@ include("run.jl")                  #run module
 include("erec.jl")                 #EREC postprocessing module
 include("debug.jl")                #debug function
 include("holistic_linkage.jl")     #auditable multi-resolution GTEP-PCM linkage
+include("holistic_coverage.jl")    #machine-readable holistic coverage and acceptance
 include("run_holistic.jl")         #Holistic assessment: GTEP-PCM two stage
 
 #export HOPE functions
@@ -109,6 +110,9 @@ export validate_hope
 export select_dart_windows
 export run_hope_holistic
 export run_hope_holistic_fresh
+export holistic_coverage_metrics
+export holistic_model_activity_metrics
+export write_holistic_coverage_report
 export solve_model
 export solve_dart_sced
 export solve_dart_scuc

@@ -126,16 +126,50 @@ function finalize_output_directory(tmp_outpath::AbstractString, outpath::Abstrac
         return outpath
     catch err
         # On Windows/Dropbox-backed folders, `mv(tmp_outpath, outpath)` can partially
-        # succeed and populate `outpath` before reporting a lock/permission error.
-        # If the final `output/Analysis` tree is already present, keep that successful
-        # destination and treat the leftover temp folder as a cleanup artifact.
-        if isdir(outpath) && isdir(joinpath(outpath, "Analysis"))
-            println(
-                "Warning: Temporary output rename reported a filesystem lock, but '$outpath' already contains analysis outputs.",
-            )
-            println(
-                "Continuing with '$outpath' and leaving '$tmp_outpath' for later cleanup if needed.",
-            )
+        # succeed before reporting a lock/permission error. In that state some files
+        # have already moved to `outpath` and the remainder are still in `tmp_outpath`.
+        # Merge the remainder into the destination instead of retrying a directory move
+        # whose destination now exists.
+        if isdir(outpath) && isdir(tmp_outpath)
+            try
+                with_filesystem_retries("complete partially moved output directory") do
+                    copy_directory_tree(tmp_outpath, outpath)
+                end
+                try
+                    rm(tmp_outpath; recursive = true, force = true)
+                catch
+                end
+                println(
+                    "Warning: Completed a partially moved output directory after a filesystem lock.",
+                )
+                return outpath
+            catch merge_err
+                if !is_filesystem_lock_error(merge_err)
+                    rethrow(merge_err)
+                end
+                # The fallback below must combine both halves of the partial move.
+                fallback_outpath = outpath * "_completed_" * string(round(Int, time()))
+                println(
+                    "Warning: Could not finish the partially moved output in place; preserving the combined results in: $fallback_outpath",
+                )
+                with_filesystem_retries(
+                    "copy partial output destination to fallback location",
+                ) do
+                    copy_directory_tree(outpath, fallback_outpath)
+                end
+                with_filesystem_retries(
+                    "copy remaining temporary output to fallback location",
+                ) do
+                    copy_directory_tree(tmp_outpath, fallback_outpath)
+                end
+                try
+                    rm(tmp_outpath; recursive = true, force = true)
+                catch
+                end
+                return fallback_outpath
+            end
+        elseif isdir(outpath) && !isdir(tmp_outpath)
+            # The move completed even though the filesystem reported an error.
             return outpath
         end
 
@@ -1090,7 +1124,10 @@ function _write_output_impl(
         C_gen_df[New_built_idx, :New_Build] .= 1
 
         C_gen_df[!, :Capacity_RET] .= 0.0
-        x_ret_values = Float64.(value.(model[:x_RET]))
+        # x_RET is keyed by generator IDs (for example, axis [2, 7]), while
+        # the output assembly below uses positions within the retirement set.
+        # Materialize a positional Vector before applying those indices.
+        x_ret_values = [Float64(value(model[:x_RET][g])) for g in axes(model[:x_RET], 1)]
         retired_gret_idx = [i for (i, v) in enumerate(x_ret_values) if v > 0]
         Retirement_idx = map(x -> G_RET[x], retired_gret_idx)
         if !isempty(Retirement_idx)
@@ -1107,16 +1144,12 @@ function _write_output_impl(
         rename!(C_gen_df, :Capacity => Symbol("Capacity_FIN (MW)"))
 
         if "Asset_ID" in names(Gendata)
-            C_gen_df[!, :Asset_ID] = vcat(
-                string.(Gendata[!, "Asset_ID"]),
-                fill(missing, Num_Cgen),
-            )
+            C_gen_df[!, :Asset_ID] =
+                vcat(string.(Gendata[!, "Asset_ID"]), fill(missing, Num_Cgen))
         end
         if "Candidate_ID" in names(Gendata_candidate)
-            C_gen_df[!, :Candidate_ID] = vcat(
-                fill(missing, Num_Egen),
-                string.(Gendata_candidate[!, "Candidate_ID"]),
-            )
+            C_gen_df[!, :Candidate_ID] =
+                vcat(fill(missing, Num_Egen), string.(Gendata_candidate[!, "Candidate_ID"]))
         end
         CSV.write(joinpath(outpath, "capacity.csv"), C_gen_df, header = true)
         ##Transmission line-----------------------------------------------------------------------------------------------------------
@@ -1315,10 +1348,8 @@ function _write_output_impl(
         rename!(C_es_df, :EnergyCapacity => Symbol("EnergyCapacity (MWh)"))
 
         if "Asset_ID" in names(Storagedata)
-            C_es_df[!, :Asset_ID] = vcat(
-                string.(Storagedata[!, "Asset_ID"]),
-                fill(missing, Num_Csto),
-            )
+            C_es_df[!, :Asset_ID] =
+                vcat(string.(Storagedata[!, "Asset_ID"]), fill(missing, Num_Csto))
         end
         if "Candidate_ID" in names(Estoragedata_candidate)
             C_es_df[!, :Candidate_ID] = vcat(

@@ -161,14 +161,18 @@ using DataFrames
         )
         updated, audit = HOPE.apply_line_builds_with_audit!(copy(lines), builds)
 
-        logical_forward_before = lines[1, Symbol("Forward Capacity (MW)")] +
-                                 lines[2, Symbol("Reverse Capacity (MW)")]
-        logical_forward_after = updated[1, Symbol("Forward Capacity (MW)")] +
-                                updated[2, Symbol("Reverse Capacity (MW)")]
-        logical_reverse_before = lines[1, Symbol("Reverse Capacity (MW)")] +
-                                 lines[2, Symbol("Forward Capacity (MW)")]
-        logical_reverse_after = updated[1, Symbol("Reverse Capacity (MW)")] +
-                                updated[2, Symbol("Forward Capacity (MW)")]
+        logical_forward_before =
+            lines[1, Symbol("Forward Capacity (MW)")] +
+            lines[2, Symbol("Reverse Capacity (MW)")]
+        logical_forward_after =
+            updated[1, Symbol("Forward Capacity (MW)")] +
+            updated[2, Symbol("Reverse Capacity (MW)")]
+        logical_reverse_before =
+            lines[1, Symbol("Reverse Capacity (MW)")] +
+            lines[2, Symbol("Forward Capacity (MW)")]
+        logical_reverse_after =
+            updated[1, Symbol("Reverse Capacity (MW)")] +
+            updated[2, Symbol("Forward Capacity (MW)")]
         @test logical_forward_after - logical_forward_before ≈ 40.0
         @test logical_reverse_after - logical_reverse_before ≈ 20.0
         @test nrow(audit) == 2
@@ -180,7 +184,10 @@ using DataFrames
         )
         missing_build = copy(builds)
         missing_build.From_zone .= "X"
-        @test_throws ArgumentError HOPE.apply_line_builds_with_audit!(copy(lines), missing_build)
+        @test_throws ArgumentError HOPE.apply_line_builds_with_audit!(
+            copy(lines),
+            missing_build,
+        )
     end
 
     @testset "Legacy cases need no new identity columns" begin
@@ -275,11 +282,8 @@ using DataFrames
             "Storagedata" => empty_storage,
             "Linedata" => empty_lines,
         )
-        pcm_config = Dict(
-            "resource_aggregation" => 0,
-            "unit_commitment" => 0,
-            "network_model" => 1,
-        )
+        pcm_config =
+            Dict("resource_aggregation" => 0, "unit_commitment" => 0, "network_model" => 1)
         updated = HOPE.prepare_pcm_inputs_from_gtep_linked(
             gtep_output,
             gtep_input,
@@ -338,14 +342,16 @@ using DataFrames
         )
         gtep_config = Dict("model_mode" => "GTEP", "holistic_spatial_basis" => "bus")
         pcm_config = Dict("model_mode" => "PCM", "holistic_spatial_basis" => "auto")
-        @test isnothing(HOPE.validate_holistic_case_pair!(
-            "gtep",
-            gtep_config,
-            gtep_input,
-            "pcm",
-            pcm_config,
-            pcm_input,
-        ))
+        @test isnothing(
+            HOPE.validate_holistic_case_pair!(
+                "gtep",
+                gtep_config,
+                gtep_input,
+                "pcm",
+                pcm_config,
+                pcm_input,
+            ),
+        )
     end
 
     @testset "Nodal builds realize at buses and update branchdata" begin
@@ -357,9 +363,16 @@ using DataFrames
             Symbol("Pmax (MW)") => [100.0],
             Symbol("Pmin (MW)") => [20.0],
             Symbol("Cost (\$/MWh)") => [30.0],
-            :EF => [0.4], :CC => [1.0], :AF => [1.0], :FOR => [0.05],
-            :RM_SPIN => [0.1], :RU => [1.0], :RD => [1.0],
-            :Flag_thermal => [1], :Flag_VRE => [0], :Flag_mustrun => [0],
+            :EF => [0.4],
+            :CC => [1.0],
+            :AF => [1.0],
+            :FOR => [0.05],
+            :RM_SPIN => [0.1],
+            :RU => [1.0],
+            :RD => [1.0],
+            :Flag_thermal => [1],
+            :Flag_VRE => [0],
+            :Flag_mustrun => [0],
         )
         candidate = DataFrame(
             :Candidate_ID => ["GEN_B2"],
@@ -369,23 +382,34 @@ using DataFrames
             Symbol("Pmax (MW)") => [100.0],
             Symbol("Pmin (MW)") => [0.0],
             Symbol("Cost (\$/MWh)") => [0.0],
-            :EF => [0.0], :CC => [0.3], :AF => [1.0], :FOR => [0.0],
-            :RM_SPIN => [0.0], :RU => [1.0], :RD => [1.0],
-            :Flag_thermal => [0], :Flag_VRE => [1], :Flag_mustrun => [0],
+            :EF => [0.0],
+            :CC => [0.3],
+            :AF => [1.0],
+            :FOR => [0.0],
+            :RM_SPIN => [0.0],
+            :RU => [1.0],
+            :RD => [1.0],
+            :Flag_thermal => [0],
+            :Flag_VRE => [1],
+            :Flag_mustrun => [0],
         )
         empty_storage = DataFrame(
-            :Zone => String[], :Bus_id => String[], :Type => String[],
+            :Zone => String[],
+            :Bus_id => String[],
+            :Type => String[],
             Symbol("Capacity (MWh)") => Float64[],
             Symbol("Max Power (MW)") => Float64[],
             Symbol("Charging efficiency") => Float64[],
             Symbol("Discharging efficiency") => Float64[],
             Symbol("Cost (\$/MWh)") => Float64[],
-            :EF => Float64[], :CC => Float64[],
+            :EF => Float64[],
+            :CC => Float64[],
             Symbol("Charging Rate") => Float64[],
             Symbol("Discharging Rate") => Float64[],
         )
         line_candidate = DataFrame(
-            :From_zone => ["B1"], :To_zone => ["B2"],
+            :From_zone => ["B1"],
+            :To_zone => ["B2"],
             Symbol("Forward Capacity (MW)") => [40.0],
             Symbol("Reverse Capacity (MW)") => [20.0],
             :Corridor_ID => ["C1"],
@@ -405,13 +429,15 @@ using DataFrames
                 Symbol("Capacity_FIN (MW)") => [100.0, 60.0],
             ),
             "es_capacity" => DataFrame(
-                :EC_Category => String[], :New_Build => Float64[],
+                :EC_Category => String[],
+                :New_Build => Float64[],
                 Symbol("Capacity (MW)") => Float64[],
                 Symbol("EnergyCapacity (MWh)") => Float64[],
             ),
             "line" => DataFrame(
                 :New_Build => [1.0],
-                :From_zone => ["B1"], :To_zone => ["B2"],
+                :From_zone => ["B1"],
+                :To_zone => ["B2"],
                 Symbol("Forward Capacity (MW)") => [40.0],
                 Symbol("Reverse Capacity (MW)") => [20.0],
             ),
@@ -419,8 +445,10 @@ using DataFrames
         pcm_existing = copy(existing)
         pcm_existing.Zone .= "Z1"
         branch = DataFrame(
-            :From_zone => ["Z1"], :To_zone => ["Z2"],
-            :from_bus => ["B1"], :to_bus => ["B2"],
+            :From_zone => ["Z1"],
+            :To_zone => ["Z2"],
+            :from_bus => ["B1"],
+            :to_bus => ["B2"],
             Symbol("Forward Capacity (MW)") => [100.0],
             Symbol("Reverse Capacity (MW)") => [100.0],
             :Corridor_ID => ["C1"],
@@ -429,7 +457,8 @@ using DataFrames
             "Gendata" => pcm_existing,
             "Storagedata" => empty_storage,
             "Linedata" => DataFrame(
-                :From_zone => ["Z1"], :To_zone => ["Z2"],
+                :From_zone => ["Z1"],
+                :To_zone => ["Z2"],
                 Symbol("Forward Capacity (MW)") => [10.0],
                 Symbol("Reverse Capacity (MW)") => [10.0],
             ),
@@ -455,33 +484,68 @@ using DataFrames
         @test updated["Branchdata"][1, Symbol("Reverse Capacity (MW)")] == 120.0
         @test updated["Linedata"][1, Symbol("Forward Capacity (MW)")] == 10.0
         mktempdir() do tmpdir
-            paths = HOPE.persist_realized_pcm_inputs_for_holistic(tmpdir, pcm_config, updated)
+            paths =
+                HOPE.persist_realized_pcm_inputs_for_holistic(tmpdir, pcm_config, updated)
             @test isfile(paths["branchdata"])
         end
     end
 
     @testset "Aggregated line decisions can target explicit PCM branches" begin
         branches = DataFrame(
-            :From_zone => ["Z1"], :To_zone => ["Z2"],
-            :from_bus => ["B1"], :to_bus => ["B2"],
+            :From_zone => ["Z1"],
+            :To_zone => ["Z2"],
+            :from_bus => ["B1"],
+            :to_bus => ["B2"],
             Symbol("Forward Capacity (MW)") => [100.0],
             Symbol("Reverse Capacity (MW)") => [80.0],
             :Corridor_ID => ["C1"],
         )
         builds = DataFrame(
-            :From_zone => ["Z1"], :To_zone => ["Z2"],
-            :PCM_from_bus => ["B1"], :PCM_to_bus => ["B2"],
+            :From_zone => ["Z1"],
+            :To_zone => ["Z2"],
+            :PCM_from_bus => ["B1"],
+            :PCM_to_bus => ["B2"],
             Symbol("Forward Capacity (MW)") => [25.0],
             Symbol("Reverse Capacity (MW)") => [15.0],
             :Corridor_ID => ["C1"],
         )
-        updated, audit = HOPE.apply_line_builds_with_audit!(
-            branches,
-            builds;
-            network_model = 2,
-        )
+        updated, audit =
+            HOPE.apply_line_builds_with_audit!(branches, builds; network_model = 2)
         @test updated[1, Symbol("Forward Capacity (MW)")] == 125.0
         @test updated[1, Symbol("Reverse Capacity (MW)")] == 95.0
         @test audit.MappingMode == ["corridor_id"]
+    end
+
+    @testset "Holistic acceptance settings and thresholds are machine readable" begin
+        metrics = Dict{String,Any}(
+            "retired_generation_mw" => 20.0,
+            "pcm_load_shedding_mwh" => 0.0,
+        )
+        expectations = Dict{String,Any}(
+            "required_settings" => Dict(
+                "gtep" => Dict("inv_dcs_bin" => 1),
+                "pcm" => Dict("network_model" => 2),
+            ),
+            "thresholds" => Dict(
+                "retired_generation_mw" => Dict("minimum" => 19.0),
+                "pcm_load_shedding_mwh" => Dict("maximum" => 1.0e-6),
+            ),
+        )
+        checks = HOPE._holistic_acceptance_checks(
+            metrics,
+            Dict("inv_dcs_bin" => 1),
+            Dict("network_model" => 2),
+            expectations,
+        )
+        @test nrow(checks) == 4
+        @test all(checks.Passed)
+        metrics["retired_generation_mw"] = 0.0
+        failed = HOPE._holistic_acceptance_checks(
+            metrics,
+            Dict("inv_dcs_bin" => 1),
+            Dict("network_model" => 2),
+            expectations,
+        )
+        @test !all(failed.Passed)
     end
 end

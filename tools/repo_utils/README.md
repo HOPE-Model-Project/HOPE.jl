@@ -6,6 +6,7 @@ This folder contains general repository utilities that are not specific to a sin
 
 - `audit_holistic_case_pair.jl`: validate that a paired GTEP and PCM case use a topology-compatible holistic setup before solving.
 - `build_md_holistic_full_pair.jl`: build the canonical Maryland full-year holistic benchmark pair.
+- `build_md_restricted_linkage_pair.jl`: build the compact Maryland stress pair that verifies retirement, generation, storage, and transmission transfer with a machine-readable acceptance contract.
 - `build_pjm_holistic_canonical_pair.jl`: build the canonical PJM holistic benchmark pair.
 - `build_pjm_holistic_mixed_pair.jl`: build the mixed PJM holistic benchmark pair used for chronology and workflow experiments.
 

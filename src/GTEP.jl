@@ -1074,17 +1074,24 @@ function create_GTEP_model(
             )
         end
 
-        # [GTEP-C4] Existing generator operating limits (energy + SPIN headroom), with retirement and must-run variants
-        CLe_con = @constraint(
+        # [GTEP-C4] Existing generator operating limits. Minimum output applies
+        # to energy dispatch; SPIN consumes only upper-bound headroom.
+        CLe_LB_con = @constraint(
             model,
             [g in setdiff(G_exist, G_RET), t in T, h in H_t[t]],
-            P_min[g] <= p[g, h] + r_G_SPIN[g, h] <= P_max[g] * AF_gh[g, h],
-            base_name = "CLe_con"
+            P_min[g] <= p[g, h],
+            base_name = "CLe_LB_con"
+        )
+        CLe_UP_con = @constraint(
+            model,
+            [g in setdiff(G_exist, G_RET), t in T, h in H_t[t]],
+            p[g, h] + r_G_SPIN[g, h] <= P_max[g] * AF_gh[g, h],
+            base_name = "CLe_UP_con"
         )
         CLe_RET_LB_con = @constraint(
             model,
             [g in G_RET, t in T, h in H_t[t]],
-            P_min[g] - P_min[g] * x_RET[g] <= p[g, h] + r_G_SPIN[g, h],
+            P_min[g] - P_min[g] * x_RET[g] <= p[g, h],
             base_name = "CLe_RET_LB_con"
         )
         CLe_RET_UP_con = @constraint(
@@ -1105,7 +1112,7 @@ function create_GTEP_model(
         CLn_LB_con = @constraint(
             model,
             [g in G_new, t in T, h in H_t[t]],
-            P_min[g] * x[g] <= p[g, h] + r_G_SPIN[g, h],
+            P_min[g] * x[g] <= p[g, h],
             base_name = "CLn_LB_con"
         )
         CLn_UB_con = @constraint(
@@ -1381,7 +1388,8 @@ function create_GTEP_model(
             # [GTEP-C6.A] System-level adequacy
             RA_con = @constraint(
                 model,
-                sum(CC_g[g] * P_max[g] for g in G_exist) +
+                sum(CC_g[g] * P_max[g] for g in setdiff(G_exist, G_RET)) +
+                sum(CC_g[g] * P_max[g] * (1 - x_RET[g]) for g in G_RET) +
                 sum(CC_g[g] * P_max[g] * x[g] for g in G_new) +
                 sum(CC_s[s] * SCAP[s] for s in S_exist) +
                 sum(CC_s[s] * SCAP[s] * z[s] for s in S_new) +
@@ -1393,7 +1401,10 @@ function create_GTEP_model(
             RA_zone_con = @constraint(
                 model,
                 [i in I],
-                sum(CC_g[g] * P_max[g] for g in intersect(G_exist, G_i[i])) +
+                sum(
+                    CC_g[g] * P_max[g] for g in setdiff(intersect(G_exist, G_i[i]), G_RET)
+                ) +
+                sum(CC_g[g] * P_max[g] * (1 - x_RET[g]) for g in intersect(G_RET, G_i[i])) +
                 sum(CC_g[g] * P_max[g] * x[g] for g in intersect(G_new, G_i[i])) +
                 sum(CC_s[s] * SCAP[s] for s in intersect(S_exist, S_i[i])) +
                 sum(CC_s[s] * SCAP[s] * z[s] for s in intersect(S_new, S_i[i])) +
