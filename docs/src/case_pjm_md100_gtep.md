@@ -3,6 +3,9 @@
 Case path: `ModelCases/PJM_MD100_GTEP_case`
 Data path: `ModelCases/PJM_MD100_GTEP_case/Data_PJM_GTEP_subzones`
 
+MD100 denotes the case's 100% renewable-policy scenario; it does not denote
+a 100-bus network. The case has 35 modeled zones, as summarized below.
+
 ## Dashboard
 
 A live demo is hosted on Hugging Face Spaces:
