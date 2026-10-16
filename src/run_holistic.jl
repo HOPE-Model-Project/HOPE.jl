@@ -1012,7 +1012,7 @@ function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractSt
         pcm_config,
         "run_hope_holistic_topology_load_done",
     )
-    validate_holistic_case_pair!(
+    handoff_contract = validate_holistic_handoff_contract(
         gtep_path,
         gtep_config,
         gtep_input,
@@ -1127,6 +1127,16 @@ function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractSt
     )
     source_gtep_hashes_after = _holistic_source_hashes(gtep_path, gtep_config)
     source_pcm_hashes_after = _holistic_source_hashes(pcm_path, pcm_config)
+    validate_holistic_source_immutability!(
+        handoff_contract,
+        source_gtep_hashes_after,
+        source_pcm_hashes_after,
+        require_valid = false,
+    )
+    handoff_contract_paths =
+        write_holistic_handoff_contract_report(actual_pcm_outpath, handoff_contract)
+    handoff_contract["valid"] ||
+        throw(ErrorException("Holistic workflow modified a source input file."))
     holistic_debug_stage_log_pair(
         gtep_config,
         pcm_config,
@@ -1150,6 +1160,8 @@ function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractSt
         "pcm_solved_model" => solved_pcm_model,
         "pcm_output" => pcm_output,
         "transfer_summary" => transfer_summary,
+        "handoff_contract" => handoff_contract,
+        "handoff_contract_paths" => handoff_contract_paths,
         "gtep_activity" => gtep_activity,
         "pcm_activity" => pcm_activity,
         "source_gtep_hashes_before" => source_gtep_hashes_before,

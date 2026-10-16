@@ -159,6 +159,12 @@ silently changing them.
 See [DART Input Data](@ref dart-inputs) for the file schema and validation
 rules.
 
+For linked or restart workflows, [Operational-State Contracts](@ref operational-state-contracts)
+define a hashed state package with stable IDs, boundary time, physical-system
+identity, and parent lineage. DART accepts this package as an alternative to
+its two initial-state CSVs and publishes its final binding state in the same
+format.
+
 The `RTS24_DART_case` in ModelCases is a standalone standard case with all 19
 compatible DART constraint families enabled. It demonstrates manifest and ID
 validation, rolling DA/RT operation, physical outage realization, strict

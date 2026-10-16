@@ -118,6 +118,13 @@ It loads stable IDs, validates the physical network and calendar, records source
 hashes and provenance, and provides typed DART conversion functions. It should
 not be treated as the entire future registry or as a mutable global state store.
 
+The version-1 `HOPE.simulation_state` implementation now provides the separate
+carry-over layer: hashed generator and storage state, boundary time, physical
+system fingerprint, parent lineage, and immutable publication. DART can consume
+it optionally and publishes its final binding state in the same form. A PCM
+adapter remains the next producer-side step; it should emit this contract rather
+than requiring DART to interpret arbitrary PCM output folders.
+
 ## Model-connection gaps
 
 ### GTEP to PCM

@@ -52,7 +52,12 @@ pages = OrderedDict(
     ],
     "Postprocessing" => ["EREC" => "EREC.md"],
     "Reference" =>
-        ["Package scope" => "package_scope.md", "API Reference" => "95-reference.md"],
+        [
+            "Package scope" => "package_scope.md",
+            "Holistic handoff contracts" => "holistic_contracts.md",
+            "Operational-state contracts" => "operational_state_contracts.md",
+            "API Reference" => "95-reference.md",
+        ],
     "HOPE-AI" => [
         "HOPE-AI (LLM Agent)" => "hope_ai.md",
         "Multi-Model and Multi-Agent Design" => "multi_agent_system_design.md",

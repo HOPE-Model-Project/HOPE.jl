@@ -91,6 +91,13 @@ These files intentionally remain separate from `gendata.csv` and
 `storagedata.csv`: they describe the start of a simulation, not permanent
 asset properties.
 
+For linked or restart workflows, `files.operational_state_artifact` may instead
+identify a versioned state directory relative to `DataCase`. It contains the
+same physical carry-over values plus timestamp, lineage, physical-system
+fingerprint, and integrity hashes. Do not configure it together with the two
+legacy CSV fields. Completed DART runs publish a reusable artifact at
+`output/operational_state/`. See [Operational-State Contracts](@ref operational-state-contracts).
+
 ## Native real-time series
 
 A DART case may configure three native subhourly files:

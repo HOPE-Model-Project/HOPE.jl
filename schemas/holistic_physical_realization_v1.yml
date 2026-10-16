@@ -1,0 +1,134 @@
+schema_name: HOPE holistic physical realization
+schema_version: 1
+artifact_type: HOPE.physical_realization
+status: stable
+description: >-
+  Declares how an aggregate GTEP planning system is realized on the physical
+  network used by PCM. The contract records mapping rules and provenance; it
+  does not change either model's mathematical formulation.
+
+required_top_level:
+  schema_version:
+    type: integer
+    value: 1
+  artifact_type:
+    type: string
+    value: HOPE.physical_realization
+  workflow:
+    type: string
+    value: GTEP-PCM
+  topology:
+    type: mapping
+  resource_siting:
+    type: mapping
+  transmission_realization:
+    type: mapping
+  provenance:
+    type: mapping
+
+topology:
+  planning_basis:
+    type: string
+    allowed: [zone, bus]
+  planning_node_table:
+    type: string
+    description: GTEP table containing planning nodes.
+  physical_node_table:
+    type: string
+    description: PCM bus table containing Bus_id and Zone_id.
+  physical_branch_table:
+    type: string
+    description: PCM branch table containing physical endpoints.
+  expected_counts:
+    type: mapping
+    optional: true
+    fields:
+      planning_nodes: integer
+      physical_nodes: integer
+      physical_branches: integer
+
+resource_siting:
+  generation:
+    type: mapping
+    fields:
+      method:
+        allowed: [explicit_bus, legacy_zone]
+      bus_column:
+        required_when: method == explicit_bus
+        default: Bus_id
+      planning_zone_column:
+        default: Planning_Zone
+  storage:
+    type: mapping
+    fields:
+      method:
+        allowed: [explicit_bus, legacy_zone]
+      bus_column:
+        required_when: method == explicit_bus
+        default: Bus_id
+      planning_zone_column:
+        default: Planning_Zone
+  allocation_semantics:
+    explicit_bus: >-
+      Each candidate row identifies the exact physical PCM bus. Built capacity
+      remains conserved and receives a stable Asset_ID derived from Candidate_ID.
+    legacy_zone: >-
+      Existing validated row or aggregate mapping remains available for old
+      zonal cases. It is not sufficient for a strict nodal realization contract.
+
+transmission_realization:
+  method_priority:
+    type: list
+    allowed_items:
+      - corridor_id
+      - explicit_endpoints
+      - proportional_parallel_corridor
+  method_semantics:
+    corridor_id: Match candidate and physical branch Corridor_ID.
+    explicit_endpoints: Match PCM_from_bus and PCM_to_bus to branch endpoints.
+    proportional_parallel_corridor: >-
+      For zonal models only, distribute directional additions across parallel
+      corridors in proportion to existing directional ratings.
+
+identity:
+  existing_assets:
+    preferred_column: Asset_ID
+    fallback: validated legacy row or aggregate mapping
+  candidates:
+    preferred_column: Candidate_ID
+    realized_asset_pattern: "<Candidate_ID>__UNIT_<sequence>"
+  requirements:
+    - IDs, when supplied, are nonblank and unique within their tables.
+    - Asset_ID must be present on both stages or neither stage.
+    - Every GTEP Asset_ID must resolve in PCM before retirement transfer.
+
+provenance:
+  source_register:
+    type: case_file_reference
+    fields:
+      case:
+        allowed: [gtep, pcm]
+      path: string
+    required_columns:
+      - Dataset
+      - Role
+      - Source
+      - License_or_terms
+      - Transformation
+  confidence:
+    type: mapping
+    optional: true
+    description: Distinguishes observed, derived, inferred, and assumed fields.
+
+integrity:
+  hashing: SHA-256 of every file under each source DataCase directory
+  mutation_policy: Source data must be byte-for-byte unchanged after the workflow.
+  report_files:
+    - realized_inputs/handoff_contract.yml
+    - realized_inputs/handoff_contract_checks.csv
+
+migration_policy:
+  unknown_version: reject
+  missing_contract: >-
+    Preserve validated legacy linkage behavior and emit a warning-level contract
+    check. Cases opting into this schema receive strict physical checks.

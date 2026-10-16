@@ -8,18 +8,18 @@ function main(args)
 
     gtep_case, pcm_case = args
     try
-        gtep_path, gtep_config = HOPE.load_case_config_for_holistic(gtep_case; context = "audit_holistic_case_pair")
-        pcm_path, pcm_config = HOPE.load_case_config_for_holistic(pcm_case; context = "audit_holistic_case_pair")
-
         println("Auditing holistic pair:")
-        println("  GTEP: ", gtep_path)
-        println("  PCM : ", pcm_path)
+        println("  GTEP: ", gtep_case)
+        println("  PCM : ", pcm_case)
 
-        gtep_input = HOPE.load_data(gtep_config, gtep_path)
-        pcm_input = HOPE.load_data(pcm_config, pcm_path)
-        HOPE.validate_holistic_case_pair!(gtep_path, gtep_config, gtep_input, pcm_path, pcm_config, pcm_input)
+        report = HOPE.validate_holistic_handoff_contract(gtep_case, pcm_case)
+        println()
+        for row in eachrow(report["checks"])
+            status = row.Severity == "warning" ? "WARN" : (row.Passed ? "PASS" : "FAIL")
+            println("  [", status, "] ", row.Check, ": ", row.Evidence)
+        end
 
-        println("Holistic pair audit passed.")
+        println("\nHolistic handoff contract passed.")
         return 0
     catch err
         println(err)

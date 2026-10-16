@@ -55,6 +55,10 @@ confirmed that neither source input tree changed during the workflow.
 
 The GTEP model sees four Maryland planning zones plus an external boundary.
 Candidate rows include `Bus_id`, `Planning_Zone`, and stable candidate identity.
+The GTEP case also supplies `Settings/HOPE_physical_realization.yml`, which opts
+the pair into the version-1 strict handoff contract. It declares explicit-bus
+generation and storage siting, corridor/endpoint transmission mapping, expected
+network counts, provenance, and confidence labels.
 The PCM model retains 656 reconstructed transmission buses, 838 branches, and
 explicit external-boundary buses with bounded net interchange.
 

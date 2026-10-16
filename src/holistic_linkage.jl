@@ -959,13 +959,7 @@ function holistic_transfer_summary(updated_input::Dict)
 end
 
 function _holistic_source_hashes(case_path::AbstractString, config::Dict)
-    data_dir = joinpath(case_path, String(config["DataCase"]))
-    hashes = Dict{String,String}()
-    for filename in ("gendata.csv", "storagedata.csv", "linedata.csv", "branchdata.csv")
-        path = joinpath(data_dir, filename)
-        isfile(path) && (hashes[filename] = bytes2hex(sha256(read(path))))
-    end
-    return hashes
+    return holistic_case_fingerprint(case_path, config)
 end
 
 function persist_realized_pcm_inputs_for_holistic(

@@ -188,9 +188,22 @@ function _load_dart_system(config, snapshot, settings, data_dir, single)
 end
 function _load_dart_state(data, settings, data_dir)
     files = _dart_mapping(settings, "files"; required = false)
+    artifact_directory = string(get(files, "operational_state_artifact", ""))
     gen_file = string(get(files, "initial_generator_state", ""))
     sto_file = string(get(files, "initial_storage_state", ""))
-    isempty(gen_file) && isempty(sto_file) && return build_dart_initial_state(data)
+    if !isempty(artifact_directory)
+        (!isempty(gen_file) || !isempty(sto_file)) && throw(
+            ArgumentError(
+                "Configure either files.operational_state_artifact or the legacy " *
+                "initial-state CSV files, not both.",
+            ),
+        )
+        artifact_path = normpath(joinpath(data_dir, artifact_directory))
+        artifact = load_operational_state_artifact(artifact_path, data)
+        return artifact.state, artifact
+    end
+    isempty(gen_file) && isempty(sto_file) &&
+        return build_dart_initial_state(data), nothing
     isempty(gen_file) && throw(ArgumentError("initial_generator_state is required."))
     gen = CSV.read(joinpath(data_dir, gen_file), DataFrame)
     gen_rows = _dart_exact_rows(gen, :generator_id, getfield.(data.generators, :name), "Initial generator state")
@@ -202,7 +215,7 @@ function _load_dart_state(data, settings, data_dir)
     end
     gids = getfield.(data.generators, :name)
     sids = getfield.(data.storage, :name)
-    return build_dart_initial_state(
+    state = build_dart_initial_state(
         data;
         commitment = [Int(gen_rows[id].commitment) for id in gids],
         generation_mw = [Float64(gen_rows[id].generation_mw) for id in gids],
@@ -211,6 +224,7 @@ function _load_dart_state(data, settings, data_dir)
         generator_in_service = [_dart_bool(gen_rows[id].in_service) for id in gids],
         storage_soc_mwh = [Float64(sto_rows[id].soc_mwh) for id in sids],
     )
+    return state, nothing
 end
 
 function _dart_realtime_tables(settings, data_dir)
@@ -567,7 +581,7 @@ function load_dart_case(case_path::AbstractString, config::AbstractDict; emit_wa
     settings = _dart_mapping(config, "dart_settings")
     single = _dart_single_parameters(data_dir)
     data = _load_dart_system(config, snapshot, settings, data_dir, single)
-    state = _load_dart_state(data, settings, data_dir)
+    state, state_artifact = _load_dart_state(data, settings, data_dir)
     forecasts = _dart_forecasts(snapshot, data, state, config, settings, data_dir)
     coverage = _dart_coverage(data, forecasts.day_ahead, forecasts.real_time, settings)
     acceptance = _dart_mapping(settings, "acceptance"; required = false)
@@ -582,6 +596,7 @@ function load_dart_case(case_path::AbstractString, config::AbstractDict; emit_wa
         "snapshot" => snapshot,
         "system" => data,
         "initial_state" => state,
+        "operational_state_artifact" => state_artifact,
         "forecasts" => forecasts,
         "dart_config" => _dart_runtime_config(config, settings, single),
         "inventory" => _dart_inventory(snapshot, data),
@@ -750,6 +765,29 @@ function _write_dart_output(case_path, input, rolling, settlement, acceptance)
             ))
         end
         CSV.write(joinpath(tmp, "acceptance_summary.csv"), acceptance)
+        f = input["forecasts"]
+        rt_count = f.binding_hours * f.real_time_intervals_per_hour
+        interval_minutes = div(60, f.real_time_intervals_per_hour)
+        boundary_time = f.real_time_timestamps[rt_count] + Minute(interval_minutes)
+        parent = input["operational_state_artifact"]
+        parent_hashes = parent === nothing ? Dict{String,String}() :
+                        Dict("initial_state" => parent.artifact_id)
+        write_operational_state_artifact(
+            joinpath(tmp, "operational_state"),
+            input["system"],
+            rolling.final_state;
+            boundary_time = boundary_time,
+            timezone = get(input["snapshot"].provenance, "timezone", "unspecified"),
+            interval_minutes = interval_minutes,
+            source_model = "DART",
+            scenario_id = input["snapshot"].name,
+            initialization_method = "preceding_run",
+            parent_artifact_hashes = parent_hashes,
+            assumptions = Dict(
+                "state_semantics" => "physical state after the final binding RT interval",
+                "publication" => "published atomically with the DART output directory",
+            ),
+        )
         return finalize_output_directory(tmp, outpath)
     catch
         isdir(tmp) && rm(tmp; recursive = true, force = true)
@@ -787,6 +825,10 @@ function run_dart_case(case_path::AbstractString, config::AbstractDict, optimize
                  calculate_dart_settlements(input["system"], rolling) : nothing
     acceptance = _dart_acceptance(input, rolling, settlement)
     output_path = _write_dart_output(case_path, input, rolling, settlement, acceptance)
+    final_state_artifact = load_operational_state_artifact(
+        joinpath(output_path, "operational_state"),
+        input["system"],
+    )
     return Dict(
         "case_path" => case_path,
         "output_path" => output_path,
@@ -794,6 +836,7 @@ function run_dart_case(case_path::AbstractString, config::AbstractDict, optimize
         "input" => input,
         "rolling_result" => rolling,
         "settlement" => settlement,
+        "operational_state_artifact" => final_state_artifact,
         "output" => Dict("acceptance_summary" => acceptance),
     )
 end

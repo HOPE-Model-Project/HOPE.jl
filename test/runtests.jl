@@ -15,9 +15,11 @@ using Test
     include("test-erec-snapshot.jl")
     include("test-holistic.jl")
     include("test-holistic-linkage.jl")
+    include("test-holistic-contract.jl")
     include("test-lmp-sign-regression.jl")
     include("test-pcm-constraints.jl")
     include("test-dart.jl")
     include("test-operational-snapshot.jl")
+    include("test-operational-state-contract.jl")
     include("test-dart-workflow.jl")
 end

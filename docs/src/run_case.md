@@ -207,6 +207,14 @@ selected by the standard output writer). It contains `gendata.csv`,
 `storagedata.csv`, `linedata.csv`, optional nodal `branchdata.csv`, mapping audit CSVs, and
 `handoff_manifest.yml` with source hashes and transfer totals.
 
+A case may opt into strict physical-realization validation by adding
+`Settings/HOPE_physical_realization.yml`. The holistic runner discovers this
+versioned contract automatically, validates candidate buses, planning zones,
+branch targets, identities, topology counts, and provenance before solving, and
+then verifies SHA-256 fingerprints for every source data file after the run.
+The resulting `handoff_contract.yml` and `handoff_contract_checks.csv` are
+written beside the realized inputs. See [Holistic Handoff and Physical-Realization Contracts](@ref).
+
 If you want to validate a pair before solving, you can also use the generic audit helper:
 
 ```powershell

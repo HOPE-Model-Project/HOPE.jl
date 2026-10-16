@@ -1,0 +1,82 @@
+schema_name: HOPE operational simulation state
+schema_version: 1
+artifact_type: HOPE.simulation_state
+status: stable
+description: >-
+  Immutable physical carry-over state at a chronological model boundary. The
+  artifact is separate from installed-system data, forecasts, market rules,
+  and solver settings.
+
+required_top_level:
+  schema_version:
+    type: integer
+    value: 1
+  artifact_type:
+    type: string
+    value: HOPE.simulation_state
+  artifact_id:
+    type: sha256
+  scenario_id:
+    type: string
+  boundary:
+    type: mapping
+  source:
+    type: mapping
+  lineage:
+    type: mapping
+  files:
+    type: mapping
+
+boundary:
+  timestamp:
+    type: ISO-8601 local datetime
+  timezone:
+    type: string
+    description: IANA name, fixed offset, or explicit unspecified marker.
+  interval_minutes:
+    type: positive integer
+    description: Resolution of the interval that ended at the boundary.
+
+source:
+  model:
+    type: string
+    examples: [PCM, DART, STANDALONE]
+  initialization_method:
+    type: string
+    examples: [preceding_run, warm_start, observed, assumed]
+
+lineage:
+  physical_system_hash:
+    type: sha256
+    description: Fingerprint of stable assets, locations, limits, and network.
+  parent_artifact_hashes:
+    type: mapping
+    optional: true
+    description: Exact upstream artifacts used to create this state.
+
+files:
+  generator_state:
+    path: generator_state.csv
+    required_columns:
+      - generator_id
+      - commitment
+      - generation_mw
+      - on_duration_hours
+      - off_duration_hours
+      - in_service
+  storage_state:
+    path: storage_state.csv
+    required_columns:
+      - storage_id
+      - soc_mwh
+  integrity:
+    - Every file has a row count and SHA-256 hash in the manifest.
+    - Stable IDs must exactly match the consuming physical system.
+    - Artifact ID is derived from semantic metadata and file hashes.
+
+consumer_rules:
+  - Reject unknown schema versions and artifact types.
+  - Reject physical-system hash mismatches by default.
+  - Reorder rows by stable ID; never rely on CSV row position.
+  - Treat the artifact directory as immutable after publication.
+  - Keep forecasts, reserve rules, offers, and settlement assumptions outside this artifact.

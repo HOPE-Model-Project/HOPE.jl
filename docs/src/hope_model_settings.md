@@ -94,6 +94,7 @@ All DART-only controls live under `dart_settings`:
 | `silent` | Suppress detailed solver logs |
 | `files.initial_generator_state` | Initial unit commitment/output/duration state |
 | `files.initial_storage_state` | Initial storage SOC |
+| `files.operational_state_artifact` | Optional immutable state package used instead of both initial-state CSVs |
 | `files.real_time_load` | Native RT load file with `Minute` |
 | `files.real_time_wind` | Native RT wind file with `Minute` |
 | `files.real_time_solar` | Native RT solar file with `Minute` |
