@@ -10,10 +10,17 @@ on:
       - "Manifest.toml"
       - "src/GTEP.jl"
       - "src/PCM.jl"
+      - "src/aggregation.jl"
+      - "src/holistic_contract.jl"
       - "src/holistic_coverage.jl"
       - "src/holistic_linkage.jl"
+      - "src/read_input_data.jl"
+      - "src/run.jl"
       - "src/run_holistic.jl"
+      - "src/solve.jl"
       - "src/write_output.jl"
+      - "schemas/holistic_physical_realization_v1.yml"
+      - "scripts/run_holistic_regressions.jl"
   pull_request:
     branches:
       - main
@@ -23,11 +30,30 @@ on:
       - "Manifest.toml"
       - "src/GTEP.jl"
       - "src/PCM.jl"
+      - "src/aggregation.jl"
+      - "src/holistic_contract.jl"
       - "src/holistic_coverage.jl"
       - "src/holistic_linkage.jl"
+      - "src/read_input_data.jl"
+      - "src/run.jl"
       - "src/run_holistic.jl"
+      - "src/solve.jl"
       - "src/write_output.jl"
+      - "schemas/holistic_physical_realization_v1.yml"
+      - "scripts/run_holistic_regressions.jl"
+  schedule:
+    - cron: "17 7 * * 1"
   workflow_dispatch:
+    inputs:
+      benchmark:
+        description: Holistic benchmark to run
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - restricted
+          - public-rps20
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,9 +64,13 @@ permissions:
 
 jobs:
   restricted-maryland-linkage:
-    name: Restricted Maryland GTEP-to-PCM
+    name: Maryland GTEP-to-PCM (restricted)
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.benchmark == 'all' ||
+      inputs.benchmark == 'restricted'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Check out HOPE
@@ -65,5 +95,68 @@ jobs:
       - name: Build HOPE
         uses: julia-actions/julia-buildpkg@v1
 
-      - name: Run restricted holistic benchmark
-        run: julia --project=. ModelCases/MD_GTEP_restricted_linkage_case/run_holistic_pair.jl
+      - name: Run holistic regression benchmark
+        run: >-
+          julia --project=. scripts/run_holistic_regressions.jl
+          --suite restricted
+          --modelcases ModelCases
+          --solver highs
+          --artifacts artifacts/holistic
+
+      - name: Upload holistic audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: holistic-restricted-${{ github.run_id }}
+          path: artifacts/holistic
+          if-no-files-found: ignore
+          retention-days: 14
+
+  public-maryland-rps20:
+    name: Maryland GTEP-to-PCM (public 20% RPS)
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.benchmark == 'all' || inputs.benchmark == 'public-rps20'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out HOPE
+        uses: actions/checkout@v6
+
+      - name: Check out HOPE ModelCases
+        uses: actions/checkout@v6
+        with:
+          repository: HOPE-Model-Project/HOPEModelCases
+          ref: main
+          path: ModelCases
+          lfs: true
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "1"
+
+      - name: Use Julia cache
+        uses: julia-actions/cache@v2
+
+      - name: Build HOPE
+        uses: julia-actions/julia-buildpkg@v1
+
+      - name: Run holistic regression benchmark
+        run: >-
+          julia --project=. scripts/run_holistic_regressions.jl
+          --suite public-rps20
+          --modelcases ModelCases
+          --solver highs
+          --artifacts artifacts/holistic
+
+      - name: Upload holistic audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: holistic-public-rps20-${{ github.run_id }}
+          path: artifacts/holistic
+          if-no-files-found: ignore
+          retention-days: 14

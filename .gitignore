@@ -41,6 +41,7 @@ check_docs.jl
 /.tmp/
 /HOPE/
 /.tmp_cost_sources/
+/artifacts/
 
 # Generated preprocessing outputs and local analysis artifacts
 /tools/**/outputs/*.csv

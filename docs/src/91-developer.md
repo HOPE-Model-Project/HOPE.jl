@@ -94,6 +94,41 @@ julia --project=docs docs/make.jl
 
 If your change touches workflow files, verify the target branch names and trigger conditions at the same time.
 
+### Holistic GTEP-to-PCM regression suite
+
+The standard package tests exercise the linkage logic with small fixtures. The
+holistic regression suite additionally solves paired Maryland ModelCases and
+checks the persisted handoff contract, transfer reconciliation, acceptance
+thresholds, activity metrics, and source-case immutability.
+
+Clone `HOPEModelCases` beside or inside the HOPE checkout, then run the fast,
+constraint-rich benchmark with the portable HiGHS solver:
+
+```bash
+julia --project=. scripts/run_holistic_regressions.jl \
+  --suite restricted \
+  --modelcases ModelCases \
+  --solver highs
+```
+
+For a release candidate, run both the restricted benchmark and the larger
+Maryland 20% RPS benchmark. A licensed local solver can be selected without
+editing either case:
+
+```bash
+julia --project=. scripts/run_holistic_regressions.jl \
+  --suite all \
+  --modelcases ModelCases \
+  --solver gurobi
+```
+
+The runner always clones inputs into temporary directories. Compact coverage,
+handoff, reconciliation, and realized-input audit artifacts are written under
+`artifacts/holistic/`; the source ModelCases are never used as output targets.
+The GitHub workflow runs the restricted benchmark for relevant pull requests
+and pushes. The public 20% RPS benchmark runs weekly or through manual workflow
+dispatch so routine contributions do not pay its full runtime cost.
+
 ## Working on a new issue
 
 We try to keep a linear history in this repo, so it is important to keep your branches up-to-date.
