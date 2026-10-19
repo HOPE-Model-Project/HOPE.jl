@@ -64,9 +64,8 @@ end
 
     representative_metadata = deepcopy(config)
     representative_metadata["time_periods"] = Dict(1 => (3, 20, 6, 20))
-    @test length(
-        validate_dart_settings(representative_metadata; emit_warnings = false),
-    ) == 1
+    @test length(validate_dart_settings(representative_metadata; emit_warnings = false)) ==
+          1
 end
 
 @testset "RTS24 standard DART case validation" begin
@@ -86,22 +85,17 @@ end
         forecasts = input["forecasts"]
         @test length(forecasts.real_time_timestamps) == 288
         @test Dates.minute.(forecasts.real_time_timestamps[1:12]) == collect(0:5:55)
-        @test maximum(abs.(forecasts.real_time.load_mw[:, 1] .-
-                           forecasts.real_time.load_mw[:, 2])) > 0
+        @test maximum(
+            abs.(forecasts.real_time.load_mw[:, 1] .- forecasts.real_time.load_mw[:, 2]),
+        ) > 0
         quick_start = filter(g -> g.quick_start_eligible, input["system"].generators)
         @test length(quick_start) == 6
         @test all(g.commitment_required for g in quick_start)
         @test all(g.reserve_capability_mw[:nspin] == 50.0 for g in quick_start)
-        @test !isfile(joinpath(
-            case_path,
-            "Data_RTS24_DART",
-            "dart_generator_parameters.csv",
-        ))
-        @test !isfile(joinpath(
-            case_path,
-            "Data_RTS24_DART",
-            "dart_storage_parameters.csv",
-        ))
+        @test !isfile(
+            joinpath(case_path, "Data_RTS24_DART", "dart_generator_parameters.csv"),
+        )
+        @test !isfile(joinpath(case_path, "Data_RTS24_DART", "dart_storage_parameters.csv"))
     else
         @test_skip "RTS24_DART_case is unavailable in this checkout"
     end
@@ -138,10 +132,7 @@ end
     mktempdir() do case_path
         settings_path = joinpath(case_path, "Settings")
         mkpath(settings_path)
-        write(
-            joinpath(settings_path, "HOPE_model_settings.yml"),
-            "model_mode: DART\n",
-        )
+        write(joinpath(settings_path, "HOPE_model_settings.yml"), "model_mode: DART\n")
         @test_throws ArgumentError HOPE.run_debug(case_path)
     end
 end

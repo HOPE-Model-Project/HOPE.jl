@@ -54,8 +54,6 @@ Notes:
   2. add optional `Loss (%)` columns to the relevant line input tables,
   3. keep `transmission_loss: 0` in `PCM network_model = 3`, because PTDF mode is currently lossless.
 
-
-
 ## DART compatibility rules
 
 DART is an operational market model with explicit chronological state. The

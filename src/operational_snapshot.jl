@@ -26,12 +26,8 @@ Base.@kwdef struct OperationalGenerator
     quick_start_eligible::Bool = false
     quick_start_time_minutes::Int = 0
     nspin_capability_mw::Float64 = 0.0
-    reserve_cost_per_mw_hour::Dict{Symbol,Float64} = Dict(
-        :reg_up => 0.0,
-        :reg_down => 0.0,
-        :spin => 0.0,
-        :nspin => 0.0,
-    )
+    reserve_cost_per_mw_hour::Dict{Symbol,Float64} =
+        Dict(:reg_up => 0.0, :reg_down => 0.0, :spin => 0.0, :nspin => 0.0)
 end
 
 Base.@kwdef struct OperationalStorage
@@ -46,18 +42,10 @@ Base.@kwdef struct OperationalStorage
     charge_efficiency::Float64
     discharge_efficiency::Float64
     variable_cost_per_mwh::Float64
-    reserve_capability_mw::Dict{Symbol,Float64} = Dict(
-        :reg_up => 0.0,
-        :reg_down => 0.0,
-        :spin => 0.0,
-        :nspin => 0.0,
-    )
-    reserve_cost_per_mw_hour::Dict{Symbol,Float64} = Dict(
-        :reg_up => 0.0,
-        :reg_down => 0.0,
-        :spin => 0.0,
-        :nspin => 0.0,
-    )
+    reserve_capability_mw::Dict{Symbol,Float64} =
+        Dict(:reg_up => 0.0, :reg_down => 0.0, :spin => 0.0, :nspin => 0.0)
+    reserve_cost_per_mw_hour::Dict{Symbol,Float64} =
+        Dict(:reg_up => 0.0, :reg_down => 0.0, :spin => 0.0, :nspin => 0.0)
 end
 
 Base.@kwdef struct OperationalBus
@@ -102,11 +90,12 @@ Base.@kwdef struct DARTForecastSet
     bus_ids::Vector{String}
 end
 
-_snapshot_float(value, label) = try
-    value isa Number ? Float64(value) : parse(Float64, strip(string(value)))
-catch
-    throw(ArgumentError("Expected numeric value for $(label); found '$(value)'."))
-end
+_snapshot_float(value, label) =
+    try
+        value isa Number ? Float64(value) : parse(Float64, strip(string(value)))
+    catch
+        throw(ArgumentError("Expected numeric value for $(label); found '$(value)'."))
+    end
 
 function _snapshot_int(value, label)
     numeric = _snapshot_float(value, label)
@@ -142,7 +131,7 @@ function _load_stable_ids(path, expected_counts)
         throw(ArgumentError("stable_ids.csv must contain kind, source_row, stable_id."))
     ids = Dict{String,Vector{String}}()
     for (kind, expected) in expected_counts
-        rows = table[string.(table.kind) .== kind, :]
+        rows = table[string.(table.kind).==kind, :]
         nrow(rows) == expected ||
             throw(ArgumentError("Stable ID kind $(kind) has the wrong row count."))
         sort!(rows, :source_row)
@@ -187,8 +176,7 @@ function _calendar_timestamps(load_data, calendar_year)
     timestamps = DateTime[]
     for row in eachrow(load_data)
         hour_value = _snapshot_int(row["Hours"], "Hours")
-        1 <= hour_value <= 24 ||
-            throw(ArgumentError("Hours must use the 1:24 convention."))
+        1 <= hour_value <= 24 || throw(ArgumentError("Hours must use the 1:24 convention."))
         push!(
             timestamps,
             DateTime(
@@ -247,10 +235,10 @@ function load_operational_snapshot(case_dir::AbstractString)
     source_case = string(get(manifest, "source_case", ""))
     data_subdir = string(get(manifest, "source_data_subdir", ""))
     isempty(source_case) && throw(ArgumentError("Manifest must define source_case."))
-    isempty(data_subdir) &&
-        throw(ArgumentError("Manifest must define source_data_subdir."))
+    isempty(data_subdir) && throw(ArgumentError("Manifest must define source_data_subdir."))
     data_dir = joinpath(normpath(joinpath(case_dir, source_case)), data_subdir)
-    isdir(data_dir) || throw(ArgumentError("Source data directory is missing: $(data_dir)."))
+    isdir(data_dir) ||
+        throw(ArgumentError("Source data directory is missing: $(data_dir)."))
 
     expected_hashes = _manifest_dict(manifest, "source_hashes")
     observed_hashes = Dict{String,String}()
@@ -308,10 +296,14 @@ function load_operational_snapshot(case_dir::AbstractString)
                 zone = string(gen[r, "Zone"]),
                 pmax_mw = _snapshot_float(gen[r, "Pmax (MW)"], "Pmax"),
                 pmin_mw = _snapshot_float(gen[r, "Pmin (MW)"], "Pmin"),
-                variable_cost_per_mwh =
-                    _snapshot_float(gen[r, "Cost (\$/MWh)"], "variable cost"),
-                startup_cost_per_mw =
-                    _snapshot_float(gen[r, "Start_up_cost (\$/MW)"], "startup cost"),
+                variable_cost_per_mwh = _snapshot_float(
+                    gen[r, "Cost (\$/MWh)"],
+                    "variable cost",
+                ),
+                startup_cost_per_mw = _snapshot_float(
+                    gen[r, "Start_up_cost (\$/MW)"],
+                    "startup cost",
+                ),
                 static_availability = _snapshot_float(gen[r, "AF"], "AF"),
                 forced_outage_rate = _snapshot_float(gen[r, "FOR"], "FOR"),
                 ramp_up_fraction_per_hour = _snapshot_float(gen[r, "RU"], "RU"),
@@ -333,8 +325,13 @@ function load_operational_snapshot(case_dir::AbstractString)
                     0.0,
                     _snapshot_float,
                 ),
-                shutdown_cost =
-                    _snapshot_optional(gen, r, "shutdown_cost", 0.0, _snapshot_float),
+                shutdown_cost = _snapshot_optional(
+                    gen,
+                    r,
+                    "shutdown_cost",
+                    0.0,
+                    _snapshot_float,
+                ),
                 startup_limit_fraction = _snapshot_optional(
                     gen,
                     r,
@@ -420,22 +417,30 @@ function load_operational_snapshot(case_dir::AbstractString)
                 technology = string(sto[r, "Type"]),
                 bus_id = bus_id[label],
                 zone = string(sto[r, "Zone"]),
-                energy_capacity_mwh =
-                    _snapshot_float(sto[r, "Capacity (MWh)"], "storage energy"),
-                charge_capacity_mw =
-                    max_power * _snapshot_float(sto[r, "Charging Rate"], "charge rate"),
+                energy_capacity_mwh = _snapshot_float(
+                    sto[r, "Capacity (MWh)"],
+                    "storage energy",
+                ),
+                charge_capacity_mw = max_power * _snapshot_float(
+                    sto[r, "Charging Rate"],
+                    "charge rate",
+                ),
                 discharge_capacity_mw = max_power * _snapshot_float(
                     sto[r, "Discharging Rate"],
                     "discharge rate",
                 ),
-                charge_efficiency =
-                    _snapshot_float(sto[r, "Charging efficiency"], "charge efficiency"),
+                charge_efficiency = _snapshot_float(
+                    sto[r, "Charging efficiency"],
+                    "charge efficiency",
+                ),
                 discharge_efficiency = _snapshot_float(
                     sto[r, "Discharging efficiency"],
                     "discharge efficiency",
                 ),
-                variable_cost_per_mwh =
-                    _snapshot_float(sto[r, "Cost (\$/MWh)"], "storage cost"),
+                variable_cost_per_mwh = _snapshot_float(
+                    sto[r, "Cost (\$/MWh)"],
+                    "storage cost",
+                ),
                 reserve_capability_mw = Dict(
                     :reg_up => _snapshot_optional(
                         sto,
@@ -500,8 +505,7 @@ function load_operational_snapshot(case_dir::AbstractString)
         )
     end
 
-    forward, reverse =
-        parse_directional_line_limits(branch; context = "RTS24 branchdata")
+    forward, reverse = parse_directional_line_limits(branch; context = "RTS24 branchdata")
     source_bus_index = Dict(x.source_label => i for (i, x) in pairs(buses))
     branches = OperationalBranch[]
     from_idx = Int[]
@@ -545,14 +549,13 @@ function load_operational_snapshot(case_dir::AbstractString)
     for (b, x) in pairs(buses)
         x.zone in string.(names(load_data)) ||
             throw(ArgumentError("Load series is missing zone $(x.zone)."))
-        load_mw[b, :] .= x.peak_load_mw .* [
-            _snapshot_float(v, "load multiplier") for v in load_data[!, x.zone]
-        ]
+        load_mw[b, :] .=
+            x.peak_load_mw .*
+            [_snapshot_float(v, "load multiplier") for v in load_data[!, x.zone]]
     end
     any(load_mw .< 0) && throw(ArgumentError("Derived load cannot be negative."))
     if "NI" in string.(names(load_data))
-        all(iszero, [_snapshot_float(v, "NI") for v in load_data[!, "NI"]]) ||
-            throw(ArgumentError("Nonzero interchange is unsupported in this first case."))
+        all(iszero, [_snapshot_float(v, "NI") for v in load_data[!, "NI"]]) || throw(ArgumentError("Nonzero interchange is unsupported in this first case."))
     end
     interchange_mw = zeros(length(buses), T)
 
@@ -561,35 +564,29 @@ function load_operational_snapshot(case_dir::AbstractString)
     availability = zeros(length(generators), T)
     for (g, x) in pairs(generators)
         source_name = "G$(x.source_row)"
-        values =
-            if af_data !== nothing && source_name in string.(names(af_data))
-                af_data[!, source_name]
-            elseif x.technology == "SolarPV"
-                solar[!, x.zone]
-            elseif x.technology in ("WindOn", "WindOff")
-                wind[!, x.zone]
-            else
-                fill(x.static_availability, T)
-            end
-        availability[g, :] .= clamp.(
-            [_snapshot_float(v, "generator availability") for v in values],
-            0.0,
-            1.0,
-        )
+        values = if af_data !== nothing && source_name in string.(names(af_data))
+            af_data[!, source_name]
+        elseif x.technology == "SolarPV"
+            solar[!, x.zone]
+        elseif x.technology in ("WindOn", "WindOff")
+            wind[!, x.zone]
+        else
+            fill(x.static_availability, T)
+        end
+        availability[g, :] .=
+            clamp.([_snapshot_float(v, "generator availability") for v in values], 0.0, 1.0)
     end
 
     single = tables["single_parameter.csv"]
-    nrow(single) == 1 ||
-        throw(ArgumentError("single_parameter.csv must contain one row."))
+    nrow(single) == 1 || throw(ArgumentError("single_parameter.csv must contain one row."))
     reserve_fraction = Dict(
         :reg_up => _snapshot_float(single[1, "reg_up_requirement"], "reg up"),
         :reg_down => _snapshot_float(single[1, "reg_dn_requirement"], "reg down"),
         :spin => _snapshot_float(single[1, "spin_requirement"], "spin"),
         :nspin => _snapshot_float(single[1, "nspin_requirement"], "nspin"),
     )
-    provenance = Dict(
-        string(k) => string(v) for (k, v) in _manifest_dict(manifest, "provenance")
-    )
+    provenance =
+        Dict(string(k) => string(v) for (k, v) in _manifest_dict(manifest, "provenance"))
     return OperationalSnapshot(
         name = string(get(manifest, "case_name", basename(case_dir))),
         generators = generators,
@@ -653,7 +650,8 @@ function build_dart_system(
         throw(ArgumentError("Unknown DART conversion profile $(profile)."))
     contingencies = Set(string.(contingency_ids))
     unknown = setdiff(contingencies, Set(getfield.(snapshot.generators, :id)))
-    isempty(unknown) || throw(ArgumentError("Unknown contingency IDs: $(collect(unknown))."))
+    isempty(unknown) ||
+        throw(ArgumentError("Unknown contingency IDs: $(collect(unknown))."))
 
     generators = DARTGenerator[]
     for x in snapshot.generators
@@ -665,8 +663,7 @@ function build_dart_system(
         if include_reserves
             for product in (:reg_up, :reg_down, :spin)
                 cap = x.reserve_fraction[product] * x.pmax_mw
-                profile == :deterministic_derated &&
-                    (cap *= 1.0 - x.forced_outage_rate)
+                profile == :deterministic_derated && (cap *= 1.0 - x.forced_outage_rate)
                 caps[product] = cap
             end
             if include_nspin
@@ -708,8 +705,8 @@ function build_dart_system(
     storage = DARTStorage[]
     if include_storage
         for x in snapshot.storage
-            capabilities = include_reserves ? copy(x.reserve_capability_mw) :
-                           Dict{Symbol,Float64}()
+            capabilities =
+                include_reserves ? copy(x.reserve_capability_mw) : Dict{Symbol,Float64}()
             !include_nspin && delete!(capabilities, :nspin)
             push!(
                 storage,
@@ -782,8 +779,7 @@ function build_dart_forecasts(
     rt_availability = repeat(da_availability; inner = (1, R))
     rt_interchange = repeat(da_interchange; inner = (1, R))
     da_service = _service_matrix(day_ahead_generator_in_service, G, H, "DA service")
-    rt_service =
-        _service_matrix(real_time_generator_in_service, G, H * R, "RT service")
+    rt_service = _service_matrix(real_time_generator_in_service, G, H * R, "RT service")
 
     da_requirements = Dict{Symbol,Vector{Float64}}()
     rt_requirements = Dict{Symbol,Vector{Float64}}()
@@ -809,9 +805,7 @@ function build_dart_forecasts(
 
     da_timestamps = snapshot.timestamps[selected]
     step = Minute(div(60, R))
-    rt_timestamps = [
-        timestamp + (r - 1) * step for timestamp in da_timestamps for r = 1:R
-    ]
+    rt_timestamps = [timestamp + (r - 1) * step for timestamp in da_timestamps for r = 1:R]
     day_ahead = DARTForecast(
         interval_hours = 1.0,
         load_mw = da_load,
@@ -866,18 +860,17 @@ function build_dart_initial_state(
     on_value =
         on_duration_hours === nothing ?
         [
-            commitment_value[g] == 1 ?
-            Float64(max(data.generators[g].min_up_hours, 24)) : 0.0 for g = 1:G
+            commitment_value[g] == 1 ? Float64(max(data.generators[g].min_up_hours, 24)) :
+            0.0 for g = 1:G
         ] : Float64.(on_duration_hours)
     off_value =
         off_duration_hours === nothing ?
         [
-            commitment_value[g] == 0 ?
-            Float64(max(data.generators[g].min_down_hours, 24)) : 0.0 for g = 1:G
+            commitment_value[g] == 0 ? Float64(max(data.generators[g].min_down_hours, 24)) :
+            0.0 for g = 1:G
         ] : Float64.(off_duration_hours)
     soc_value =
-        storage_soc_mwh === nothing ?
-        [0.5 * x.energy_capacity_mwh for x in data.storage] :
+        storage_soc_mwh === nothing ? [0.5 * x.energy_capacity_mwh for x in data.storage] :
         Float64.(storage_soc_mwh)
     service_value =
         generator_in_service === nothing ? trues(G) : Bool.(generator_in_service)

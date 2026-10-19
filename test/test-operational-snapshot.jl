@@ -17,17 +17,16 @@ function small_operational_snapshot(; disconnected = false)
             peak_load_mw = 10.0,
         ),
     ]
-    disconnected &&
-        push!(
-            buses,
-            OperationalBus(
-                id = "B3",
-                source_row = 3,
-                source_label = "3",
-                zone = "Z3",
-                peak_load_mw = 0.0,
-            ),
-        )
+    disconnected && push!(
+        buses,
+        OperationalBus(
+            id = "B3",
+            source_row = 3,
+            source_label = "3",
+            zone = "Z3",
+            peak_load_mw = 0.0,
+        ),
+    )
     generator = OperationalGenerator(
         id = "G1",
         source_row = 1,
@@ -118,8 +117,7 @@ function small_operational_snapshot(; disconnected = false)
         buses = buses,
         branches = branches,
         timestamps = [DateTime(2021, 1, 1), DateTime(2021, 1, 1, 1)],
-        load_mw = disconnected ? [10.0 20.0; 5.0 10.0; 0.0 0.0] :
-                                [10.0 20.0; 5.0 10.0],
+        load_mw = disconnected ? [10.0 20.0; 5.0 10.0; 0.0 0.0] : [10.0 20.0; 5.0 10.0],
         availability = [1.0 0.5],
         interchange_mw = zeros(length(buses), 2),
         reserve_requirement_fraction = Dict(
@@ -187,8 +185,7 @@ end
     @test vec(sum(forecast.real_time.load_mw; dims = 2)) ./ 12 ≈
           vec(sum(forecast.day_ahead.load_mw; dims = 2))
     @test length(forecast.real_time_timestamps) == 24
-    @test forecast.real_time_timestamps[2] - forecast.real_time_timestamps[1] ==
-          Minute(5)
+    @test forecast.real_time_timestamps[2] - forecast.real_time_timestamps[1] == Minute(5)
 
     day_ahead_reserves = build_dart_forecasts(
         snapshot,
@@ -202,5 +199,7 @@ end
     state = build_dart_initial_state(data)
     @test state.generation_mw == [0.0]
     @test state.storage_soc_mwh == [20.0]
-    @test_throws ArgumentError build_dart_system(small_operational_snapshot(disconnected = true))
+    @test_throws ArgumentError build_dart_system(
+        small_operational_snapshot(disconnected = true),
+    )
 end
