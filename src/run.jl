@@ -108,6 +108,9 @@ function _run_hope_impl(
             mode == "GTEP" ? create_GTEP_model(config, input_data, optimizer) :
             create_PCM_model(config, input_data, optimizer)
         solved_model = solve_model(config, input_data, model)
+        operational_state_trace =
+            mode == "PCM" ?
+            maybe_capture_pcm_operational_trace(config, input_data, solved_model) : nothing
         output_write = write_output_with_metadata(outpath, config, input_data, solved_model)
         snapshot = nothing
         save_mode =
@@ -134,6 +137,7 @@ function _run_hope_impl(
             "output" => output_write.results,
             "input" => saved_input,
             "snapshot" => snapshot,
+            "operational_state_trace" => operational_state_trace,
         )
     catch err
         @error "Error running HOPE case: $case" exception = (err, catch_backtrace())

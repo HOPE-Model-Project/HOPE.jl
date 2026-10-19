@@ -73,6 +73,39 @@ artifact = HOPE.write_operational_state_artifact(
 loaded = HOPE.load_operational_state_artifact("state_from_pcm", dart_system)
 ```
 
+For a solved PCM model, the producer adapter constructs and writes the artifact
+directly:
+
+```julia
+artifact = HOPE.write_pcm_operational_state_artifact(
+    "state_from_pcm",
+    pcm_result, # result from run_hope or run_hope_holistic
+    target_dart_system;
+    boundary_hour = 168,
+    boundary_time = DateTime(2035, 7, 8),
+    timezone = "America/New_York",
+    scenario_id = "md-2035-weather-a",
+)
+```
+
+`run_hope` and `run_hope_holistic` capture the required PCM trajectory in a
+solver-neutral in-memory trace immediately after optimization when the PCM input
+has stable `Asset_ID` columns. Cases without those columns continue to run, but
+cannot publish a safe cross-model state artifact. The artifact writer uses the
+trace rather than depending on a live commercial-solver handle. The trace is an
+intermediate workflow object; the immutable artifact directory is the portable
+deliverable for another model, process, or agent.
+
+The PCM and target DART assets must match exactly through `Asset_ID` by default.
+The column names are configurable, but implicit row-number matching is refused.
+Commitment-enabled DART units require integer PCM commitment and one physical
+unit per PCM row. Relaxed UC and clustered multi-unit rows are rejected because
+they do not define which physical units are online. The adapter derives elapsed
+on/off time from consecutive solved PCM intervals and records that durations are
+left-censored at the beginning of the PCM horizon.
+Because PCM is hourly, its artifact records `interval_minutes: 60`; the DART
+consumer may still advance at its independently configured five-minute cadence.
+
 Artifact directories are immutable: the writer refuses to overwrite an existing
 path. A workflow should publish a new artifact for each state boundary and pass
 its `artifact_id` to downstream models or agents.
@@ -89,6 +122,6 @@ its `artifact_id` to downstream models or agents.
 - **DART to DART:** consume the automatically published final-state artifact for
   chronological continuation or scenario branching.
 
-This contract is the operational-state layer only. A future PCM adapter can
-write it directly after selecting a PCM boundary; it does not need to change the
-DART mathematical formulation.
+This contract and adapter implement the operational-state layer without changing
+either PCM or DART mathematics. Selecting stress events and constructing the
+separate DART market scenario remain workflow-level decisions.

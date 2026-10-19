@@ -21,5 +21,6 @@ using Test
     include("test-dart.jl")
     include("test-operational-snapshot.jl")
     include("test-operational-state-contract.jl")
+    include("test-pcm-state-adapter.jl")
     include("test-dart-workflow.jl")
 end

@@ -46,6 +46,7 @@ include("DART.jl")#day-ahead and real-time operations
 using .DART
 include("operational_snapshot.jl") # installed-system snapshot and DART conversion
 include("operational_state_contract.jl") # immutable chronological state exchange
+include("pcm_state_adapter.jl")     # explicit PCM boundary to DART state adapter
 include("dart_workflow.jl")        # standard DART case configuration and runner
 include("solve.jl")                #solve model function
 include("run.jl")                  #run module
@@ -89,6 +90,7 @@ export OperationalStateArtifact
 export build_dart_forecasts
 export build_dart_initial_state
 export build_dart_system
+export build_pcm_operational_state
 export dart_system_fingerprint
 export default_dart_reserve_products
 export default_dart_state
@@ -125,6 +127,7 @@ export validate_holistic_source_immutability!
 export write_holistic_handoff_contract_report
 export write_holistic_coverage_report
 export write_operational_state_artifact
+export write_pcm_operational_state_artifact
 export solve_model
 export solve_dart_sced
 export solve_dart_scuc

@@ -1114,6 +1114,8 @@ function _run_hope_holistic_impl(
         "run_hope_holistic_pcm_model_build_done",
     )
     solved_pcm_model = solve_model(pcm_config, updated_pcm_input, pcm_model)
+    pcm_operational_state_trace =
+        maybe_capture_pcm_operational_trace(pcm_config, updated_pcm_input, solved_pcm_model)
     pcm_activity = holistic_model_activity_metrics(solved_pcm_model, "pcm")
     holistic_debug_stage_log_pair(
         gtep_config,
@@ -1189,6 +1191,7 @@ function _run_hope_holistic_impl(
         "pcm_config" => pcm_config,
         "pcm_input" => updated_pcm_input,
         "pcm_solved_model" => solved_pcm_model,
+        "pcm_operational_state_trace" => pcm_operational_state_trace,
         "pcm_output" => pcm_output,
         "transfer_summary" => transfer_summary,
         "transfer_reconciliation" => transfer_reconciliation,

@@ -121,9 +121,11 @@ not be treated as the entire future registry or as a mutable global state store.
 The version-1 `HOPE.simulation_state` implementation now provides the separate
 carry-over layer: hashed generator and storage state, boundary time, physical
 system fingerprint, parent lineage, and immutable publication. DART can consume
-it optionally and publishes its final binding state in the same form. A PCM
-adapter remains the next producer-side step; it should emit this contract rather
-than requiring DART to interpret arbitrary PCM output folders.
+it optionally and publishes its final binding state in the same form. The PCM
+producer adapter emits this contract from an explicitly selected solved boundary
+when stable IDs are one-to-one and unit commitment is physically discrete. It
+rejects relaxed or clustered commitment rather than requiring DART to interpret
+arbitrary PCM output folders.
 
 ## Model-connection gaps
 
