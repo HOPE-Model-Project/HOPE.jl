@@ -113,11 +113,12 @@ function _holistic_upgraded_line_metrics(
     return max_flow, isfinite(max_above_source) ? max_above_source : 0.0
 end
 
-function holistic_coverage_metrics(result::Dict)
-    updated_input = result["pcm_input"]
-    model = result["pcm_solved_model"]
-    pcm_config = result["pcm_config"]
-    source_input = load_data(pcm_config, result["pcm_case_path"])
+function holistic_pcm_transfer_activity_metrics(
+    model::JuMP.Model,
+    updated_input::Dict,
+    source_input::Dict,
+    pcm_config::Dict,
+)
     audit = get(updated_input, "LinkageAudit", Dict{String,Any}())
     generation = get(audit, "generation_builds", DataFrame())
     storage = get(audit, "storage_builds", DataFrame())
@@ -128,21 +129,39 @@ function holistic_coverage_metrics(result::Dict)
     storage_rows = _holistic_rows_for_ids(updated_input["Storagedata"], storage_ids)
     upgraded_flow, upgraded_above_source =
         _holistic_upgraded_line_metrics(model, updated_input, source_input, pcm_config)
+    return Dict{String,Any}(
+        "pcm_new_generation_dispatch_mwh" =>
+            _holistic_selected_sum(model, :p, generation_rows),
+        "pcm_new_storage_charge_mwh" => _holistic_selected_sum(model, :c, storage_rows),
+        "pcm_new_storage_discharge_mwh" => _holistic_selected_sum(model, :dc, storage_rows),
+        "pcm_upgraded_line_max_abs_flow_mw" => upgraded_flow,
+        "pcm_upgraded_line_flow_above_source_mw" => upgraded_above_source,
+    )
+end
 
+function holistic_coverage_metrics(result::Dict)
     metrics = Dict{String,Any}()
     merge!(metrics, Dict(string(k) => v for (k, v) in result["transfer_summary"]))
     merge!(metrics, get(result, "gtep_activity", Dict{String,Any}()))
-    merge!(
-        metrics,
-        get(result, "pcm_activity", holistic_model_activity_metrics(model, "pcm")),
-    )
-    metrics["pcm_new_generation_dispatch_mwh"] =
-        _holistic_selected_sum(model, :p, generation_rows)
-    metrics["pcm_new_storage_charge_mwh"] = _holistic_selected_sum(model, :c, storage_rows)
-    metrics["pcm_new_storage_discharge_mwh"] =
-        _holistic_selected_sum(model, :dc, storage_rows)
-    metrics["pcm_upgraded_line_max_abs_flow_mw"] = upgraded_flow
-    metrics["pcm_upgraded_line_flow_above_source_mw"] = upgraded_above_source
+    if haskey(result, "pcm_activity")
+        merge!(metrics, result["pcm_activity"])
+    else
+        merge!(metrics, holistic_model_activity_metrics(result["pcm_solved_model"], "pcm"))
+    end
+    if haskey(result, "pcm_transfer_activity")
+        merge!(metrics, result["pcm_transfer_activity"])
+    else
+        pcm_config = result["pcm_config"]
+        merge!(
+            metrics,
+            holistic_pcm_transfer_activity_metrics(
+                result["pcm_solved_model"],
+                result["pcm_input"],
+                load_data(pcm_config, result["pcm_case_path"]),
+                pcm_config,
+            ),
+        )
+    end
     metrics["source_gtep_unchanged"] =
         get(result, "source_gtep_hashes_before", Dict()) ==
         get(result, "source_gtep_hashes_after", Dict())

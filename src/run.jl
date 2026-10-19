@@ -1,8 +1,9 @@
 """
-    run_hope(case::AbstractString)
+    run_hope(case::AbstractString; solver_override=nothing)
 
 Run HOPE for a single case directory. GTEP, PCM, and DART cases all use
 `Settings/HOPE_model_settings.yml` and write results under `<case>/output/`.
+`solver_override` selects a solver for this run without changing the case file.
 """
 function _resolve_case_path(case::AbstractString)
     case_path = case
@@ -77,10 +78,22 @@ function _prepare_standard_input(path, config; context)
     return load_data(config, path)
 end
 
-function _run_hope_impl(case::AbstractString, path::AbstractString)
+function _effective_solver_name(config::AbstractDict, solver_override)
+    selected = solver_override === nothing ? get(config, "solver", "") : solver_override
+    name = lowercase(strip(string(selected)))
+    isempty(name) && throw(ArgumentError("HOPE solver name must not be blank."))
+    return name
+end
+
+function _run_hope_impl(
+    case::AbstractString,
+    path::AbstractString,
+    solver_override = nothing,
+)
     outpath = joinpath(path, "output")
     try
         config = _load_hope_settings(path)
+        config["solver"] = _effective_solver_name(config, solver_override)
         mode = config["model_mode"]
         validate_model_mode(mode)
         optimizer = initiate_solver(path, lowercase(String(config["solver"])))
@@ -91,13 +104,14 @@ function _run_hope_impl(case::AbstractString, path::AbstractString)
 
         input_data = _prepare_standard_input(path, config; context = "run_hope")
         saved_input = deepcopy(input_data)
-        model = mode == "GTEP" ?
-                create_GTEP_model(config, input_data, optimizer) :
-                create_PCM_model(config, input_data, optimizer)
+        model =
+            mode == "GTEP" ? create_GTEP_model(config, input_data, optimizer) :
+            create_PCM_model(config, input_data, optimizer)
         solved_model = solve_model(config, input_data, model)
         output_write = write_output_with_metadata(outpath, config, input_data, solved_model)
         snapshot = nothing
-        save_mode = parse_postprocess_snapshot_mode(get(config, "save_postprocess_snapshot", 0))
+        save_mode =
+            parse_postprocess_snapshot_mode(get(config, "save_postprocess_snapshot", 0))
         if save_mode > 0
             if mode == "GTEP"
                 snapshot = save_postprocess_snapshot(
@@ -127,15 +141,15 @@ function _run_hope_impl(case::AbstractString, path::AbstractString)
     end
 end
 
-function run_hope(case::AbstractString)
+function run_hope(case::AbstractString; solver_override = nothing)
     path = _resolve_case_path(case)
     config = _load_hope_settings(path)
-    solver_name = lowercase(String(config["solver"]))
+    solver_name = _effective_solver_name(config, solver_override)
     if haskey(OPTIONAL_SOLVER_PACKAGES, solver_name)
         _ensure_optional_solver_loaded(solver_name)
-        return Base.invokelatest(_run_hope_impl, case, path)
+        return Base.invokelatest(_run_hope_impl, case, path, solver_name)
     end
-    return _run_hope_impl(case, path)
+    return _run_hope_impl(case, path, solver_name)
 end
 
 """Validate a GTEP, PCM, or DART case without solving it or writing outputs."""
@@ -158,7 +172,9 @@ function write_hope(case::AbstractString, solved_case::Model)
     try
         config = _load_hope_settings(path)
         config["model_mode"] == "DART" && throw(
-            ArgumentError("write_hope(::Model) is not valid for rolling DART results; use run_hope."),
+            ArgumentError(
+                "write_hope(::Model) is not valid for rolling DART results; use run_hope.",
+            ),
         )
         input = _prepare_standard_input(path, config; context = "write_hope")
         write_output(outpath, config, input, solved_case)

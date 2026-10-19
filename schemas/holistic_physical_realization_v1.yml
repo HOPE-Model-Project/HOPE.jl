@@ -76,6 +76,46 @@ resource_siting:
       Existing validated row or aggregate mapping remains available for old
       zonal cases. It is not sufficient for a strict nodal realization contract.
 
+generation_realization:
+  optional_candidate_columns:
+    PCM_Unit_Size_MW:
+      type: number
+      exclusive_minimum: 0
+      description: >-
+        When supplied, split solved aggregate build capacity into fixed-size PCM
+        units. A final partial unit is allowed only for candidates without unit
+        commitment (Flag_UC != 1). When absent, preserve the legacy one-row
+        realization.
+  identity:
+    pattern: "<Candidate_ID>__UNIT_<sequence>"
+    sequence_format: three-digit, one-based
+
+retirement_realization:
+  type: mapping
+  optional: true
+  fields:
+    method:
+      default: proportional_capacity
+      allowed:
+        - proportional_capacity
+        - largest_first
+        - smallest_first
+        - priority
+    priority_column:
+      default: Retirement_Priority
+      required_when: method == priority
+      description: Lower numeric values retire first; Asset_ID breaks ties.
+    partial_unit_policy:
+      default: allow_capacity_reduction
+      allowed: [allow_capacity_reduction, reject]
+  semantics:
+    proportional_capacity: >-
+      Apply the aggregate GTEP retention factor to every physical unit in the
+      corresponding resource-aggregation group. This is the legacy default.
+    largest_first: Retire higher-capacity physical units first.
+    smallest_first: Retire lower-capacity physical units first.
+    priority: Retire physical units in ascending priority-column order.
+
 transmission_realization:
   method_priority:
     type: list

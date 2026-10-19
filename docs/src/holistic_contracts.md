@@ -68,6 +68,32 @@ Version 1 supports these resource-siting rules:
 - `explicit_bus`: each GTEP candidate identifies an exact PCM `Bus_id`;
 - `legacy_zone`: retain the compatible historical zonal mapping.
 
+It also provides two optional, backward-compatible physical-fleet rules:
+
+- Add `PCM_Unit_Size_MW` to a generation-candidate row to split its solved
+  aggregate build into fixed-size PCM units. Each realized row receives a stable
+  `<Candidate_ID>__UNIT_<sequence>` identity. A non-unit-commitment candidate may
+  have one smaller final unit; a `Flag_UC = 1` candidate must build an integer
+  number of units. If the column is absent, HOPE preserves the historical
+  one-candidate/one-PCM-row behavior.
+- Add `retirement_realization` to the physical contract to choose
+  `largest_first`, `smallest_first`, or an explicit numeric `priority` for
+  disaggregating an aggregate GTEP retirement among physical units. The default
+  remains `proportional_capacity`. `partial_unit_policy` can allow one capacity
+  reduction or reject a transfer that cannot retire whole units exactly.
+
+For example:
+
+```yaml
+retirement_realization:
+  method: priority
+  priority_column: Retirement_Priority
+  partial_unit_policy: reject
+```
+
+These rules change only the realization of solved planning decisions; they do
+not change the GTEP or PCM mathematical formulations.
+
 It supports these transmission rules, evaluated in declared priority order:
 
 - `corridor_id`;
@@ -91,6 +117,16 @@ The output contains two additional artifacts under `realized_inputs/`:
   complete source fingerprints;
 - `handoff_contract_checks.csv`: one row per topology, identity, realization,
   provenance, or immutability assertion.
+- `transfer_reconciliation.yml`: independent capacity-conservation and identity
+  results for the solved GTEP decisions and realized PCM tables;
+- `transfer_reconciliation_checks.csv`: one machine-readable row per retirement,
+  generation, storage, transmission, operating-bound, or stable-ID assertion.
+
+The reconciliation runs before the PCM model is constructed. It compares the
+solved GTEP decisions with both the source and realized PCM physical tables and
+fails fast if capacity is lost or duplicated. Directional transmission additions
+are also checked through the linkage audit, while the physical table check uses
+total bidirectional capacity so reversed branch orientation is handled correctly.
 
 The returned result dictionary also provides `handoff_contract` and
 `handoff_contract_paths`.

@@ -25,11 +25,13 @@ function _holistic_empty_generation_build_audit()
         CandidateRow = Int[],
         CandidateID = String[],
         RealizedAssetID = String[],
+        RealizedUnitSequence = Int[],
         Zone = String[],
         Type = String[],
         CandidateMW = Float64[],
         BuiltMW = Float64[],
         OperationalTemplateID = String[],
+        RealizationMode = String[],
         ParameterSource = String[],
     )
 end
@@ -90,19 +92,13 @@ function _holistic_assert_unique_ids(df::AbstractDataFrame, column::AbstractStri
 end
 
 function _holistic_generator_signature(df::AbstractDataFrame, row::Int)
-    cols = (
-        "Zone",
-        "Type",
-        "Flag_RET",
-        "Flag_mustrun",
-        "Flag_VRE",
-        "Flag_thermal",
-    )
+    cols = ("Zone", "Type", "Flag_RET", "Flag_mustrun", "Flag_VRE", "Flag_thermal")
     values = String[]
     for col in cols
         if _holistic_has_column(df, col)
-            value = col == "Type" ? replace(string(df[row, col]), "_CCS" => "") :
-                    string(df[row, col])
+            value =
+                col == "Type" ? replace(string(df[row, col]), "_CCS" => "") :
+                string(df[row, col])
             push!(values, strip(value))
         end
     end
@@ -117,7 +113,7 @@ function _holistic_rows_are_aligned(
     nrow(source) == nrow(target) || return false
     for row = 1:nrow(source)
         _holistic_generator_signature(source, row) ==
-            _holistic_generator_signature(target, row) || return false
+        _holistic_generator_signature(target, row) || return false
         source_pmax = to_float_output(source[row, Symbol("Pmax (MW)")], 0.0)
         target_pmax = to_float_output(target[row, Symbol("Pmax (MW)")], 0.0)
         isapprox(source_pmax, target_pmax; atol = atol, rtol = 1e-8) || return false
@@ -130,14 +126,15 @@ function _holistic_retention_factors(
     gtep_gendata::DataFrame;
     atol::Float64 = 1e-7,
 )
-    required = ["EC_Category", "Capacity_INI (MW)", "Capacity_RET (MW)", "Capacity_FIN (MW)"]
+    required =
+        ["EC_Category", "Capacity_INI (MW)", "Capacity_RET (MW)", "Capacity_FIN (MW)"]
     missing = setdiff(required, names(capacity_df))
     isempty(missing) || throw(
         ArgumentError(
             "GTEP capacity output is missing retirement columns: $(join(missing, ", ")).",
         ),
     )
-    existing = capacity_df[string.(capacity_df[!, "EC_Category"]) .== "Existing", :]
+    existing = capacity_df[string.(capacity_df[!, "EC_Category"]).=="Existing", :]
     nrow(existing) == nrow(gtep_gendata) || throw(
         ArgumentError(
             "GTEP capacity output has $(nrow(existing)) existing rows, but the solved GTEP table has $(nrow(gtep_gendata)).",
@@ -147,13 +144,18 @@ function _holistic_retention_factors(
     for row = 1:nrow(existing)
         initial = to_float_output(existing[row, Symbol("Capacity_INI (MW)")], 0.0)
         retired = to_float_output(existing[row, Symbol("Capacity_RET (MW)")], 0.0)
-        final = to_float_output(existing[row, Symbol("Capacity_FIN (MW)")], initial - retired)
-        initial >= -atol || throw(ArgumentError("GTEP initial capacity cannot be negative."))
-        retired >= -atol || throw(ArgumentError("GTEP retired capacity cannot be negative."))
+        final =
+            to_float_output(existing[row, Symbol("Capacity_FIN (MW)")], initial - retired)
+        initial >= -atol ||
+            throw(ArgumentError("GTEP initial capacity cannot be negative."))
+        retired >= -atol ||
+            throw(ArgumentError("GTEP retired capacity cannot be negative."))
         final >= -atol || throw(ArgumentError("GTEP final capacity cannot be negative."))
         if initial <= atol
             abs(retired) <= atol && abs(final) <= atol || throw(
-                ArgumentError("A zero-capacity GTEP resource has a nonzero retirement decision."),
+                ArgumentError(
+                    "A zero-capacity GTEP resource has a nonzero retirement decision.",
+                ),
             )
             factors[row] = 1.0
         else
@@ -163,9 +165,8 @@ function _holistic_retention_factors(
                 ),
             )
             factor = final / initial
-            -atol <= factor <= 1.0 + atol || throw(
-                ArgumentError("GTEP retention factor must lie in [0, 1]."),
-            )
+            -atol <= factor <= 1.0 + atol ||
+                throw(ArgumentError("GTEP retention factor must lie in [0, 1]."))
             factors[row] = clamp(factor, 0.0, 1.0)
         end
     end
@@ -192,6 +193,7 @@ function _holistic_apply_retention_factors!(
     source::DataFrame,
     factors::Vector{Float64};
     layer::AbstractString,
+    mapping_mode_override::Union{Nothing,AbstractString} = nothing,
     atol::Float64 = 1e-7,
 )
     length(factors) == nrow(source) ||
@@ -212,13 +214,16 @@ function _holistic_apply_retention_factors!(
     if source_has_ids
         _holistic_assert_unique_ids(source, HOLISTIC_ASSET_ID, "GTEP $(layer)")
         _holistic_assert_unique_ids(target, HOLISTIC_ASSET_ID, "PCM $(layer)")
-        target_index = Dict(string(target[i, HOLISTIC_ASSET_ID]) => i for i = 1:nrow(target))
+        target_index =
+            Dict(string(target[i, HOLISTIC_ASSET_ID]) => i for i = 1:nrow(target))
         for source_row = 1:nrow(source)
             factor = factors[source_row]
             isapprox(factor, 1.0; atol = atol) && continue
             asset_id = string(source[source_row, HOLISTIC_ASSET_ID])
             haskey(target_index, asset_id) || throw(
-                ArgumentError("PCM is missing Asset_ID $(asset_id) required by GTEP retirement."),
+                ArgumentError(
+                    "PCM is missing Asset_ID $(asset_id) required by GTEP retirement.",
+                ),
             )
             target_row = target_index[asset_id]
             initial = to_float_output(target[target_row, Symbol("Pmax (MW)")], 0.0)
@@ -232,7 +237,8 @@ function _holistic_apply_retention_factors!(
                     string(target_row),
                     string(source[source_row, "Zone"]),
                     string(source[source_row, "Type"]),
-                    "asset_id",
+                    mapping_mode_override === nothing ? "asset_id" :
+                    String(mapping_mode_override),
                     initial,
                     initial * (1.0 - factor),
                     initial * factor,
@@ -258,7 +264,8 @@ function _holistic_apply_retention_factors!(
                     string(row),
                     string(source[row, "Zone"]),
                     string(source[row, "Type"]),
-                    "validated_row",
+                    mapping_mode_override === nothing ? "validated_row" :
+                    String(mapping_mode_override),
                     initial,
                     initial * (1.0 - factor),
                     initial * factor,
@@ -315,7 +322,8 @@ function _holistic_apply_retention_factors!(
                 join(target_rows, ";"),
                 string(source[first_source, "Zone"]),
                 string(source[first_source, "Type"]),
-                "aggregate_signature",
+                mapping_mode_override === nothing ? "aggregate_signature" :
+                String(mapping_mode_override),
                 target_initial,
                 target_initial * (1.0 - factor),
                 target_initial * factor,
@@ -326,16 +334,138 @@ function _holistic_apply_retention_factors!(
     return audit
 end
 
+function _holistic_retirement_realization_policy(physical_realization)
+    default = (
+        method = "proportional_capacity",
+        priority_column = "Retirement_Priority",
+        partial_unit_policy = "allow_capacity_reduction",
+    )
+    physical_realization isa AbstractDict || return default
+    rule = get(physical_realization, "retirement_realization", nothing)
+    rule isa AbstractDict || return default
+    method = lowercase(_holistic_text(get(rule, "method", default.method), default.method))
+    method in ("proportional_capacity", "largest_first", "smallest_first", "priority") ||
+        throw(
+            ArgumentError(
+                "Unsupported retirement_realization.method=$(method). Use proportional_capacity, largest_first, smallest_first, or priority.",
+            ),
+        )
+    priority_column = _holistic_text(
+        get(rule, "priority_column", default.priority_column),
+        default.priority_column,
+    )
+    partial_unit_policy = lowercase(
+        _holistic_text(
+            get(rule, "partial_unit_policy", default.partial_unit_policy),
+            default.partial_unit_policy,
+        ),
+    )
+    partial_unit_policy in ("allow_capacity_reduction", "reject") || throw(
+        ArgumentError(
+            "Unsupported retirement_realization.partial_unit_policy=$(partial_unit_policy). Use allow_capacity_reduction or reject.",
+        ),
+    )
+    return (
+        method = method,
+        priority_column = priority_column,
+        partial_unit_policy = partial_unit_policy,
+    )
+end
+
+function _holistic_retirement_order(
+    raw_table::DataFrame,
+    rows::Vector{Int},
+    policy;
+    atol::Float64 = 1e-7,
+)
+    identity(row) =
+        _holistic_id(raw_table, row, HOLISTIC_ASSET_ID, lpad(string(row), 12, '0'))
+    capacities = Dict(
+        row => to_float_output(raw_table[row, Symbol("Pmax (MW)")], 0.0) for row in rows
+    )
+    all(capacities[row] >= -atol for row in rows) ||
+        throw(ArgumentError("Physical generator capacity cannot be negative."))
+    if policy.method == "largest_first"
+        return sort(rows; by = row -> (-capacities[row], identity(row)))
+    elseif policy.method == "smallest_first"
+        return sort(rows; by = row -> (capacities[row], identity(row)))
+    elseif policy.method == "priority"
+        policy.priority_column in names(raw_table) || throw(
+            ArgumentError(
+                "retirement_realization.method=priority requires column $(policy.priority_column) in the raw GTEP generator table.",
+            ),
+        )
+        priorities = Dict{Int,Float64}()
+        for row in rows
+            value = raw_table[row, policy.priority_column]
+            priority = try
+                Float64(value)
+            catch
+                tryparse(Float64, _holistic_text(value, ""))
+            end
+            priority isa Real && isfinite(priority) || throw(
+                ArgumentError(
+                    "$(policy.priority_column) must be finite and numeric at raw GTEP generator row $(row).",
+                ),
+            )
+            priorities[row] = Float64(priority)
+        end
+        return sort(rows; by = row -> (priorities[row], identity(row)))
+    end
+    return rows
+end
+
+function _holistic_allocate_retirement_factors!(
+    raw_factors::Vector{Float64},
+    raw_table::DataFrame,
+    rows::Vector{Int},
+    aggregate_factor::Float64,
+    policy;
+    atol::Float64 = 1e-7,
+)
+    policy.method == "proportional_capacity" && begin
+        raw_factors[rows] .= aggregate_factor
+        return raw_factors
+    end
+    ordered_rows = _holistic_retirement_order(raw_table, rows, policy; atol = atol)
+    initial = sum(to_float_output(raw_table[row, Symbol("Pmax (MW)")], 0.0) for row in rows)
+    remaining = initial * (1.0 - aggregate_factor)
+    for row in ordered_rows
+        capacity = to_float_output(raw_table[row, Symbol("Pmax (MW)")], 0.0)
+        capacity <= atol && continue
+        if remaining >= capacity - atol
+            raw_factors[row] = 0.0
+            remaining = max(remaining - capacity, 0.0)
+        elseif remaining > atol
+            policy.partial_unit_policy == "allow_capacity_reduction" || throw(
+                ArgumentError(
+                    "Retirement allocation $(policy.method) requires partially retiring physical generator $(_holistic_id(raw_table, row, HOLISTIC_ASSET_ID, row)) by $(remaining) MW, but partial_unit_policy=reject.",
+                ),
+            )
+            raw_factors[row] = clamp((capacity - remaining) / capacity, 0.0, 1.0)
+            remaining = 0.0
+        end
+    end
+    remaining <= atol || throw(
+        ArgumentError(
+            "Retirement allocation $(policy.method) could not assign $(remaining) MW to the physical generator group.",
+        ),
+    )
+    return raw_factors
+end
+
 function _holistic_raw_retention_factors(
     gtep_input::Dict,
     gtep_config::Dict,
     model_factors::Vector{Float64},
+    physical_realization = nothing,
 )
     model_table = gtep_input["Gendata"]
     raw_table = get(gtep_input, "GendataRaw", model_table)
+    policy = _holistic_retirement_realization_policy(physical_realization)
     if nrow(raw_table) == nrow(model_table) &&
        _holistic_rows_are_aligned(raw_table, model_table)
-        return copy(model_factors)
+        return copy(model_factors), policy
     end
     resource_aggregation_enabled(gtep_config) || throw(
         ArgumentError(
@@ -349,9 +479,15 @@ function _holistic_raw_retention_factors(
     )
     raw_factors = ones(Float64, nrow(raw_table))
     for (aggregate_row, key) in enumerate(order)
-        raw_factors[groups[key]] .= model_factors[aggregate_row]
+        _holistic_allocate_retirement_factors!(
+            raw_factors,
+            raw_table,
+            groups[key],
+            model_factors[aggregate_row],
+            policy,
+        )
     end
-    return raw_factors
+    return raw_factors, policy
 end
 
 function apply_gtep_retirements!(
@@ -359,10 +495,10 @@ function apply_gtep_retirements!(
     gtep_output::Dict,
     gtep_input::Dict,
     gtep_config::Dict,
+    physical_realization = nothing,
 )
     capacity_df = gtep_output["capacity"]
-    model_factors =
-        _holistic_retention_factors(capacity_df, gtep_input["Gendata"])
+    model_factors = _holistic_retention_factors(capacity_df, gtep_input["Gendata"])
     model_audit = _holistic_apply_retention_factors!(
         updated_pcm_input["Gendata"],
         gtep_input["Gendata"],
@@ -372,12 +508,21 @@ function apply_gtep_retirements!(
 
     if haskey(updated_pcm_input, "GendataRaw")
         gtep_raw = get(gtep_input, "GendataRaw", gtep_input["Gendata"])
-        raw_factors = _holistic_raw_retention_factors(gtep_input, gtep_config, model_factors)
+        raw_factors, policy = _holistic_raw_retention_factors(
+            gtep_input,
+            gtep_config,
+            model_factors,
+            physical_realization,
+        )
+        mapping_mode =
+            policy.method == "proportional_capacity" ? nothing :
+            "aggregate_$(policy.method)"
         raw_audit = _holistic_apply_retention_factors!(
             updated_pcm_input["GendataRaw"],
             gtep_raw,
             raw_factors;
             layer = "raw",
+            mapping_mode_override = mapping_mode,
         )
         return vcat(model_audit, raw_audit; cols = :union)
     end
@@ -452,13 +597,17 @@ const HOLISTIC_STORAGE_TRANSFER_COLUMNS = Set([
 
 function _holistic_candidate_output_rows(output::DataFrame, expected::Int, label)
     rows = if _holistic_has_column(output, "EC_Category")
-        output[string.(output[!, "EC_Category"]) .== "Candidate", :]
+        output[string.(output[!, "EC_Category"]).=="Candidate", :]
     elseif nrow(output) == expected
         # Transmission output has historically contained candidate rows only.
         # Accept that legacy shape so existing cases need no schema update.
         output
     else
-        throw(ArgumentError("$(label) output is missing EC_Category and cannot be aligned by row count."))
+        throw(
+            ArgumentError(
+                "$(label) output is missing EC_Category and cannot be aligned by row count.",
+            ),
+        )
     end
     nrow(rows) == expected || throw(
         ArgumentError(
@@ -473,18 +622,15 @@ function realize_generation_builds(
     candidates::DataFrame,
     pcm_gendata::DataFrame,
 )
-    output_rows = _holistic_candidate_output_rows(capacity_df, nrow(candidates), "Generation")
+    output_rows =
+        _holistic_candidate_output_rows(capacity_df, nrow(candidates), "Generation")
     built_indices = [
         row for row = 1:nrow(candidates) if
         to_float_output(output_rows[row, "New_Build"], 0.0) > 0.0 &&
         to_float_output(output_rows[row, Symbol("Capacity_FIN (MW)")], 0.0) > 0.0
     ]
     isempty(built_indices) && return (
-        DataFrame(
-            :Zone => String[],
-            :Type => String[],
-            Symbol("Pmax (MW)") => Float64[],
-        ),
+        DataFrame(:Zone => String[], :Type => String[], Symbol("Pmax (MW)") => Float64[]),
         _holistic_empty_generation_build_audit(),
     )
 
@@ -495,57 +641,110 @@ function realize_generation_builds(
     for required in ("Zone", "Type", "Pmax (MW)")
         required in keep || push!(keep, required)
     end
-    rows = copy(candidates[built_indices, keep])
-    rows[!, Symbol("Pmax (MW)")] = Float64[
-        to_float_output(output_rows[index, Symbol("Capacity_FIN (MW)")], 0.0) for
-        index in built_indices
-    ]
-    if _holistic_has_column(rows, "Pmin (MW)")
-        rows[!, Symbol("Pmin (MW)")] = Float64[
-            let original = to_float_output(candidates[index, Symbol("Pmax (MW)")], 0.0),
-                realized = to_float_output(output_rows[index, Symbol("Capacity_FIN (MW)")], 0.0)
-                ratio = original > 0.0 ? realized / original : 0.0
-                to_float_output(candidates[index, Symbol("Pmin (MW)")], 0.0) * ratio
-            end for index in built_indices
-        ]
-    end
-
-    if !_holistic_has_column(rows, HOLISTIC_ASSET_ID) &&
-       (_holistic_has_column(rows, HOLISTIC_CANDIDATE_ID) ||
-        _holistic_has_column(pcm_gendata, HOLISTIC_ASSET_ID))
-        rows[!, HOLISTIC_ASSET_ID] = [
-            _holistic_has_column(candidates, HOLISTIC_CANDIDATE_ID) ?
-            string(candidates[index, HOLISTIC_CANDIDATE_ID], "__UNIT_001") :
-            "GTEP_GEN_CANDIDATE_$(index)__UNIT_001" for index in built_indices
-        ]
-    end
-
     audit = _holistic_empty_generation_build_audit()
-    for (local_row, candidate_row) in enumerate(built_indices)
+    realized_tables = DataFrame[]
+    existing_asset_ids = Set{String}()
+    if _holistic_has_column(pcm_gendata, HOLISTIC_ASSET_ID)
+        for value in pcm_gendata[!, HOLISTIC_ASSET_ID]
+            id = _holistic_text(value)
+            isempty(id) || push!(existing_asset_ids, id)
+        end
+    end
+    for candidate_row in built_indices
         candidate_id = _holistic_id(
             candidates,
             candidate_row,
             HOLISTIC_CANDIDATE_ID,
-            "legacy-candidate-row-$(candidate_row)",
+            "GTEP_GEN_CANDIDATE_$(candidate_row)",
         )
-        asset_id = _holistic_id(rows, local_row, HOLISTIC_ASSET_ID, "")
-        template_id =
-            _holistic_id(candidates, candidate_row, "Operational_Template_ID", "")
-        push!(
-            audit,
-            (
-                candidate_row,
-                candidate_id,
-                asset_id,
-                string(candidates[candidate_row, "Zone"]),
-                string(candidates[candidate_row, "Type"]),
-                to_float_output(candidates[candidate_row, Symbol("Pmax (MW)")], 0.0),
-                to_float_output(output_rows[candidate_row, Symbol("Capacity_FIN (MW)")], 0.0),
-                template_id,
-                "candidate_then_pcm_fallback",
-            ),
-        )
+        template_id = _holistic_id(candidates, candidate_row, "Operational_Template_ID", "")
+        built_mw =
+            to_float_output(output_rows[candidate_row, Symbol("Capacity_FIN (MW)")], 0.0)
+        candidate_mw = to_float_output(candidates[candidate_row, Symbol("Pmax (MW)")], 0.0)
+        has_unit_size =
+            _holistic_has_column(candidates, "PCM_Unit_Size_MW") &&
+            !ismissing(candidates[candidate_row, "PCM_Unit_Size_MW"]) &&
+            !isempty(_holistic_text(candidates[candidate_row, "PCM_Unit_Size_MW"]))
+        unit_capacities = Float64[built_mw]
+        realization_mode = "aggregate_row"
+        if has_unit_size
+            unit_size = to_float_output(candidates[candidate_row, "PCM_Unit_Size_MW"], NaN)
+            isfinite(unit_size) && unit_size > 0.0 || throw(
+                ArgumentError(
+                    "PCM_Unit_Size_MW must be positive for generation candidate $(candidate_id).",
+                ),
+            )
+            full_units = floor(Int, (built_mw + 1e-7) / unit_size)
+            remainder = built_mw - full_units * unit_size
+            if remainder < -1e-7
+                full_units -= 1
+                remainder = built_mw - full_units * unit_size
+            end
+            unit_capacities = fill(unit_size, max(full_units, 0))
+            if remainder > 1e-7
+                flag_uc =
+                    _holistic_has_column(candidates, "Flag_UC") ?
+                    to_float_output(candidates[candidate_row, "Flag_UC"], 0.0) : 0.0
+                flag_uc < 0.5 || throw(
+                    ArgumentError(
+                        "Committed generation candidate $(candidate_id) builds $(built_mw) MW, which is not an integer multiple of PCM_Unit_Size_MW=$(unit_size).",
+                    ),
+                )
+                push!(unit_capacities, remainder)
+            end
+            realization_mode = "fixed_unit_size"
+        end
+        isempty(unit_capacities) && continue
+        for (unit_sequence, unit_capacity) in enumerate(unit_capacities)
+            row = copy(candidates[candidate_row:candidate_row, keep])
+            row[!, Symbol("Pmax (MW)")] = [unit_capacity]
+            if _holistic_has_column(row, "Pmin (MW)")
+                pmin_ratio =
+                    candidate_mw > 0.0 ?
+                    to_float_output(candidates[candidate_row, Symbol("Pmin (MW)")], 0.0) /
+                    candidate_mw : 0.0
+                row[!, Symbol("Pmin (MW)")] = [max(pmin_ratio * unit_capacity, 0.0)]
+            end
+            should_add_asset_id =
+                has_unit_size ||
+                _holistic_has_column(candidates, HOLISTIC_CANDIDATE_ID) ||
+                _holistic_has_column(pcm_gendata, HOLISTIC_ASSET_ID)
+            asset_id =
+                should_add_asset_id ?
+                string(candidate_id, "__UNIT_", lpad(unit_sequence, 3, '0')) : ""
+            if should_add_asset_id
+                asset_id in existing_asset_ids && throw(
+                    ArgumentError(
+                        "Realized generator Asset_ID $(asset_id) conflicts with an existing or newly realized PCM asset.",
+                    ),
+                )
+                push!(existing_asset_ids, asset_id)
+                row[!, HOLISTIC_ASSET_ID] = [asset_id]
+            end
+            push!(realized_tables, row)
+            push!(
+                audit,
+                (
+                    candidate_row,
+                    candidate_id,
+                    asset_id,
+                    unit_sequence,
+                    string(candidates[candidate_row, "Zone"]),
+                    string(candidates[candidate_row, "Type"]),
+                    candidate_mw,
+                    unit_capacity,
+                    template_id,
+                    realization_mode,
+                    "candidate_then_pcm_fallback",
+                ),
+            )
+        end
     end
+    isempty(realized_tables) && return (
+        DataFrame(:Zone => String[], :Type => String[], Symbol("Pmax (MW)") => Float64[]),
+        audit,
+    )
+    rows = reduce((left, right) -> vcat(left, right; cols = :union), realized_tables)
     return rows, audit
 end
 
@@ -554,7 +753,8 @@ function realize_storage_builds(
     candidates::DataFrame,
     pcm_storage::DataFrame,
 )
-    output_rows = _holistic_candidate_output_rows(es_capacity_df, nrow(candidates), "Storage")
+    output_rows =
+        _holistic_candidate_output_rows(es_capacity_df, nrow(candidates), "Storage")
     built_indices = [
         row for row = 1:nrow(candidates) if
         to_float_output(output_rows[row, "New_Build"], 0.0) > 0.0 &&
@@ -586,9 +786,10 @@ function realize_storage_builds(
         to_float_output(output_rows[index, Symbol("Capacity (MW)")], 0.0) for
         index in built_indices
     ]
-    if !_holistic_has_column(rows, HOLISTIC_ASSET_ID) &&
-       (_holistic_has_column(rows, HOLISTIC_CANDIDATE_ID) ||
-        _holistic_has_column(pcm_storage, HOLISTIC_ASSET_ID))
+    if !_holistic_has_column(rows, HOLISTIC_ASSET_ID) && (
+        _holistic_has_column(rows, HOLISTIC_CANDIDATE_ID) ||
+        _holistic_has_column(pcm_storage, HOLISTIC_ASSET_ID)
+    )
         rows[!, HOLISTIC_ASSET_ID] = [
             _holistic_has_column(candidates, HOLISTIC_CANDIDATE_ID) ?
             string(candidates[index, HOLISTIC_CANDIDATE_ID], "__UNIT_001") :
@@ -605,8 +806,7 @@ function realize_storage_builds(
             "legacy-storage-candidate-row-$(candidate_row)",
         )
         asset_id = _holistic_id(rows, local_row, HOLISTIC_ASSET_ID, "")
-        template_id =
-            _holistic_id(candidates, candidate_row, "Operational_Template_ID", "")
+        template_id = _holistic_id(candidates, candidate_row, "Operational_Template_ID", "")
         push!(
             audit,
             (
@@ -645,14 +845,16 @@ function apply_line_builds_with_audit!(
     nrow(line_builds) == 0 && return linedata, audit
     forward_col = Symbol(FORWARD_LINE_CAPACITY_COLUMN)
     reverse_col = Symbol(REVERSE_LINE_CAPACITY_COLUMN)
-    linedata[!, forward_col] = Float64[to_float_output(v, 0.0) for v in linedata[!, forward_col]]
-    linedata[!, reverse_col] = Float64[to_float_output(v, 0.0) for v in linedata[!, reverse_col]]
+    linedata[!, forward_col] =
+        Float64[to_float_output(v, 0.0) for v in linedata[!, forward_col]]
+    linedata[!, reverse_col] =
+        Float64[to_float_output(v, 0.0) for v in linedata[!, reverse_col]]
     endpoint_from =
-        network_model in (2, 3) && _holistic_has_column(linedata, "from_bus") ?
-        "from_bus" : "From_zone"
+        network_model in (2, 3) && _holistic_has_column(linedata, "from_bus") ? "from_bus" :
+        "From_zone"
     endpoint_to =
-        network_model in (2, 3) && _holistic_has_column(linedata, "to_bus") ?
-        "to_bus" : "To_zone"
+        network_model in (2, 3) && _holistic_has_column(linedata, "to_bus") ? "to_bus" :
+        "To_zone"
 
     for build_row = 1:nrow(line_builds)
         build_from_column =
@@ -669,10 +871,8 @@ function apply_line_builds_with_audit!(
             HOLISTIC_CORRIDOR_ID,
             "legacy-corridor-row-$(build_row)",
         )
-        build_forward =
-            to_float_output(line_builds[build_row, forward_col], 0.0)
-        build_reverse =
-            to_float_output(line_builds[build_row, reverse_col], 0.0)
+        build_forward = to_float_output(line_builds[build_row, forward_col], 0.0)
+        build_reverse = to_float_output(line_builds[build_row, reverse_col], 0.0)
 
         matches = Int[]
         orientations = Bool[]
@@ -681,7 +881,10 @@ function apply_line_builds_with_audit!(
            _holistic_has_column(linedata, HOLISTIC_CORRIDOR_ID) &&
            !isempty(_holistic_text(line_builds[build_row, HOLISTIC_CORRIDOR_ID], ""))
             id = string(line_builds[build_row, HOLISTIC_CORRIDOR_ID])
-            matches = findall(i -> string(linedata[i, HOLISTIC_CORRIDOR_ID]) == id, 1:nrow(linedata))
+            matches = findall(
+                i -> string(linedata[i, HOLISTIC_CORRIDOR_ID]) == id,
+                1:nrow(linedata),
+            )
             length(matches) == 1 || throw(
                 ArgumentError(
                     "Corridor_ID $(id) must match exactly one PCM transmission row; found $(length(matches)).",
@@ -694,11 +897,13 @@ function apply_line_builds_with_audit!(
             reverse =
                 string(linedata[target_row, endpoint_from]) == to_zone &&
                 string(linedata[target_row, endpoint_to]) == from_zone
-            direct || reverse || throw(
-                ArgumentError(
-                    "Corridor_ID $(id) resolves to PCM row $(target_row), but its endpoints do not match $(from_zone)<->$(to_zone).",
-                ),
-            )
+            direct ||
+                reverse ||
+                throw(
+                    ArgumentError(
+                        "Corridor_ID $(id) resolves to PCM row $(target_row), but its endpoints do not match $(from_zone)<->$(to_zone).",
+                    ),
+                )
             orientations = [direct]
             mapping_mode = "corridor_id"
         else
@@ -730,12 +935,12 @@ function apply_line_builds_with_audit!(
         end
 
         logical_forward = Float64[
-            orientations[k] ? linedata[row, forward_col] : linedata[row, reverse_col] for
-            (k, row) in enumerate(matches)
+            orientations[k] ? linedata[row, forward_col] : linedata[row, reverse_col]
+            for (k, row) in enumerate(matches)
         ]
         logical_reverse = Float64[
-            orientations[k] ? linedata[row, reverse_col] : linedata[row, forward_col] for
-            (k, row) in enumerate(matches)
+            orientations[k] ? linedata[row, reverse_col] : linedata[row, forward_col]
+            for (k, row) in enumerate(matches)
         ]
         forward_weights = _holistic_allocation_weights(logical_forward)
         reverse_weights = _holistic_allocation_weights(logical_reverse)
@@ -749,8 +954,7 @@ function apply_line_builds_with_audit!(
                 linedata[target_row, forward_col] += reverse_add
                 linedata[target_row, reverse_col] += forward_add
             end
-            target_id =
-                _holistic_id(linedata, target_row, HOLISTIC_CORRIDOR_ID, "")
+            target_id = _holistic_id(linedata, target_row, HOLISTIC_CORRIDOR_ID, "")
             push!(
                 audit,
                 (
@@ -773,18 +977,19 @@ end
 function _holistic_realize_planning_zones_from_bus!(
     rows::DataFrame,
     updated_input::Dict,
-;
+    ;
     label::AbstractString,
 )
     nrow(rows) == 0 && return rows
     _holistic_has_column(rows, "Bus_id") || return rows
-    haskey(updated_input, "Busdata") || throw(
-        ArgumentError("$(label) has Bus_id but PCM busdata is unavailable."),
-    )
+    haskey(updated_input, "Busdata") ||
+        throw(ArgumentError("$(label) has Bus_id but PCM busdata is unavailable."))
     busdata = updated_input["Busdata"]
     for required in ("Bus_id", "Zone_id")
         _holistic_has_column(busdata, required) || throw(
-            ArgumentError("PCM busdata must include $(required) for nodal build realization."),
+            ArgumentError(
+                "PCM busdata must include $(required) for nodal build realization.",
+            ),
         )
     end
     bus_to_zone = Dict(
@@ -795,7 +1000,9 @@ function _holistic_realize_planning_zones_from_bus!(
     for row = 1:nrow(rows)
         bus_id = string(rows[row, "Bus_id"])
         haskey(bus_to_zone, bus_id) || throw(
-            ArgumentError("$(label) references Bus_id $(bus_id), which is absent from PCM busdata."),
+            ArgumentError(
+                "$(label) references Bus_id $(bus_id), which is absent from PCM busdata.",
+            ),
         )
         push!(realized_zones, bus_to_zone[bus_id])
     end
@@ -821,10 +1028,16 @@ function prepare_pcm_inputs_from_gtep_linked(
     gtep_config::Dict,
     pcm_input::Dict,
     pcm_config::Dict,
+    physical_realization = nothing,
 )
     updated_input = deepcopy(pcm_input)
-    retirement_audit =
-        apply_gtep_retirements!(updated_input, gtep_output, gtep_input, gtep_config)
+    retirement_audit = apply_gtep_retirements!(
+        updated_input,
+        gtep_output,
+        gtep_input,
+        gtep_config,
+        physical_realization,
+    )
 
     using_raw_for_model =
         resource_aggregation_enabled(pcm_config) &&
@@ -894,10 +1107,11 @@ function prepare_pcm_inputs_from_gtep_linked(
     end
     network_model_raw = get(pcm_config, "network_model", 1)
     network_model =
-        network_model_raw isa Integer ? Int(network_model_raw) : parse(Int, string(network_model_raw))
+        network_model_raw isa Integer ? Int(network_model_raw) :
+        parse(Int, string(network_model_raw))
     line_table_key =
-        network_model in (2, 3) && haskey(updated_input, "Branchdata") ?
-        "Branchdata" : "Linedata"
+        network_model in (2, 3) && haskey(updated_input, "Branchdata") ? "Branchdata" :
+        "Linedata"
     updated_input[line_table_key], line_audit = apply_line_builds_with_audit!(
         copy(updated_input[line_table_key]),
         line_builds;
@@ -932,12 +1146,11 @@ end
 function holistic_transfer_summary(updated_input::Dict)
     audit = get(updated_input, "LinkageAudit", Dict{String,Any}())
     retirements = get(audit, "retirements", _holistic_empty_retirement_audit())
-    generation =
-        get(audit, "generation_builds", _holistic_empty_generation_build_audit())
+    generation = get(audit, "generation_builds", _holistic_empty_generation_build_audit())
     storage = get(audit, "storage_builds", _holistic_empty_storage_build_audit())
     lines = get(audit, "line_allocations", _holistic_empty_line_audit())
     raw_retirements =
-        nrow(retirements) == 0 ? retirements : retirements[retirements.Layer .== "raw", :]
+        nrow(retirements) == 0 ? retirements : retirements[retirements.Layer.=="raw", :]
     retirement_basis = nrow(raw_retirements) > 0 ? raw_retirements : retirements
     return Dict(
         "retirement_rows" => nrow(retirement_basis),
@@ -946,16 +1159,337 @@ function holistic_transfer_summary(updated_input::Dict)
         "new_generation_rows" => nrow(generation),
         "new_generation_mw" => nrow(generation) == 0 ? 0.0 : sum(generation.BuiltMW),
         "new_storage_rows" => nrow(storage),
-        "new_storage_power_mw" =>
-            nrow(storage) == 0 ? 0.0 : sum(storage.BuiltPowerMW),
-        "new_storage_energy_mwh" =>
-            nrow(storage) == 0 ? 0.0 : sum(storage.BuiltEnergyMWh),
+        "new_storage_power_mw" => nrow(storage) == 0 ? 0.0 : sum(storage.BuiltPowerMW),
+        "new_storage_energy_mwh" => nrow(storage) == 0 ? 0.0 : sum(storage.BuiltEnergyMWh),
         "new_line_rows" => length(unique(lines.CandidateRow)),
-        "line_forward_added_mw" =>
-            nrow(lines) == 0 ? 0.0 : sum(lines.ForwardAddedMW),
-        "line_reverse_added_mw" =>
-            nrow(lines) == 0 ? 0.0 : sum(lines.ReverseAddedMW),
+        "line_forward_added_mw" => nrow(lines) == 0 ? 0.0 : sum(lines.ForwardAddedMW),
+        "line_reverse_added_mw" => nrow(lines) == 0 ? 0.0 : sum(lines.ReverseAddedMW),
     )
+end
+
+function _holistic_physical_generator_table(input::Dict, config::Dict)
+    if resource_aggregation_enabled(config) && haskey(input, "GendataRaw")
+        return input["GendataRaw"]
+    end
+    return input["Gendata"]
+end
+
+function _holistic_numeric_total(table::AbstractDataFrame, column::AbstractString)
+    column in names(table) || return 0.0
+    return sum((to_float_output(value, 0.0) for value in table[!, column]); init = 0.0)
+end
+
+function _holistic_expected_transfer_metrics(gtep_output::Dict, gtep_input::Dict)
+    capacity = gtep_output["capacity"]
+    existing =
+        "EC_Category" in names(capacity) ?
+        capacity[string.(capacity[!, "EC_Category"]).=="Existing", :] : capacity
+    generation_candidates = _holistic_candidate_output_rows(
+        capacity,
+        nrow(gtep_input["Gendata_candidate"]),
+        "Generation",
+    )
+    built_generation = [
+        row for row = 1:nrow(generation_candidates) if
+        to_float_output(generation_candidates[row, "New_Build"], 0.0) > 0.0 &&
+        to_float_output(generation_candidates[row, Symbol("Capacity_FIN (MW)")], 0.0) > 0.0
+    ]
+
+    storage = _holistic_candidate_output_rows(
+        gtep_output["es_capacity"],
+        nrow(gtep_input["Estoragedata_candidate"]),
+        "Storage",
+    )
+    built_storage = [
+        row for row = 1:nrow(storage) if
+        to_float_output(storage[row, "New_Build"], 0.0) > 0.0 &&
+        to_float_output(storage[row, Symbol("Capacity (MW)")], 0.0) > 0.0
+    ]
+
+    lines = _holistic_candidate_output_rows(
+        gtep_output["line"],
+        nrow(gtep_input["Linedata_candidate"]),
+        "Transmission",
+    )
+    built_lines = [
+        row for
+        row = 1:nrow(lines) if to_float_output(lines[row, "New_Build"], 0.0) > 0.0 &&
+        max(
+            to_float_output(lines[row, Symbol(FORWARD_LINE_CAPACITY_COLUMN)], 0.0),
+            to_float_output(lines[row, Symbol(REVERSE_LINE_CAPACITY_COLUMN)], 0.0),
+        ) > 0.0
+    ]
+
+    return Dict{String,Float64}(
+        "retired_generation_mw" => _holistic_numeric_total(existing, "Capacity_RET (MW)"),
+        "new_generation_mw" => sum(
+            to_float_output(generation_candidates[row, Symbol("Capacity_FIN (MW)")], 0.0) for row in built_generation;
+            init = 0.0,
+        ),
+        "new_storage_power_mw" => sum(
+            to_float_output(storage[row, Symbol("Capacity (MW)")], 0.0) for
+            row in built_storage;
+            init = 0.0,
+        ),
+        "new_storage_energy_mwh" => sum(
+            to_float_output(storage[row, Symbol("EnergyCapacity (MWh)")], 0.0) for
+            row in built_storage;
+            init = 0.0,
+        ),
+        "line_forward_added_mw" => sum(
+            to_float_output(lines[row, Symbol(FORWARD_LINE_CAPACITY_COLUMN)], 0.0) for
+            row in built_lines;
+            init = 0.0,
+        ),
+        "line_reverse_added_mw" => sum(
+            to_float_output(lines[row, Symbol(REVERSE_LINE_CAPACITY_COLUMN)], 0.0) for
+            row in built_lines;
+            init = 0.0,
+        ),
+    )
+end
+
+function _holistic_reconciliation_check!(
+    checks::DataFrame,
+    name::AbstractString,
+    expected,
+    actual;
+    atol::Real,
+    details::AbstractString = "",
+)
+    passed = if expected isa Bool
+        actual === expected
+    else
+        isfinite(Float64(actual)) &&
+            isapprox(Float64(actual), Float64(expected); atol = atol, rtol = 1e-8)
+    end
+    push!(
+        checks,
+        (
+            String(name),
+            string(expected),
+            string(actual),
+            Float64(atol),
+            passed,
+            String(details),
+        ),
+    )
+    return passed
+end
+
+function _holistic_asset_identity_valid(table::AbstractDataFrame)
+    "Asset_ID" in names(table) || return true
+    ids = [value === missing ? "" : strip(string(value)) for value in table[!, "Asset_ID"]]
+    return all(!isempty, ids) && length(unique(ids)) == length(ids)
+end
+
+function _holistic_generation_bounds_valid(table::AbstractDataFrame; atol::Real)
+    all(column -> column in names(table), ("Pmax (MW)", "Pmin (MW)")) || return false
+    for row = 1:nrow(table)
+        pmax = to_float_output(table[row, "Pmax (MW)"], NaN)
+        pmin = to_float_output(table[row, "Pmin (MW)"], NaN)
+        isfinite(pmax) && isfinite(pmin) || return false
+        pmax >= -atol && pmin >= -atol && pmin <= pmax + atol || return false
+    end
+    return true
+end
+
+"""
+    validate_holistic_transfer_reconciliation(
+        gtep_output, gtep_input, source_pcm_input, updated_pcm_input, pcm_config;
+        atol=1e-5, require_valid=true,
+    )
+
+Independently reconcile solved GTEP retirement and build decisions against the
+physical PCM tables produced by the handoff. The check runs before PCM model
+construction and fails on capacity loss, duplication, invalid operating bounds,
+or unstable realized identities. It does not alter either model formulation.
+"""
+function validate_holistic_transfer_reconciliation(
+    gtep_output::Dict,
+    gtep_input::Dict,
+    source_pcm_input::Dict,
+    updated_pcm_input::Dict,
+    pcm_config::Dict;
+    atol::Real = 1e-5,
+    require_valid::Bool = true,
+)
+    isfinite(atol) && atol >= 0 || throw(
+        ArgumentError("Holistic reconciliation tolerance must be nonnegative and finite."),
+    )
+    expected = _holistic_expected_transfer_metrics(gtep_output, gtep_input)
+    audit = holistic_transfer_summary(updated_pcm_input)
+    source_generation = _holistic_physical_generator_table(source_pcm_input, pcm_config)
+    realized_generation = _holistic_physical_generator_table(updated_pcm_input, pcm_config)
+    source_storage = source_pcm_input["Storagedata"]
+    realized_storage = updated_pcm_input["Storagedata"]
+    network_model = Int(get(pcm_config, "network_model", 1))
+    line_key =
+        network_model in (2, 3) && haskey(source_pcm_input, "Branchdata") ? "Branchdata" :
+        "Linedata"
+    source_lines = source_pcm_input[line_key]
+    realized_lines = updated_pcm_input[line_key]
+
+    metrics = Dict{String,Any}(
+        "expected_retired_generation_mw" => expected["retired_generation_mw"],
+        "expected_new_generation_mw" => expected["new_generation_mw"],
+        "expected_new_storage_power_mw" => expected["new_storage_power_mw"],
+        "expected_new_storage_energy_mwh" => expected["new_storage_energy_mwh"],
+        "expected_line_forward_added_mw" => expected["line_forward_added_mw"],
+        "expected_line_reverse_added_mw" => expected["line_reverse_added_mw"],
+        "realized_generation_capacity_mw" =>
+            _holistic_numeric_total(realized_generation, "Pmax (MW)"),
+        "source_generation_capacity_mw" =>
+            _holistic_numeric_total(source_generation, "Pmax (MW)"),
+        "realized_storage_power_mw" =>
+            _holistic_numeric_total(realized_storage, "Max Power (MW)"),
+        "source_storage_power_mw" =>
+            _holistic_numeric_total(source_storage, "Max Power (MW)"),
+        "realized_storage_energy_mwh" =>
+            _holistic_numeric_total(realized_storage, "Capacity (MWh)"),
+        "source_storage_energy_mwh" =>
+            _holistic_numeric_total(source_storage, "Capacity (MWh)"),
+    )
+    metrics["expected_realized_generation_capacity_mw"] =
+        metrics["source_generation_capacity_mw"] - expected["retired_generation_mw"] +
+        expected["new_generation_mw"]
+    metrics["expected_realized_storage_power_mw"] =
+        metrics["source_storage_power_mw"] + expected["new_storage_power_mw"]
+    metrics["expected_realized_storage_energy_mwh"] =
+        metrics["source_storage_energy_mwh"] + expected["new_storage_energy_mwh"]
+    source_line_total =
+        _holistic_numeric_total(source_lines, FORWARD_LINE_CAPACITY_COLUMN) +
+        _holistic_numeric_total(source_lines, REVERSE_LINE_CAPACITY_COLUMN)
+    realized_line_total =
+        _holistic_numeric_total(realized_lines, FORWARD_LINE_CAPACITY_COLUMN) +
+        _holistic_numeric_total(realized_lines, REVERSE_LINE_CAPACITY_COLUMN)
+    metrics["source_bidirectional_line_capacity_mw"] = source_line_total
+    metrics["realized_bidirectional_line_capacity_mw"] = realized_line_total
+    metrics["expected_realized_bidirectional_line_capacity_mw"] =
+        source_line_total +
+        expected["line_forward_added_mw"] +
+        expected["line_reverse_added_mw"]
+
+    checks = DataFrame(
+        Check = String[],
+        Expected = String[],
+        Actual = String[],
+        Tolerance = Float64[],
+        Passed = Bool[],
+        Details = String[],
+    )
+    for key in (
+        "retired_generation_mw",
+        "new_generation_mw",
+        "new_storage_power_mw",
+        "new_storage_energy_mwh",
+        "line_forward_added_mw",
+        "line_reverse_added_mw",
+    )
+        _holistic_reconciliation_check!(
+            checks,
+            "audit.$(key)",
+            expected[key],
+            audit[key];
+            atol = atol,
+            details = "GTEP output versus linkage audit",
+        )
+    end
+    _holistic_reconciliation_check!(
+        checks,
+        "table.generation_capacity_conservation",
+        metrics["expected_realized_generation_capacity_mw"],
+        metrics["realized_generation_capacity_mw"];
+        atol = atol,
+        details = "source PCM - GTEP retirement + GTEP build",
+    )
+    _holistic_reconciliation_check!(
+        checks,
+        "table.storage_power_conservation",
+        metrics["expected_realized_storage_power_mw"],
+        metrics["realized_storage_power_mw"];
+        atol = atol,
+        details = "source PCM + GTEP storage power build",
+    )
+    _holistic_reconciliation_check!(
+        checks,
+        "table.storage_energy_conservation",
+        metrics["expected_realized_storage_energy_mwh"],
+        metrics["realized_storage_energy_mwh"];
+        atol = atol,
+        details = "source PCM + GTEP storage energy build",
+    )
+    _holistic_reconciliation_check!(
+        checks,
+        "table.bidirectional_line_capacity_conservation",
+        metrics["expected_realized_bidirectional_line_capacity_mw"],
+        metrics["realized_bidirectional_line_capacity_mw"];
+        atol = atol,
+        details = "direction-independent check supports reversed branch orientation",
+    )
+    _holistic_reconciliation_check!(
+        checks,
+        "table.generator_operating_bounds",
+        true,
+        _holistic_generation_bounds_valid(realized_generation; atol = atol);
+        atol = 0.0,
+        details = "0 <= Pmin <= Pmax for every realized generator",
+    )
+    _holistic_reconciliation_check!(
+        checks,
+        "identity.generator_asset_ids",
+        true,
+        _holistic_asset_identity_valid(realized_generation);
+        atol = 0.0,
+        details = "Asset_ID is nonblank and unique when present",
+    )
+    _holistic_reconciliation_check!(
+        checks,
+        "identity.storage_asset_ids",
+        true,
+        _holistic_asset_identity_valid(realized_storage);
+        atol = 0.0,
+        details = "Asset_ID is nonblank and unique when present",
+    )
+
+    valid = all(checks.Passed)
+    report = Dict{String,Any}(
+        "schema_version" => 1,
+        "workflow" => "GTEP-PCM",
+        "valid" => valid,
+        "metrics" => metrics,
+        "checks" => checks,
+    )
+    if require_valid && !valid
+        failed = join(checks.Check[.!checks.Passed], ", ")
+        throw(ArgumentError("Holistic transfer reconciliation failed: $(failed)."))
+    end
+    return report
+end
+
+function _write_holistic_transfer_reconciliation!(
+    written::Dict{String,String},
+    data_dir::AbstractString,
+    report::Dict,
+)
+    checks_path = joinpath(data_dir, "transfer_reconciliation_checks.csv")
+    CSV.write(checks_path, report["checks"])
+    written["transfer_reconciliation_checks"] = checks_path
+    yaml_path = joinpath(data_dir, "transfer_reconciliation.yml")
+    document = Dict{String,Any}(
+        "schema_version" => report["schema_version"],
+        "workflow" => report["workflow"],
+        "valid" => report["valid"],
+        "metrics" => report["metrics"],
+        "checks" => [
+            Dict(string(column) => row[column] for column in names(report["checks"])) for row in eachrow(report["checks"])
+        ],
+    )
+    open(yaml_path, "w") do io
+        YAML.write(io, document)
+    end
+    written["transfer_reconciliation"] = yaml_path
+    return written
 end
 
 function _holistic_source_hashes(case_path::AbstractString, config::Dict)
@@ -969,6 +1503,7 @@ function persist_realized_pcm_inputs_for_holistic(
     gtep_case_path::AbstractString = "",
     pcm_case_path::AbstractString = "",
     gtep_config::Union{Nothing,Dict} = nothing,
+    transfer_reconciliation::Union{Nothing,Dict} = nothing,
 )
     data_dir = joinpath(output_path, "realized_inputs")
     mkpath(data_dir)
@@ -995,13 +1530,13 @@ function persist_realized_pcm_inputs_for_holistic(
     end
 
     summary = holistic_transfer_summary(updated_input)
+    transfer_reconciliation === nothing ||
+        _write_holistic_transfer_reconciliation!(written, data_dir, transfer_reconciliation)
     manifest = Dict{String,Any}(
         "schema_version" => 1,
         "workflow" => "GTEP-PCM",
-        "source_cases" => Dict(
-            "gtep" => String(gtep_case_path),
-            "pcm" => String(pcm_case_path),
-        ),
+        "source_cases" =>
+            Dict("gtep" => String(gtep_case_path), "pcm" => String(pcm_case_path)),
         "identity_policy" => "Asset_ID when supplied; otherwise validated legacy row or aggregate mapping",
         "source_pcm_hashes" =>
             isempty(pcm_case_path) ? Dict{String,String}() :
@@ -1010,6 +1545,13 @@ function persist_realized_pcm_inputs_for_holistic(
             isempty(gtep_case_path) || gtep_config === nothing ? Dict{String,String}() :
             _holistic_source_hashes(gtep_case_path, gtep_config),
         "transfer_summary" => summary,
+        "transfer_reconciliation" =>
+            transfer_reconciliation === nothing ? Dict{String,Any}() :
+            Dict(
+                "schema_version" => transfer_reconciliation["schema_version"],
+                "valid" => transfer_reconciliation["valid"],
+                "metrics" => transfer_reconciliation["metrics"],
+            ),
     )
     manifest_path = joinpath(data_dir, "handoff_manifest.yml")
     open(manifest_path, "w") do io

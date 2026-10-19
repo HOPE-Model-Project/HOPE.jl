@@ -179,6 +179,22 @@ result = HOPE.run_hope_holistic_fresh(
 )
 ```
 
+For a validation run, select a faster installed solver without editing either
+source case:
+
+```julia
+result = HOPE.run_hope_holistic(
+    "ModelCases/MD_GTEP_RPS20_4zone_public_case",
+    "ModelCases/MD_PCM_RPS20_transmission_public_case";
+    solver_override = "gurobi",
+)
+```
+
+`gtep_solver_override` and `pcm_solver_override` may be supplied separately when
+the stages need different solvers. The override exists only in the returned run
+configuration; `Settings/HOPE_model_settings.yml` is not modified. The same
+non-mutating `solver_override` keyword is available on standalone `run_hope`.
+
 Key requirements:
 
 - The `GTEP` and `PCM` cases must use the same resolved spatial topology. The default `holistic_spatial_basis: zone` requires matching `zonedata.Zone_id` and zonal `linedata` corridors. A GTEP case may select `bus`, where each physical bus is represented as a GTEP zone and PCM is validated through `busdata`, `branchdata`, `Bus_id`, and `load_timeseries_nodal`. Set PCM to `holistic_spatial_basis: auto` when one nodal PCM case should inherit either resolution from different paired GTEP cases.

@@ -180,6 +180,40 @@ end
     end
 
     mktempdir() do root
+        fixture = collect(_holistic_contract_fixture(root))
+        fixture[3]["Gendata_candidate"][!, "PCM_Unit_Size_MW"] = [100.0]
+        fixture[3]["Gendata"][!, "Retirement_Priority"] = [1.0]
+        fixture[7]["retirement_realization"] = Dict(
+            "method" => "priority",
+            "priority_column" => "Retirement_Priority",
+            "partial_unit_policy" => "reject",
+        )
+        report = HOPE.validate_holistic_handoff_contract(
+            fixture[1:6]...;
+            physical_contract = fixture[7],
+            require_valid = true,
+        )
+        @test report["valid"]
+        @test only(
+            report["checks"].Passed[report["checks"].Check.=="generation_physical_unit_sizes"],
+        )
+        @test only(
+            report["checks"].Passed[report["checks"].Check.=="retirement_priority_values"],
+        )
+
+        fixture[7]["retirement_realization"]["method"] = "unknown"
+        invalid = HOPE.validate_holistic_handoff_contract(
+            fixture[1:6]...;
+            physical_contract = fixture[7],
+            require_valid = false,
+        )
+        @test !invalid["valid"]
+        @test !only(
+            invalid["checks"].Passed[invalid["checks"].Check.=="retirement_realization_method"],
+        )
+    end
+
+    mktempdir() do root
         contract_path = joinpath(root, "physical.yml")
         open(contract_path, "w") do io
             YAML.write(

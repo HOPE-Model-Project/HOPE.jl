@@ -949,6 +949,9 @@ function run_hope_holistic_fresh(
     gtep_tag::AbstractString = "gtep_run",
     pcm_tag::AbstractString = "pcm_run",
     debug_stage_file::Union{Nothing,AbstractString} = nothing,
+    solver_override = nothing,
+    gtep_solver_override = nothing,
+    pcm_solver_override = nothing,
 )
     fresh_gtep_case = prepare_fresh_holistic_case(
         GTEP_source_case,
@@ -960,7 +963,13 @@ function run_hope_holistic_fresh(
         pcm_tag;
         debug_stage_file = debug_stage_file,
     )
-    result = run_hope_holistic(fresh_gtep_case, fresh_pcm_case)
+    result = run_hope_holistic(
+        fresh_gtep_case,
+        fresh_pcm_case;
+        solver_override = solver_override,
+        gtep_solver_override = gtep_solver_override,
+        pcm_solver_override = pcm_solver_override,
+    )
     result["fresh_gtep_case_path"] = fresh_gtep_case
     result["fresh_pcm_case_path"] = fresh_pcm_case
     return result
@@ -987,12 +996,19 @@ Both case directories must share a consistent zonal topology; mismatches raise a
 Returns a `Dict` with keys `"gtep_output"` and `"pcm_output"` containing the respective
 result dictionaries.
 """
-function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractString)
+function _run_hope_holistic_impl(
+    GTEP_case::AbstractString,
+    PCM_case::AbstractString,
+    gtep_solver_override = nothing,
+    pcm_solver_override = nothing,
+)
     println("Run Holistic Assessment: 'GTEP-PCM' mode!")
     gtep_path, gtep_config =
         load_case_config_for_holistic(GTEP_case; context = "run_hope_holistic")
     pcm_path, pcm_config =
         load_case_config_for_holistic(PCM_case; context = "run_hope_holistic")
+    gtep_config["solver"] = _effective_solver_name(gtep_config, gtep_solver_override)
+    pcm_config["solver"] = _effective_solver_name(pcm_config, pcm_solver_override)
     holistic_debug_stage_log_pair(
         gtep_config,
         pcm_config,
@@ -1034,7 +1050,7 @@ function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractSt
         pcm_config,
         "run_hope_holistic_gtep_run_start",
     )
-    gtep_results = run_hope(gtep_path)
+    gtep_results = run_hope(gtep_path; solver_override = gtep_config["solver"])
     holistic_debug_stage_log_pair(
         gtep_config,
         pcm_config,
@@ -1067,6 +1083,14 @@ function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractSt
         gtep_config,
         pcm_input,
         pcm_config,
+        handoff_contract["physical_realization"],
+    )
+    transfer_reconciliation = validate_holistic_transfer_reconciliation(
+        gtep_output,
+        gtep_input,
+        pcm_input,
+        updated_pcm_input,
+        pcm_config,
     )
     holistic_debug_stage_log_pair(
         gtep_config,
@@ -1097,6 +1121,12 @@ function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractSt
         "run_hope_holistic_pcm_solve_done",
     )
     require_feasible_primal_solution(solved_pcm_model; context = "Holistic PCM stage")
+    pcm_transfer_activity = holistic_pcm_transfer_activity_metrics(
+        solved_pcm_model,
+        updated_pcm_input,
+        pcm_input,
+        pcm_config,
+    )
 
     pcm_outpath = joinpath(pcm_path, "output_holistic")
     holistic_debug_stage_log_pair(
@@ -1124,6 +1154,7 @@ function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractSt
         gtep_case_path = gtep_path,
         pcm_case_path = pcm_path,
         gtep_config = gtep_config,
+        transfer_reconciliation = transfer_reconciliation,
     )
     source_gtep_hashes_after = _holistic_source_hashes(gtep_path, gtep_config)
     source_pcm_hashes_after = _holistic_source_hashes(pcm_path, pcm_config)
@@ -1160,10 +1191,12 @@ function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractSt
         "pcm_solved_model" => solved_pcm_model,
         "pcm_output" => pcm_output,
         "transfer_summary" => transfer_summary,
+        "transfer_reconciliation" => transfer_reconciliation,
         "handoff_contract" => handoff_contract,
         "handoff_contract_paths" => handoff_contract_paths,
         "gtep_activity" => gtep_activity,
         "pcm_activity" => pcm_activity,
+        "pcm_transfer_activity" => pcm_transfer_activity,
         "source_gtep_hashes_before" => source_gtep_hashes_before,
         "source_gtep_hashes_after" => source_gtep_hashes_after,
         "source_pcm_hashes_before" => source_pcm_hashes_before,
@@ -1172,15 +1205,31 @@ function _run_hope_holistic_impl(GTEP_case::AbstractString, PCM_case::AbstractSt
 end
 
 """
-    run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString) -> Dict
+    run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString;
+                      solver_override=nothing,
+                      gtep_solver_override=nothing,
+                      pcm_solver_override=nothing) -> Dict
 
 Run the two-stage holistic GTEP-to-PCM workflow. Optional solver extensions are
 loaded before entering the compiled workflow so dynamically selected Gurobi,
 CPLEX, and SCIP methods are visible during both model-construction stages.
+Solver overrides affect only the current run and never edit either source case.
 """
-function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
+function run_hope_holistic(
+    GTEP_case::AbstractString,
+    PCM_case::AbstractString;
+    solver_override = nothing,
+    gtep_solver_override = nothing,
+    pcm_solver_override = nothing,
+)
     _, gtep_config = load_case_config_for_holistic(GTEP_case; context = "run_hope_holistic")
     _, pcm_config = load_case_config_for_holistic(PCM_case; context = "run_hope_holistic")
+    effective_gtep_override =
+        gtep_solver_override === nothing ? solver_override : gtep_solver_override
+    effective_pcm_override =
+        pcm_solver_override === nothing ? solver_override : pcm_solver_override
+    gtep_config["solver"] = _effective_solver_name(gtep_config, effective_gtep_override)
+    pcm_config["solver"] = _effective_solver_name(pcm_config, effective_pcm_override)
     solver_names = unique(
         lowercase.(
             String[
@@ -1197,7 +1246,18 @@ function run_hope_holistic(GTEP_case::AbstractString, PCM_case::AbstractString)
         end
     end
     if optional_solver_requested
-        return Base.invokelatest(_run_hope_holistic_impl, GTEP_case, PCM_case)
+        return Base.invokelatest(
+            _run_hope_holistic_impl,
+            GTEP_case,
+            PCM_case,
+            effective_gtep_override,
+            effective_pcm_override,
+        )
     end
-    return _run_hope_holistic_impl(GTEP_case, PCM_case)
+    return _run_hope_holistic_impl(
+        GTEP_case,
+        PCM_case,
+        effective_gtep_override,
+        effective_pcm_override,
+    )
 end

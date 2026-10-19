@@ -397,6 +397,98 @@ function _holistic_contract_identity_checks!(
     end
 end
 
+function _holistic_contract_resource_realization_checks!(
+    checks::DataFrame,
+    gtep_input::Dict,
+    contract::Dict,
+)
+    if haskey(gtep_input, "Gendata_candidate")
+        candidates = gtep_input["Gendata_candidate"]
+        if "PCM_Unit_Size_MW" in names(candidates)
+            invalid = Int[]
+            configured = 0
+            for row = 1:nrow(candidates)
+                value = candidates[row, "PCM_Unit_Size_MW"]
+                (ismissing(value) || isempty(strip(string(value)))) && continue
+                configured += 1
+                parsed = try
+                    Float64(value)
+                catch
+                    tryparse(Float64, strip(string(value)))
+                end
+                (parsed isa Real && isfinite(parsed) && parsed > 0.0) || push!(invalid, row)
+            end
+            _holistic_contract_add!(
+                checks,
+                "generation_physical_unit_sizes",
+                "physical_realization",
+                isempty(invalid),
+                isempty(invalid) ? "configured candidate rows=$(configured)" :
+                "PCM_Unit_Size_MW must be positive at candidate rows=$(join(invalid, ','))",
+            )
+        end
+    end
+
+    retirement = get(contract, "retirement_realization", nothing)
+    retirement isa AbstractDict || return
+    method = lowercase(strip(string(get(retirement, "method", "proportional_capacity"))))
+    supported_methods =
+        ("proportional_capacity", "largest_first", "smallest_first", "priority")
+    method_valid = method in supported_methods
+    _holistic_contract_add!(
+        checks,
+        "retirement_realization_method",
+        "physical_realization",
+        method_valid,
+        "method=$(method); supported=$(join(supported_methods, '|'))",
+    )
+    partial_policy = lowercase(
+        strip(string(get(retirement, "partial_unit_policy", "allow_capacity_reduction"))),
+    )
+    partial_valid = partial_policy in ("allow_capacity_reduction", "reject")
+    _holistic_contract_add!(
+        checks,
+        "retirement_partial_unit_policy",
+        "physical_realization",
+        partial_valid,
+        "partial_unit_policy=$(partial_policy); supported=allow_capacity_reduction|reject",
+    )
+    method_valid || return
+    if method == "priority"
+        priority_column =
+            strip(string(get(retirement, "priority_column", "Retirement_Priority")))
+        raw_generators = get(gtep_input, "GendataRaw", gtep_input["Gendata"])
+        has_priority = priority_column in names(raw_generators)
+        _holistic_contract_add!(
+            checks,
+            "retirement_priority_column",
+            "physical_realization",
+            has_priority,
+            has_priority ? "column=$(priority_column)" :
+            "missing raw GTEP generator column=$(priority_column)",
+        )
+        has_priority || return
+        invalid = Int[]
+        for row = 1:nrow(raw_generators)
+            value = raw_generators[row, priority_column]
+            parsed = try
+                Float64(value)
+            catch
+                tryparse(Float64, strip(string(value)))
+            end
+            (parsed isa Real && isfinite(parsed)) || push!(invalid, row)
+        end
+        _holistic_contract_add!(
+            checks,
+            "retirement_priority_values",
+            "physical_realization",
+            isempty(invalid),
+            isempty(invalid) ? "all $(nrow(raw_generators)) values are finite" :
+            "non-numeric or non-finite rows=$(join(invalid, ','))",
+        )
+    end
+end
+
 """
     validate_holistic_handoff_contract(gtep_case, pcm_case; kwargs...) -> Dict
 
@@ -477,6 +569,7 @@ function validate_holistic_handoff_contract(
         )
         _holistic_contract_bus_checks!(checks, gtep_input, pcm_input, contract)
         _holistic_contract_line_checks!(checks, gtep_input, pcm_input, contract)
+        _holistic_contract_resource_realization_checks!(checks, gtep_input, contract)
         _holistic_contract_provenance_checks!(checks, contract, gtep_case, pcm_case)
     end
 
