@@ -685,6 +685,10 @@ function realize_generation_builds(
                 flag_uc =
                     _holistic_has_column(candidates, "Flag_UC") ?
                     to_float_output(candidates[candidate_row, "Flag_UC"], 0.0) : 0.0
+                flag_thermal =
+                    _holistic_has_column(candidates, "Flag_thermal") ?
+                    to_float_output(candidates[candidate_row, "Flag_thermal"], 0.0) : 0.0
+                flag_thermal >= 0.5 && (flag_uc = 1.0)
                 flag_uc < 0.5 || throw(
                     ArgumentError(
                         "Committed generation candidate $(candidate_id) builds $(built_mw) MW, which is not an integer multiple of PCM_Unit_Size_MW=$(unit_size).",
@@ -1057,6 +1061,28 @@ function prepare_pcm_inputs_from_gtep_linked(
         updated_input;
         label = "GTEP generation build",
     )
+    operational_templates = get(updated_input, "OperationalResourceTemplates", DataFrame())
+    new_generation, generation_parameter_audit = apply_operational_resource_templates(
+        new_generation,
+        operational_templates;
+        resource_kind = "generation",
+    )
+    thermal_generation_rows = if "Flag_thermal" in names(new_generation)
+        [
+            row for row = 1:nrow(new_generation) if
+            to_float_output(new_generation[row, "Flag_thermal"], 0.0) >= 0.5
+        ]
+    else
+        Int[]
+    end
+    thermal_uc_rows = if "Flag_UC" in names(new_generation)
+        count(
+            row -> to_float_output(new_generation[row, "Flag_UC"], 0.0) >= 0.5,
+            thermal_generation_rows,
+        )
+    else
+        0
+    end
     updated_input["Gendata"] =
         append_rows_preserve_columns(updated_input["Gendata"], new_generation)
     _holistic_append_to_raw_if_distinct!(
@@ -1075,6 +1101,33 @@ function prepare_pcm_inputs_from_gtep_linked(
         new_storage,
         updated_input;
         label = "GTEP storage build",
+    )
+    new_storage, storage_parameter_audit = apply_operational_resource_templates(
+        new_storage,
+        operational_templates;
+        resource_kind = "storage",
+    )
+    operational_parameter_audit =
+        vcat(generation_parameter_audit, storage_parameter_audit; cols = :union)
+    template_asset_ids = if nrow(operational_parameter_audit) == 0
+        String[]
+    else
+        unique(
+            operational_parameter_audit.AssetID[startswith.(
+                operational_parameter_audit.Source,
+                "template:",
+            ),],
+        )
+    end
+    operational_summary = Dict{String,Any}(
+        "new_thermal_generation_rows" => length(thermal_generation_rows),
+        "new_thermal_generation_uc_rows" => thermal_uc_rows,
+        "new_thermal_generation_all_uc" =>
+            isempty(thermal_generation_rows) ||
+            thermal_uc_rows == length(thermal_generation_rows) ? 1.0 : 0.0,
+        "operational_template_assets" => length(template_asset_ids),
+        "operational_template_parameter_rows" =>
+            count(startswith.(operational_parameter_audit.Source, "template:")),
     )
     updated_input["Storagedata"] =
         append_rows_preserve_columns(updated_input["Storagedata"], new_storage)
@@ -1138,6 +1191,8 @@ function prepare_pcm_inputs_from_gtep_linked(
         "retirements" => retirement_audit,
         "generation_builds" => generation_audit,
         "storage_builds" => storage_audit,
+        "operational_parameters" => operational_parameter_audit,
+        "operational_summary" => operational_summary,
         "line_allocations" => line_audit,
     )
     return updated_input
@@ -1152,7 +1207,7 @@ function holistic_transfer_summary(updated_input::Dict)
     raw_retirements =
         nrow(retirements) == 0 ? retirements : retirements[retirements.Layer.=="raw", :]
     retirement_basis = nrow(raw_retirements) > 0 ? raw_retirements : retirements
-    return Dict(
+    summary = Dict(
         "retirement_rows" => nrow(retirement_basis),
         "retired_generation_mw" =>
             nrow(retirement_basis) == 0 ? 0.0 : sum(retirement_basis.RetiredMW),
@@ -1160,11 +1215,14 @@ function holistic_transfer_summary(updated_input::Dict)
         "new_generation_mw" => nrow(generation) == 0 ? 0.0 : sum(generation.BuiltMW),
         "new_storage_rows" => nrow(storage),
         "new_storage_power_mw" => nrow(storage) == 0 ? 0.0 : sum(storage.BuiltPowerMW),
-        "new_storage_energy_mwh" => nrow(storage) == 0 ? 0.0 : sum(storage.BuiltEnergyMWh),
+        "new_storage_energy_mwh" =>
+            nrow(storage) == 0 ? 0.0 : sum(storage.BuiltEnergyMWh),
         "new_line_rows" => length(unique(lines.CandidateRow)),
         "line_forward_added_mw" => nrow(lines) == 0 ? 0.0 : sum(lines.ForwardAddedMW),
         "line_reverse_added_mw" => nrow(lines) == 0 ? 0.0 : sum(lines.ReverseAddedMW),
     )
+    merge!(summary, get(audit, "operational_summary", Dict{String,Any}()))
+    return summary
 end
 
 function _holistic_physical_generator_table(input::Dict, config::Dict)

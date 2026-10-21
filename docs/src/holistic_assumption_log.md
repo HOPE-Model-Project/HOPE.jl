@@ -50,8 +50,8 @@ At minimum, a new entry records:
 | HLA-004 | Maryland candidate-bus choice | Each zone uses its largest existing generation bus as a representative candidate bus | Active |
 | HLA-005 | New plant sizing | GTEP selects continuous MW; without `PCM_Unit_Size_MW`, one candidate becomes one aggregate PCM row | Validated |
 | HLA-006 | Existing-resource parameters | Each model owns its input parameters; retirements transfer capacity changes through `Asset_ID` | Validated |
-| HLA-007 | New-resource parameters | Candidate values take precedence; missing PCM fields use zone/type mean, type mean, then code defaults | Validated |
-| HLA-008 | Operational templates | `Operational_Template_ID` is currently provenance only; a parameter registry is still needed | Open |
+| HLA-007 | New-resource parameters | Candidate values take precedence, followed by a PCM template, zone/type mean, type mean, and code defaults | Validated |
+| HLA-008 | Operational templates | PCM owns an optional validated template registry; new thermal generation is always unit committed | Implemented |
 | HLA-009 | Retirement realization | Default is proportional capacity; priority and whole-unit policies are optional | Active |
 | HLA-010 | Transmission realization | Use `Corridor_ID`, then explicit endpoints; no line build was selected in the annual case | Active |
 | HLA-011 | Reserve alignment | GTEP's 7% upward proxy represents PCM's 1% REG-UP, 3% SPIN, and 3% NSPIN | Validated |
@@ -112,9 +112,9 @@ At minimum, a new entry records:
   supporting explicit unit disaggregation when physical detail is available.
 - **Evidence:** `realize_generation_builds` in `src/holistic_linkage.jl` and the
   generation-build audit.
-- **Consequence:** The current 5,000 MW PEPCO NGCC result is represented as one
-  non-unit-committed aggregate row. This is acceptable for linkage testing but
-  is not a production-grade plant fleet.
+- **Consequence:** Without `PCM_Unit_Size_MW`, a thermal build is one committed
+  aggregate row even when it represents several physical units. This is useful
+  for linkage testing but is not a production-grade plant fleet.
 - **Next action:** choose technology-specific unit sizes and commitment behavior
   through the template registry proposed in HLA-008.
 
@@ -124,16 +124,20 @@ At minimum, a new entry records:
   common fleet basis in this benchmark, and `Asset_ID` maps capacity retirements.
   The linkage does not replace PCM costs, commitment, ramp, reserve, outage, or
   emissions parameters for existing resources.
-- **New resources:** candidate-supplied values are copied first. Missing numeric
-  PCM fields are filled from the same zone/type, then the same type, then code
-  defaults.
-- **Known gap:** `Operational_Template_ID` is recorded in realized inputs and
-  audits but does not yet retrieve a parameter row.
-- **Proposed resolution:** add a versioned operational-template table containing
-  unit size, minimum output, commitment flag, minimum up/down time, ramp rates,
-  startup/no-load cost, reserve eligibility, outage rates, storage behavior,
-  fuel, and emissions. Use candidate override → template → documented default
-  as the explicit precedence.
+- **New resources:** candidate-supplied values are copied first. The candidate's
+  `Operational_Template_ID` then selects a row from the PCM-owned optional
+  `operational_resource_templates.csv`. Remaining numeric fields use the same
+  zone/type, then the same type, then code defaults.
+- **Thermal commitment safeguard:** every newly realized row with
+  `Flag_thermal = 1` receives `Flag_UC = 1`, even when a legacy candidate carries
+  a zero placeholder. Existing PCM resources are not modified by this rule.
+- **Evidence:** the Maryland annual benchmark defines modern NGCC, solar, wind,
+  and four-hour battery templates. The realized-input package writes
+  `operational_parameters_audit.csv` with field-level candidate, template, and
+  thermal-policy sources.
+- **Remaining refinement:** technology-specific unit size and minimum-output
+  fractions should be calibrated before treating aggregate GTEP builds as a
+  production physical fleet.
 
 ### HLA-009 and HLA-010 — retirement and transmission
 
