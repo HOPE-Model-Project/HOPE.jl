@@ -26,6 +26,7 @@ pages = OrderedDict(
         "Maryland Full-Year Holistic Case" => "case_md_holistic_full8760.md",
         "Maryland Restricted Linkage Benchmark" => "case_md_restricted_linkage.md",
         "Maryland 20% RPS Public Holistic Benchmark" => "case_md_rps20_holistic.md",
+        "Maryland Full-Year 20% RPS Physical Benchmark" => "case_md_rps20_full8760_holistic.md",
         "USA 64-Zone GTEP Case" => "case_usa64_gtep.md",
         "RTS24 PCM Multizone4 Congested 1-Month Case" => "case_rts24_pcm_multizone4.md",
         "RTS24 DART Case" => "case_rts24_dart.md",
@@ -54,6 +55,7 @@ pages = OrderedDict(
     "Reference" => [
         "Package scope" => "package_scope.md",
         "Holistic handoff contracts" => "holistic_contracts.md",
+        "Holistic assumption and decision log" => "holistic_assumption_log.md",
         "Operational-state contracts" => "operational_state_contracts.md",
         "API Reference" => "95-reference.md",
     ],

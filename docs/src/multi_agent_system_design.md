@@ -21,6 +21,11 @@ The design preserves several important properties:
 - The agent organization remains provisional until the complete HOPE model
   architecture is better established.
 
+Cross-model assumptions and incremental design decisions are maintained in the
+[Holistic Linkage Assumption and Decision Log](holistic_assumption_log.md). The
+log is the human governance record; versioned contracts and run manifests remain
+the machine-readable source of truth for agents.
+
 ## First-principles view
 
 GTEP, PCM, and DART are not merely different solvers over the same input table.
@@ -293,6 +298,105 @@ expected_model_mode: DART
 ```
 
 The message points to data; it does not contain an improvised copy of the data.
+
+## HOPE-AI and the deterministic modeling boundary
+
+HOPE-AI should be treated as the interaction and control layer for HOPE, not as
+another power-system model and not as a replacement for deterministic workflow
+code. An LLM agent can interpret a study request, select an appropriate workflow,
+monitor execution, and explain validated results. The numerical truth remains in
+the GTEP, PCM, DART, and supporting calculation code.
+
+This leads to a first-principles division of responsibility:
+
+- agents decide what question to ask and explain the resulting evidence;
+- configuration and data contracts define which inputs and assumptions are valid;
+- deterministic workflow code transfers state between models;
+- optimization models calculate numerical results;
+- validation code decides whether results are complete and publishable; and
+- persistent artifacts, rather than conversational memory, are the system of record.
+
+This boundary is important even before HOPE adopts multiple specialized agents.
+An agent should never recreate a generator fleet, infer transmission mappings, or
+copy large model arrays through natural-language messages when those operations can
+be represented by versioned files and tested transformation code. Agents should
+communicate compact references such as a request ID, scenario ID, artifact path,
+schema version, and validation state.
+
+### GTEP-to-PCM as the first agent-safe cross-model transaction
+
+The current GTEP-to-PCM workflow is the first implementation of this principle.
+Its conceptual execution path is:
+
+```text
+User objective
+    -> HOPE-AI agent
+    -> agent-safe holistic-run tool
+    -> case, role, solver, and source-fingerprint validation
+    -> isolated run workspace
+    -> GTEP
+    -> deterministic physical realization and transfer reconciliation
+    -> PCM
+    -> coverage and source-immutability checks
+    -> persistent published or failed manifest
+    -> agent retrieves and explains the evidence
+```
+
+The workflow uses a stable request ID for idempotency, rejects reuse of that ID
+with conflicting inputs, fingerprints source cases, protects those cases from
+mutation, and records lifecycle state independently of the MCP conversation. A
+disconnected agent can therefore reconnect, query the same request, and recover
+the authoritative status and artifact locations without starting a duplicate run.
+Large numerical data remain in the run artifacts instead of crossing agent
+messages.
+
+The lifecycle and integration tests for this interface are *agent tests* in a
+specific sense: they test whether an agent can invoke, retry, disconnect from, and
+recover a deterministic study safely. They do not yet evaluate the quality of the
+LLM's scientific reasoning or written interpretation. Real-solver integration
+testing additionally verifies that GTEP and PCM solve, transfer reconciliation and
+required feature coverage pass, and source cases remain unchanged.
+
+### Standalone use and present scope
+
+The agent layer must remain optional. Users must continue to be able to run GTEP,
+PCM, DART, or deterministic coupled workflows without an LLM. This preserves
+HOPE's value as a modeling package and allows the same validated capability to be
+used interactively, in scripts, in continuous integration, or by a future agent.
+
+The current baseline does not yet constitute the full multi-agent system. It does
+not define a final coordinator or division among planning, realization,
+operations, and evaluation agents; it does not benchmark natural-language
+reasoning; and it does not yet provide a general durable queue with leases,
+heartbeats, or interrupted-run resumption. Automated derivation of a physical
+network from sources such as OpenStreetMap is also separate from the current
+case-defined realization contract. These are later design and evaluation tasks,
+not assumptions hidden inside the completed GTEP-to-PCM transaction.
+
+The recommended sequence is therefore to strengthen request-based artifact
+inspection and scientific evaluation before splitting the workflow among multiple
+agents. A future agent evaluation should test whether the agent selects compatible
+cases, detects inconsistent assumptions, interprets transfer and coverage reports,
+and distinguishes model evidence from its own inference.
+
+### Implemented GTEP-to-PCM agent-test baseline
+
+The local MCP `hope_run_holistic` path now implements the first deterministic
+slice of this protocol without fixing a final multi-agent hierarchy:
+
+- a caller-supplied `request_id` is the idempotency key;
+- source settings and data are fingerprinted before launch;
+- GTEP and PCM model roles are checked before any workspace or solver process is created;
+- each request receives isolated source copies with stale output folders excluded;
+- the manifest records source fingerprints, solver, command, workspace, state, and result artifacts;
+- reuse of a request ID with changed cases, data, or solver is rejected;
+- Julia publishes `PUBLISHED` or `FAILED` even if the MCP client disconnects;
+- `hope_holistic_status` can recover the terminal state after an MCP restart; and
+- cases with a holistic acceptance contract must pass their declared capability checks before publication.
+
+This is an orchestration and test boundary around the existing mathematical
+models. Standalone `run_hope` and direct Julia GTEP-to-PCM workflows remain
+available and unchanged.
 
 ## Provisional agent roles
 

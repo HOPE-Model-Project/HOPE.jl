@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -15,13 +18,26 @@ from typing import Any
 
 import yaml
 
-DEFAULT_HOPE_REPO_ROOT = Path("/Users/qianzhang/Documents/GitHub/HOPE")
+# The MCP package lives at <repo>/tools/hope_mcp_server/src/hope_mcp_server.
+# Keep the environment override for installed deployments, but make a source
+# checkout work on every developer machine without a user-specific path.
+DEFAULT_HOPE_REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_JULIA_COMMAND = "julia"
 
 DEFAULT_CASE_ID = "md_gtep_clean"
 LEGACY_CASE_ALIASES = {
     DEFAULT_CASE_ID: "MD_GTEP_clean_case",
 }
+
+HOLISTIC_REQUEST_SCHEMA_VERSION = 1
+HOLISTIC_OUTPUT_DIR_NAMES = {
+    "output",
+    "output_holistic",
+    "plot_output",
+    "backup",
+    "debug_report",
+}
+HOLISTIC_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 BOOLEAN_SETTING_KEYS = (
     "resource_aggregation",
@@ -109,7 +125,6 @@ def setup_command(repo_root: Path, julia_command: str) -> str:
 
 
 def validate_julia_command(repo_root: Path) -> tuple[str | None, dict[str, Any] | None]:
-    julia_command = configured_julia_command()
     julia_env = os.environ.get("HOPE_JULIA_BIN")
     if julia_env:
         julia_path = Path(julia_env).expanduser()
@@ -211,6 +226,106 @@ def read_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
+def holistic_runs_root(repo_root: Path) -> Path:
+    configured = os.environ.get("HOPE_AGENT_RUNS_ROOT")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return (repo_root / "artifacts" / "agent_runs").resolve()
+
+
+def normalize_holistic_request_id(
+    request_id: str | None,
+) -> tuple[str | None, dict[str, Any] | None]:
+    value = str(request_id).strip() if request_id is not None else uuid.uuid4().hex
+    if not HOLISTIC_REQUEST_ID_PATTERN.fullmatch(value):
+        return None, error_result(
+            "invalid_request_id",
+            "request_id must be 1-128 characters using only letters, numbers, '.', '_', or '-'.",
+            request_id=value,
+        )
+    return value, None
+
+
+def _is_holistic_output_dir_name(name: str) -> bool:
+    return name in HOLISTIC_OUTPUT_DIR_NAMES or name.startswith("output_backup")
+
+
+def _case_input_files(case_path: Path) -> list[Path]:
+    case_root = case_path.resolve()
+    settings_path = settings_path_for_case(case_path)
+    settings = read_yaml(settings_path)
+    data_case = str(settings.get("DataCase", "")).strip()
+    if not data_case:
+        raise ValueError(f"DataCase is missing or blank in {settings_path}")
+    data_root = (case_path / data_case).resolve()
+    try:
+        data_root.relative_to(case_root)
+    except ValueError as exc:
+        raise ValueError(f"DataCase must remain inside the case directory: {data_root}") from exc
+    if not data_root.is_dir():
+        raise ValueError(f"DataCase directory does not exist: {data_root}")
+    roots = [(case_path / "Settings").resolve(), data_root]
+
+    files: set[Path] = set()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if path.is_file() and not any(
+                _is_holistic_output_dir_name(part) for part in path.relative_to(case_root).parts
+            ):
+                files.add(path)
+    return sorted(files, key=lambda path: path.relative_to(case_root).as_posix())
+
+
+def holistic_case_input_fingerprint(case_path: Path) -> dict[str, Any]:
+    case_root = case_path.resolve()
+    digest = hashlib.sha256()
+    files = _case_input_files(case_path)
+    for path in files:
+        relative = path.relative_to(case_root).as_posix()
+        file_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(file_digest.encode("ascii"))
+        digest.update(b"\n")
+    return {
+        "sha256": digest.hexdigest(),
+        "file_count": len(files),
+    }
+
+
+def _canonical_payload_hash(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _write_yaml_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+            yaml.safe_dump(payload, handle, sort_keys=False)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _read_holistic_manifest(path: Path) -> dict[str, Any]:
+    try:
+        return read_yaml(path)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        raise ValueError(f"Invalid holistic run manifest {path}: {exc}") from exc
+
+
+def _update_holistic_manifest(path: Path, **changes: Any) -> dict[str, Any]:
+    manifest = _read_holistic_manifest(path)
+    manifest.update(changes)
+    _write_yaml_atomic(path, manifest)
+    return manifest
+
+
 def output_dir_for_case(case_path: Path) -> Path:
     return case_path / "output"
 
@@ -257,9 +372,15 @@ class _Job:
     include_output_summary: bool = False
     cancel_requested: bool = False
     cancelled_at: float | None = None
+    request_id: str = ""
+    workspace_path: str = ""
+    manifest_path: str = ""
+    output_case_path: str = ""
 
 
 _jobs: dict[str, _Job] = {}
+_holistic_request_jobs: dict[str, str] = {}
+_holistic_request_lock = threading.Lock()
 
 
 def _stream_lines(stream: Any, target: list[str]) -> None:
@@ -274,6 +395,10 @@ def _launch_job(
     *,
     job_kind: str = "generic",
     include_output_summary: bool = False,
+    request_id: str = "",
+    workspace_path: str = "",
+    manifest_path: str = "",
+    output_case_path: str = "",
 ) -> str:
     job_id = uuid.uuid4().hex[:8]
 
@@ -294,6 +419,10 @@ def _launch_job(
         case_id=case_id,
         job_kind=job_kind,
         include_output_summary=include_output_summary,
+        request_id=request_id,
+        workspace_path=workspace_path,
+        manifest_path=manifest_path,
+        output_case_path=output_case_path,
     )
     threading.Thread(target=_stream_lines, args=(process.stdout, job.stdout_lines), daemon=True).start()
     threading.Thread(target=_stream_lines, args=(process.stderr, job.stderr_lines), daemon=True).start()
@@ -336,6 +465,16 @@ def _job_stderr(job: _Job) -> str:
 
 def _job_stdout(job: _Job) -> str:
     return "\n".join(job.stdout_lines).strip()
+
+
+def _job_context(job: _Job) -> dict[str, Any]:
+    if not job.request_id:
+        return {}
+    return {
+        "request_id": job.request_id,
+        "workspace_path": job.workspace_path,
+        "manifest_path": job.manifest_path,
+    }
 
 
 def looks_like_missing_hope_dependencies(stdout: str, stderr: str) -> bool:
@@ -384,6 +523,24 @@ def build_run_command(repo_root: Path, julia_bin: str, case_path: Path) -> list[
         "-e",
         julia_script,
         str(case_path),
+    ]
+
+
+def build_holistic_run_command(
+    repo_root: Path,
+    julia_bin: str,
+    gtep_case_path: Path,
+    pcm_case_path: Path,
+    manifest_path: Path,
+    solver: str | None,
+) -> list[str]:
+    return [
+        *build_project_julia_command(repo_root, julia_bin),
+        str(repo_root / "tools" / "repo_utils" / "run_holistic_agent_job.jl"),
+        str(gtep_case_path),
+        str(pcm_case_path),
+        str(manifest_path),
+        solver or "",
     ]
 
 
@@ -677,6 +834,7 @@ def hope_job_status(job_id: str) -> dict[str, Any]:
     stdout_tail = _job_stdout_tail(job)
     stdout = _job_stdout(job)
     stderr = _job_stderr(job)
+    context = _job_context(job)
 
     if exit_code is None:
         return success_result(
@@ -685,9 +843,17 @@ def hope_job_status(job_id: str) -> dict[str, Any]:
             elapsed_seconds=elapsed,
             stdout_tail=stdout_tail,
             message=f"Job is still running ({elapsed}s elapsed). Call hope_job_status again to check.",
+            **context,
         )
 
     if job.cancel_requested:
+        _record_holistic_job_status(
+            job,
+            "CANCELLED",
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=exit_code,
+        )
         return success_result(
             job_id=job_id,
             status="cancelled",
@@ -696,10 +862,18 @@ def hope_job_status(job_id: str) -> dict[str, Any]:
             stdout_tail=stdout_tail,
             stderr=stderr,
             message="Job was cancelled in this MCP session.",
+            **context,
         )
 
     # Job finished
     if exit_code != 0:
+        _record_holistic_job_status(
+            job,
+            "FAILED",
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=exit_code,
+        )
         stdout_joined = stdout
         if job.job_kind == "debug_probe":
             return error_result(
@@ -712,6 +886,7 @@ def hope_job_status(job_id: str) -> dict[str, Any]:
                 stdout=stdout,
                 stderr=stderr,
                 parsed_stdout=_parse_key_value_lines(stdout),
+                **context,
             )
         if looks_like_applocker_block(stdout_joined, stderr):
             return error_result(
@@ -728,6 +903,7 @@ def hope_job_status(job_id: str) -> dict[str, Any]:
                 elapsed_seconds=elapsed,
                 stdout_tail=stdout_tail,
                 stderr=stderr,
+                **context,
             )
         if looks_like_missing_hope_dependencies(stdout_joined, stderr):
             repo_root = get_repo_root()
@@ -741,6 +917,7 @@ def hope_job_status(job_id: str) -> dict[str, Any]:
                 stdout_tail=stdout_tail,
                 stderr=stderr,
                 setup_command=setup_command(repo_root, julia_bin),
+                **context,
             )
         return error_result(
             "job_failed",
@@ -750,15 +927,26 @@ def hope_job_status(job_id: str) -> dict[str, Any]:
             elapsed_seconds=elapsed,
             stdout_tail=stdout_tail,
             stderr=stderr,
+            **context,
         )
 
+    manifest = _record_holistic_job_status(
+        job,
+        "PUBLISHED",
+        stdout=stdout,
+        stderr=stderr,
+        exit_code=exit_code,
+    )
     result = success_result(
         job_id=job_id,
         status="done",
         exit_code=exit_code,
         elapsed_seconds=elapsed,
         stdout_tail=stdout_tail,
+        **context,
     )
+    if manifest is not None:
+        result["result"] = manifest.get("result")
     if job.job_kind == "debug_probe":
         result["stdout"] = stdout
         result["stderr"] = stderr
@@ -784,7 +972,19 @@ def hope_cancel_job(job_id: str, timeout_seconds: float = 5.0) -> dict[str, Any]
 
     exit_code = job.process.poll()
     if exit_code is not None:
-        status = "cancelled" if job.cancel_requested else "done"
+        status = "cancelled" if job.cancel_requested else ("done" if exit_code == 0 else "failed")
+        if job.request_id:
+            _record_holistic_job_status(
+                job,
+                (
+                    "CANCELLED"
+                    if job.cancel_requested
+                    else ("PUBLISHED" if exit_code == 0 else "FAILED")
+                ),
+                stdout=_job_stdout(job),
+                stderr=_job_stderr(job),
+                exit_code=exit_code,
+            )
         return success_result(
             job_id=job_id,
             status=status,
@@ -797,6 +997,7 @@ def hope_cancel_job(job_id: str, timeout_seconds: float = 5.0) -> dict[str, Any]
                 if job.cancel_requested
                 else "Job has already finished; nothing was cancelled."
             ),
+            **_job_context(job),
         )
 
     job.cancel_requested = True
@@ -812,6 +1013,13 @@ def hope_cancel_job(job_id: str, timeout_seconds: float = 5.0) -> dict[str, Any]
 
     job.cancelled_at = time.perf_counter()
     final_exit_code = job.process.poll()
+    _record_holistic_job_status(
+        job,
+        "CANCELLED",
+        stdout=_job_stdout(job),
+        stderr=_job_stderr(job),
+        exit_code=final_exit_code,
+    )
 
     return success_result(
         job_id=job_id,
@@ -826,6 +1034,7 @@ def hope_cancel_job(job_id: str, timeout_seconds: float = 5.0) -> dict[str, Any]
             if not forced_kill
             else "Job did not exit after terminate(); force-killed successfully."
         ),
+        **_job_context(job),
     )
 
 
@@ -1547,54 +1756,319 @@ def hope_compare_cases(case_ids: list[str]) -> dict[str, Any]:
 # Holistic two-stage workflow
 # ---------------------------------------------------------------------------
 
+def _holistic_copy_ignore(_directory: str, names: list[str]) -> set[str]:
+    return {name for name in names if _is_holistic_output_dir_name(name)}
+
+
+def _holistic_manifest_response(manifest: dict[str, Any], *, reused: bool) -> dict[str, Any]:
+    return success_result(
+        request_id=manifest.get("request_id"),
+        job_id=manifest.get("job_id"),
+        status=str(manifest.get("status", "unknown")).lower(),
+        reused=reused,
+        workspace_path=manifest.get("workspace_path"),
+        manifest_path=manifest.get("manifest_path"),
+        gtep_case_id=manifest.get("gtep_case_id"),
+        pcm_case_id=manifest.get("pcm_case_id"),
+        solver=manifest.get("solver"),
+        request_sha256=manifest.get("request_sha256"),
+        result=manifest.get("result"),
+        error=manifest.get("error"),
+    )
+
+
+def _record_holistic_job_status(
+    job: _Job,
+    status: str,
+    *,
+    stdout: str = "",
+    stderr: str = "",
+    exit_code: int | None = None,
+) -> dict[str, Any] | None:
+    if not job.manifest_path:
+        return None
+    manifest_path = Path(job.manifest_path)
+    if not manifest_path.is_file():
+        return None
+    manifest = _read_holistic_manifest(manifest_path)
+    if manifest.get("status") == status:
+        return manifest
+    changes: dict[str, Any] = {"status": status, "updated_at_unix": time.time()}
+    if exit_code is not None:
+        changes["exit_code"] = exit_code
+    if status == "PUBLISHED":
+        parsed = _parse_key_value_lines(stdout)
+        changes["result"] = {
+            "gtep_case_path": parsed.get("HOPE_GTEP_CASE_PATH"),
+            "pcm_case_path": parsed.get("HOPE_PCM_CASE_PATH", job.output_case_path),
+            "pcm_output_path": parsed.get("HOPE_PCM_OUTPUT_PATH"),
+            "handoff_valid": parsed.get("HOPE_HANDOFF_VALID") == "true",
+            "transfer_valid": parsed.get("HOPE_TRANSFER_VALID") == "true",
+            "coverage_all_passed": (
+                parsed.get("HOPE_COVERAGE_ALL_PASSED") == "true"
+                if "HOPE_COVERAGE_ALL_PASSED" in parsed
+                else None
+            ),
+        }
+    elif status in ("FAILED", "CANCELLED"):
+        changes["error"] = {
+            "stderr": stderr,
+            "stdout_tail": last_nonempty_lines(stdout),
+        }
+    return _update_holistic_manifest(manifest_path, **changes)
+
+
+def hope_holistic_status(request_id: str) -> dict[str, Any]:
+    """Return retry-safe status for a holistic request, including after an MCP reconnect."""
+    normalized, error = normalize_holistic_request_id(request_id)
+    if error is not None:
+        return error
+    assert normalized is not None
+
+    job_id = _holistic_request_jobs.get(normalized)
+    if job_id and job_id in _jobs:
+        result = hope_job_status(job_id)
+        result["request_id"] = normalized
+        return result
+
+    manifest_path = holistic_runs_root(get_repo_root()) / normalized / "run_manifest.yml"
+    if not manifest_path.is_file():
+        return error_result(
+            "holistic_request_not_found",
+            f"No holistic request found with request_id '{normalized}'.",
+            request_id=normalized,
+        )
+    try:
+        manifest = _read_holistic_manifest(manifest_path)
+    except ValueError as exc:
+        return error_result(
+            "invalid_holistic_manifest",
+            str(exc),
+            request_id=normalized,
+            manifest_path=str(manifest_path),
+        )
+    return _holistic_manifest_response(manifest, reused=True)
+
 def hope_run_holistic(
     gtep_case_id: str,
     pcm_case_id: str,
+    request_id: str | None = None,
+    solver: str | None = None,
 ) -> dict[str, Any]:
-    """
-    Run the two-stage GTEP→PCM holistic workflow as a background job.
-    Stage 1 solves capacity expansion (GTEP); Stage 2 fixes the built fleet and runs PCM.
-    Returns a job_id immediately. Poll with hope_job_status.
-    """
+    """Launch an isolated, idempotent GTEP-to-PCM workflow for an agent."""
     repo_root = get_repo_root()
 
     gtep_path, err = resolve_case(gtep_case_id)
     if err is not None:
         return error_result("invalid_gtep_case", err.get("message", ""), case_id=gtep_case_id)
-
     pcm_path, err = resolve_case(pcm_case_id)
     if err is not None:
         return error_result("invalid_pcm_case", err.get("message", ""), case_id=pcm_case_id)
+
+    gtep_settings = read_yaml(settings_path_for_case(gtep_path))
+    pcm_settings = read_yaml(settings_path_for_case(pcm_path))
+    gtep_mode = str(gtep_settings.get("model_mode", "")).strip().upper()
+    pcm_mode = str(pcm_settings.get("model_mode", "")).strip().upper()
+    if gtep_mode != "GTEP" or pcm_mode != "PCM":
+        return error_result(
+            "invalid_holistic_model_modes",
+            "The holistic workflow requires a GTEP source case and a PCM source case.",
+            gtep_case_id=gtep_case_id,
+            gtep_model_mode=gtep_mode,
+            pcm_case_id=pcm_case_id,
+            pcm_model_mode=pcm_mode,
+        )
+
+    selected_solver = str(solver).strip().lower() if solver is not None else None
+    if selected_solver is not None and selected_solver not in _SOLVER_OPTIONS:
+        return error_result(
+            "invalid_solver",
+            f"Unsupported solver '{selected_solver}'.",
+            solver=selected_solver,
+            allowed_solvers=list(_SOLVER_OPTIONS),
+        )
+
+    normalized_request_id, request_error = normalize_holistic_request_id(request_id)
+    if request_error is not None:
+        return request_error
+    assert normalized_request_id is not None
 
     julia_bin, julia_error = validate_julia_command(repo_root)
     if julia_error is not None:
         return julia_error
 
-    julia_script = "using HOPE; HOPE.run_hope_holistic(ARGS[1], ARGS[2])"
-    command = [
-        *build_project_julia_command(repo_root, julia_bin),
-        "-e",
-        julia_script,
-        str(gtep_path),
-        str(pcm_path),
-    ]
+    try:
+        gtep_fingerprint = holistic_case_input_fingerprint(gtep_path)
+        pcm_fingerprint = holistic_case_input_fingerprint(pcm_path)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return error_result(
+            "invalid_holistic_inputs",
+            str(exc),
+            gtep_case_id=gtep_case_id,
+            pcm_case_id=pcm_case_id,
+        )
+    request_payload = {
+        "schema_version": HOLISTIC_REQUEST_SCHEMA_VERSION,
+        "operation": "GTEP-PCM",
+        "gtep_case_id": gtep_case_id,
+        "pcm_case_id": pcm_case_id,
+        "solver": selected_solver,
+        "gtep_source_sha256": gtep_fingerprint["sha256"],
+        "pcm_source_sha256": pcm_fingerprint["sha256"],
+    }
+    request_sha256 = _canonical_payload_hash(request_payload)
+    workspace_path = holistic_runs_root(repo_root) / normalized_request_id
+    manifest_path = workspace_path / "run_manifest.yml"
 
-    # Tag job with both case IDs
-    job_id = _launch_job(
-        command,
-        repo_root,
-        case_id=gtep_case_id,
-        job_kind="hope_run_holistic",
-        include_output_summary=True,
-    )
+    with _holistic_request_lock:
+        if workspace_path.exists():
+            if not manifest_path.is_file():
+                return error_result(
+                    "holistic_workspace_conflict",
+                    f"Workspace already exists without a valid run manifest: {workspace_path}",
+                    request_id=normalized_request_id,
+                    workspace_path=str(workspace_path),
+                )
+            try:
+                existing = _read_holistic_manifest(manifest_path)
+            except ValueError as exc:
+                return error_result(
+                    "invalid_holistic_manifest",
+                    str(exc),
+                    request_id=normalized_request_id,
+                    manifest_path=str(manifest_path),
+                )
+            if existing.get("request_sha256") != request_sha256:
+                return error_result(
+                    "request_id_conflict",
+                    "request_id already belongs to a different GTEP-PCM request or source version.",
+                    request_id=normalized_request_id,
+                    existing_request_sha256=existing.get("request_sha256"),
+                    requested_sha256=request_sha256,
+                )
+            return _holistic_manifest_response(existing, reused=True)
+
+        workspace_path.parent.mkdir(parents=True, exist_ok=True)
+        final_gtep = workspace_path / "gtep_case"
+        final_pcm = workspace_path / "pcm_case"
+        try:
+            workspace_path.mkdir()
+        except FileExistsError:
+            return error_result(
+                "holistic_workspace_conflict",
+                "Another process reserved this request_id while the request was being prepared.",
+                request_id=normalized_request_id,
+                workspace_path=str(workspace_path),
+            )
+        except OSError as exc:
+            return error_result(
+                "holistic_workspace_setup_failed",
+                str(exc),
+                request_id=normalized_request_id,
+                workspace_path=str(workspace_path),
+            )
+        manifest = {
+            **request_payload,
+            "request_id": normalized_request_id,
+            "request_sha256": request_sha256,
+            "status": "CREATED",
+            "created_at_unix": time.time(),
+            "updated_at_unix": time.time(),
+            "workspace_path": str(workspace_path),
+            "manifest_path": str(manifest_path),
+            "gtep_source_path": str(gtep_path),
+            "pcm_source_path": str(pcm_path),
+            "gtep_case_path": str(final_gtep),
+            "pcm_case_path": str(final_pcm),
+            "gtep_source_fingerprint": gtep_fingerprint,
+            "pcm_source_fingerprint": pcm_fingerprint,
+        }
+        _write_yaml_atomic(manifest_path, manifest)
+        try:
+            shutil.copytree(gtep_path, final_gtep, ignore=_holistic_copy_ignore)
+            shutil.copytree(pcm_path, final_pcm, ignore=_holistic_copy_ignore)
+            if holistic_case_input_fingerprint(final_gtep) != gtep_fingerprint:
+                raise RuntimeError("GTEP source changed while preparing the isolated workspace.")
+            if holistic_case_input_fingerprint(final_pcm) != pcm_fingerprint:
+                raise RuntimeError("PCM source changed while preparing the isolated workspace.")
+            _update_holistic_manifest(
+                manifest_path,
+                status="VALIDATED",
+                updated_at_unix=time.time(),
+            )
+        except (OSError, RuntimeError, ValueError, yaml.YAMLError) as exc:
+            _update_holistic_manifest(
+                manifest_path,
+                status="FAILED",
+                updated_at_unix=time.time(),
+                error={"message": str(exc)},
+            )
+            return error_result(
+                "holistic_workspace_setup_failed",
+                str(exc),
+                request_id=normalized_request_id,
+                workspace_path=str(workspace_path),
+            )
+
+        isolated_gtep = workspace_path / "gtep_case"
+        isolated_pcm = workspace_path / "pcm_case"
+        command = build_holistic_run_command(
+            repo_root,
+            julia_bin,
+            isolated_gtep,
+            isolated_pcm,
+            manifest_path,
+            selected_solver,
+        )
+        try:
+            job_id = _launch_job(
+                command,
+                repo_root,
+                case_id=pcm_case_id,
+                job_kind="hope_run_holistic",
+                request_id=normalized_request_id,
+                workspace_path=str(workspace_path),
+                manifest_path=str(manifest_path),
+                output_case_path=str(isolated_pcm),
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            _update_holistic_manifest(
+                manifest_path,
+                status="FAILED",
+                updated_at_unix=time.time(),
+                error={"message": str(exc)},
+            )
+            return error_result(
+                "holistic_launch_failed",
+                str(exc),
+                request_id=normalized_request_id,
+                workspace_path=str(workspace_path),
+                manifest_path=str(manifest_path),
+            )
+
+        _holistic_request_jobs[normalized_request_id] = job_id
+        _update_holistic_manifest(
+            manifest_path,
+            status="RUNNING",
+            updated_at_unix=time.time(),
+            job_id=job_id,
+            command=command,
+        )
+
     return success_result(
         job_id=job_id,
+        request_id=normalized_request_id,
+        status="running",
+        reused=False,
         gtep_case_id=gtep_case_id,
         pcm_case_id=pcm_case_id,
+        solver=selected_solver,
+        request_sha256=request_sha256,
+        workspace_path=str(workspace_path),
+        manifest_path=str(manifest_path),
         message=(
-            f"Holistic GTEP→PCM run started (GTEP: '{gtep_case_id}', PCM: '{pcm_case_id}'). "
-            "Call hope_job_status with this job_id to check progress. "
-            "Stage 1 (GTEP) runs first, then Stage 2 (PCM) uses the fixed built fleet."
+            f"Isolated holistic GTEP-to-PCM run started for request '{normalized_request_id}'. "
+            "Call hope_holistic_status with this request_id; retries are idempotent."
         ),
         command=command,
     )

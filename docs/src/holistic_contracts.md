@@ -14,6 +14,9 @@ information:
 This separation prevents a planning assumption from being silently treated as
 a physical PCM asset while preserving standalone GTEP and PCM operation.
 
+The current rules, known limitations, and proposed replacements are tracked by
+stable IDs in the [Holistic Linkage Assumption and Decision Log](holistic_assumption_log.md).
+
 ## Preflight validation
 
 Use the public API to validate a pair without invoking a solver:
@@ -67,6 +70,43 @@ Version 1 supports these resource-siting rules:
 
 - `explicit_bus`: each GTEP candidate identifies an exact PCM `Bus_id`;
 - `legacy_zone`: retain the compatible historical zonal mapping.
+
+### Spatial and parameter realization
+
+With `explicit_bus`, GTEP can remain mathematically zonal while each candidate
+row carries three linkage fields: `Planning_Zone`, `Bus_id`, and
+`Candidate_ID`. GTEP selects the capacity associated with that candidate. The
+linkage then creates one or more PCM rows at the declared bus, verifies that the
+bus exists and belongs to the declared planning zone, and assigns stable
+`<Candidate_ID>__UNIT_<sequence>` asset identities. HOPE does not infer a bus
+from geography during this step.
+
+The solved GTEP capacity determines the realized PCM `Pmax`. Without
+`PCM_Unit_Size_MW`, one candidate becomes one aggregate PCM row. With that
+column, HOPE splits the aggregate build into fixed-size physical units under the
+rules below.
+
+Existing resources remain owned by each model's source input. `Asset_ID`
+provides the crosswalk, and a GTEP retirement changes the corresponding PCM
+capacity; the linkage does not replace the PCM resource's other operational
+parameters. For a new resource, candidate values are copied first. Missing PCM
+numeric fields are filled from existing PCM resources in this order:
+
+1. mean for the same `Zone` and `Type`;
+2. mean for the same `Type`; and
+3. a conservative code default.
+
+`Operational_Template_ID` is currently retained in the realized row and audit
+trail as provenance. It does not yet select a separate parameter-registry row.
+Cases that require technology-specific commitment, ramp, reserve, startup, or
+minimum-output behavior must therefore provide those values on the candidate
+row. A future template registry can make this precedence explicit without
+changing the GTEP or PCM formulations.
+
+`legacy_zone` is backward compatibility for already compatible zonal pairs. It
+is not a general zonal-to-nodal siting algorithm. A zonal-only GTEP paired with
+a nodal PCM still needs linkage information such as an explicit bus, an
+approved candidate-bus mapping table, or a documented allocation rule.
 
 It also provides two optional, backward-compatible physical-fleet rules:
 

@@ -11,26 +11,30 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT / "src"))
 
 from hope_mcp_server.core import (
-    _Job,
+    DEFAULT_HOPE_REPO_ROOT,
     _MODEL_MODE_OPTIONS,
-    _validate_settings_dict,
+    _holistic_request_jobs,
+    _Job,
     _jobs,
+    _validate_settings_dict,
     build_debug_solver_environment_command,
+    build_holistic_run_command,
     build_run_command,
     hope_cancel_job,
     hope_case_info,
     hope_debug_solver_environment,
     hope_debug_solver_environment_async,
+    hope_holistic_status,
     hope_job_status,
     hope_open_dashboard,
     hope_output_summary,
+    hope_run_holistic,
     hope_run_hope,
     julia_string_literal,
     parse_dart_output_summary,
     setup_command,
 )
 from hope_mcp_server.server import create_mcp_server
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 JULIA_BIN = (
@@ -52,6 +56,10 @@ class HopeCoreTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.env_patch.stop()
+
+    def test_default_repo_root_is_this_source_checkout(self) -> None:
+        self.assertEqual(DEFAULT_HOPE_REPO_ROOT, REPO_ROOT)
+        self.assertTrue((DEFAULT_HOPE_REPO_ROOT / "src" / "HOPE.jl").is_file())
 
     def test_case_info_reads_yaml_and_output_inventory(self) -> None:
         result = hope_case_info()
@@ -174,6 +182,7 @@ class HopeCoreTests(unittest.TestCase):
         self.assertIn("hope_cancel_job", tool_names)
         self.assertIn("hope_debug_solver_environment", tool_names)
         self.assertIn("hope_debug_solver_environment_async", tool_names)
+        self.assertIn("hope_holistic_status", tool_names)
 
     def test_read_only_server_accepts_configured_public_hostname(self) -> None:
         with mock.patch.dict(
@@ -200,6 +209,24 @@ class HopeCoreTests(unittest.TestCase):
                 "using HOPE; HOPE.run_hope(ARGS[1])",
                 str(case_path),
             ],
+        )
+
+    def test_holistic_command_passes_paths_and_solver_as_arguments(self) -> None:
+        gtep = REPO_ROOT / "ModelCases" / "$gtep"
+        pcm = REPO_ROOT / "ModelCases" / "$pcm"
+        manifest = REPO_ROOT / "artifacts" / "$request" / "run_manifest.yml"
+        command = build_holistic_run_command(
+            REPO_ROOT,
+            JULIA_BIN,
+            gtep,
+            pcm,
+            manifest,
+            "$solver",
+        )
+        script = REPO_ROOT / "tools" / "repo_utils" / "run_holistic_agent_job.jl"
+        self.assertEqual(
+            command[-5:],
+            [str(script), str(gtep), str(pcm), str(manifest), "$solver"],
         )
 
     def test_julia_string_literal_escapes_interpolation(self) -> None:
@@ -437,6 +464,258 @@ class HopeCoreTests(unittest.TestCase):
         self.assertEqual(result["probe"]["OPTIMIZER_CONSTRUCTOR_VALUE"], "HiGHS.Optimizer")
         self.assertEqual(result["probe"]["PROBE_STATUS"], "ok")
         self.assertNotIn("output_summary", result)
+
+
+class HolisticAgentWorkflowTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.runs = self.root / "agent-runs"
+        self.gtep = self._write_case("gtep_case", "GTEP", "gtep")
+        self.pcm = self._write_case("pcm_case", "PCM", "pcm")
+        self.env_patch = mock.patch.dict(
+            "os.environ",
+            {
+                "HOPE_REPO_ROOT": str(self.root),
+                "HOPE_AGENT_RUNS_ROOT": str(self.runs),
+                "HOPE_JULIA_BIN": JULIA_BIN,
+            },
+            clear=False,
+        )
+        self.env_patch.start()
+
+    def tearDown(self) -> None:
+        self.env_patch.stop()
+        for request_id in list(_holistic_request_jobs):
+            if request_id.startswith("test-"):
+                _holistic_request_jobs.pop(request_id, None)
+        self.temporary.cleanup()
+
+    def _write_case(self, name: str, mode: str, marker: str) -> Path:
+        case = self.root / "ModelCases" / name
+        (case / "Settings").mkdir(parents=True)
+        (case / "Data").mkdir()
+        (case / "Settings" / "HOPE_model_settings.yml").write_text(
+            f"model_mode: {mode}\nsolver: highs\nDataCase: Data/\n",
+            encoding="utf-8",
+        )
+        (case / "Data" / "input.csv").write_text(
+            f"name,value\n{marker},1\n",
+            encoding="utf-8",
+        )
+        (case / "output").mkdir()
+        (case / "output" / "stale.csv").write_text("stale\n", encoding="utf-8")
+        return case
+
+    def _launch(self, request_id: str = "test-request", solver: str | None = "highs") -> dict:
+        with (
+            mock.patch(
+                "hope_mcp_server.core.validate_julia_command",
+                return_value=(JULIA_BIN, None),
+            ),
+            mock.patch("hope_mcp_server.core._launch_job", return_value="job123") as launch,
+        ):
+            result = hope_run_holistic(
+                "gtep_case",
+                "pcm_case",
+                request_id=request_id,
+                solver=solver,
+            )
+        self.assertEqual(launch.call_count, 1)
+        return result
+
+    def test_agent_run_is_isolated_and_persistently_identified(self) -> None:
+        result = self._launch()
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["reused"])
+        self.assertEqual(result["status"], "running")
+
+        workspace = Path(result["workspace_path"])
+        manifest = Path(result["manifest_path"])
+        self.assertTrue((workspace / "gtep_case" / "Data" / "input.csv").is_file())
+        self.assertTrue((workspace / "pcm_case" / "Data" / "input.csv").is_file())
+        self.assertFalse((workspace / "gtep_case" / "output").exists())
+        self.assertFalse((workspace / "pcm_case" / "output").exists())
+        self.assertTrue(manifest.is_file())
+        self.assertEqual(self.gtep.joinpath("Data", "input.csv").read_text(encoding="utf-8"), "name,value\ngtep,1\n")
+
+        _holistic_request_jobs.pop("test-request", None)
+        recovered = hope_holistic_status("test-request")
+        self.assertTrue(recovered["ok"])
+        self.assertEqual(recovered["status"], "running")
+        self.assertTrue(recovered["reused"])
+
+    def test_duplicate_request_is_idempotent(self) -> None:
+        first = self._launch("test-duplicate")
+        with (
+            mock.patch(
+                "hope_mcp_server.core.validate_julia_command",
+                return_value=(JULIA_BIN, None),
+            ),
+            mock.patch("hope_mcp_server.core._launch_job") as launch,
+        ):
+            second = hope_run_holistic(
+                "gtep_case",
+                "pcm_case",
+                request_id="test-duplicate",
+                solver="highs",
+            )
+        self.assertTrue(first["ok"])
+        self.assertTrue(second["ok"])
+        self.assertTrue(second["reused"])
+        self.assertEqual(second["job_id"], "job123")
+        launch.assert_not_called()
+
+    def test_request_id_reuse_with_changed_inputs_is_rejected(self) -> None:
+        self._launch("test-conflict")
+        (self.gtep / "Data" / "input.csv").write_text(
+            "name,value\ngtep,2\n",
+            encoding="utf-8",
+        )
+        with (
+            mock.patch(
+                "hope_mcp_server.core.validate_julia_command",
+                return_value=(JULIA_BIN, None),
+            ),
+            mock.patch("hope_mcp_server.core._launch_job") as launch,
+        ):
+            result = hope_run_holistic(
+                "gtep_case",
+                "pcm_case",
+                request_id="test-conflict",
+                solver="highs",
+            )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "request_id_conflict")
+        launch.assert_not_called()
+
+    def test_wrong_model_roles_are_rejected_before_launch(self) -> None:
+        (self.pcm / "Settings" / "HOPE_model_settings.yml").write_text(
+            "model_mode: GTEP\nsolver: highs\nDataCase: Data/\n",
+            encoding="utf-8",
+        )
+        with mock.patch("hope_mcp_server.core._launch_job") as launch:
+            result = hope_run_holistic(
+                "gtep_case",
+                "pcm_case",
+                request_id="test-wrong-role",
+            )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "invalid_holistic_model_modes")
+        launch.assert_not_called()
+
+    def test_invalid_request_id_and_solver_are_rejected(self) -> None:
+        invalid_id = hope_run_holistic(
+            "gtep_case",
+            "pcm_case",
+            request_id="../cross-over",
+        )
+        self.assertFalse(invalid_id["ok"])
+        self.assertEqual(invalid_id["error_type"], "invalid_request_id")
+
+        invalid_solver = hope_run_holistic(
+            "gtep_case",
+            "pcm_case",
+            request_id="test-invalid-solver",
+            solver="$bad",
+        )
+        self.assertFalse(invalid_solver["ok"])
+        self.assertEqual(invalid_solver["error_type"], "invalid_solver")
+
+    def test_completed_job_publishes_manifest_artifacts(self) -> None:
+        launched = self._launch("test-complete")
+        process = mock.Mock()
+        process.poll.return_value = 0
+        job = _Job(
+            job_id="complete123",
+            command=[],
+            process=process,
+            job_kind="hope_run_holistic",
+            request_id="test-complete",
+            workspace_path=launched["workspace_path"],
+            manifest_path=launched["manifest_path"],
+            output_case_path=str(Path(launched["workspace_path"]) / "pcm_case"),
+            stdout_lines=[
+                "HOPE_GTEP_CASE_PATH=/run/gtep",
+                "HOPE_PCM_CASE_PATH=/run/pcm",
+                "HOPE_PCM_OUTPUT_PATH=/run/pcm/output_holistic",
+                "HOPE_HANDOFF_VALID=true",
+                "HOPE_TRANSFER_VALID=true",
+                "HOPE_COVERAGE_ALL_PASSED=true",
+            ],
+        )
+        _jobs[job.job_id] = job
+        self.addCleanup(lambda: _jobs.pop(job.job_id, None))
+        _holistic_request_jobs["test-complete"] = job.job_id
+
+        status = hope_holistic_status("test-complete")
+        self.assertTrue(status["ok"])
+        self.assertEqual(status["status"], "done")
+        self.assertTrue(status["result"]["handoff_valid"])
+        self.assertTrue(status["result"]["transfer_valid"])
+        self.assertTrue(status["result"]["coverage_all_passed"])
+
+        _holistic_request_jobs.pop("test-complete", None)
+        persisted = hope_holistic_status("test-complete")
+        self.assertEqual(persisted["status"], "published")
+        self.assertEqual(
+            persisted["result"]["pcm_output_path"],
+            "/run/pcm/output_holistic",
+        )
+
+    def test_failed_job_persists_terminal_error(self) -> None:
+        launched = self._launch("test-failed")
+        process = mock.Mock()
+        process.poll.return_value = 2
+        job = _Job(
+            job_id="failed123",
+            command=[],
+            process=process,
+            job_kind="hope_run_holistic",
+            request_id="test-failed",
+            workspace_path=launched["workspace_path"],
+            manifest_path=launched["manifest_path"],
+            stderr_lines=["solver failed"],
+        )
+        _jobs[job.job_id] = job
+        self.addCleanup(lambda: _jobs.pop(job.job_id, None))
+        _holistic_request_jobs["test-failed"] = job.job_id
+
+        status = hope_holistic_status("test-failed")
+        self.assertFalse(status["ok"])
+        self.assertEqual(status["error_type"], "job_failed")
+
+        _holistic_request_jobs.pop("test-failed", None)
+        persisted = hope_holistic_status("test-failed")
+        self.assertTrue(persisted["ok"])
+        self.assertEqual(persisted["status"], "failed")
+        self.assertEqual(persisted["error"]["stderr"], "solver failed")
+
+    def test_cancelled_job_persists_terminal_state(self) -> None:
+        launched = self._launch("test-cancelled")
+        process = mock.Mock()
+        process.poll.side_effect = [None, -15]
+        process.wait.return_value = -15
+        job = _Job(
+            job_id="cancelled123",
+            command=[],
+            process=process,
+            job_kind="hope_run_holistic",
+            request_id="test-cancelled",
+            workspace_path=launched["workspace_path"],
+            manifest_path=launched["manifest_path"],
+        )
+        _jobs[job.job_id] = job
+        self.addCleanup(lambda: _jobs.pop(job.job_id, None))
+        _holistic_request_jobs["test-cancelled"] = job.job_id
+
+        cancelled = hope_cancel_job(job.job_id)
+        self.assertTrue(cancelled["ok"])
+        self.assertEqual(cancelled["status"], "cancelled")
+
+        _holistic_request_jobs.pop("test-cancelled", None)
+        persisted = hope_holistic_status("test-cancelled")
+        self.assertEqual(persisted["status"], "cancelled")
 
 
 if __name__ == "__main__":

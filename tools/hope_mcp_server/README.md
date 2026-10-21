@@ -29,6 +29,7 @@ Claude/local full-access server:
 - `hope_nodal_prices`
 - `hope_compare_cases`
 - `hope_run_holistic`
+- `hope_holistic_status`
 - `hope_run_erec`
 - `hope_rep_day_audit`
 - `hope_aggregation_audit`
@@ -95,7 +96,8 @@ Add this server entry to your Claude Desktop MCP config:
       "env": {
         "HOPE_REPO_ROOT": "/path/to/HOPE",
         "HOPE_JULIA_BIN": "/path/to/julia",
-        "JULIA_DEPOT_PATH": "/path/to/julia_depot"
+        "JULIA_DEPOT_PATH": "/path/to/julia_depot",
+        "HOPE_AGENT_RUNS_ROOT": "/path/to/agent_runs"
       }
     }
   }
@@ -139,6 +141,23 @@ Both servers accept:
 - prefixed paths such as `ModelCases/USA_64zone_GTEP_case`
 - the legacy alias `md_gtep_clean`
 
+## Agent-safe GTEP-to-PCM runs
+
+`hope_run_holistic(gtep_case_id, pcm_case_id, request_id, solver)` validates the
+two model roles, fingerprints their settings and input data, and copies them into
+an isolated per-request workspace before launching Julia. Existing model outputs
+are not copied. The default workspace root is `artifacts/agent_runs/`; set
+`HOPE_AGENT_RUNS_ROOT` to place these run records elsewhere.
+
+Use a stable `request_id` when a caller may retry after a timeout. Repeating the
+same request ID with identical source fingerprints returns the existing run;
+reusing it for different cases, inputs, or a different solver is rejected. Poll
+`hope_holistic_status(request_id)` for reconnect-safe status and artifact paths.
+Each workspace contains `run_manifest.yml`, isolated GTEP and PCM cases, realized
+PCM inputs, handoff audits, and model outputs. If the PCM case supplies
+`Settings/HOPE_holistic_acceptance.yml`, the Julia wrapper also requires all
+declared capability checks to pass before publishing the run.
+
 ## Local run
 
 Full local server:
@@ -163,9 +182,29 @@ uv --directory /path/to/HOPE/tools/hope_mcp_server run \
   python -m unittest discover -s tests -v
 ```
 
+The normal suite mocks solver launches. To run the restricted GTEP-to-PCM
+agent integration test through the real MCP workflow, set the opt-in flag and
+optionally choose a solver:
+
+```bash
+HOPE_RUN_HOLISTIC_AGENT_INTEGRATION=1 \
+HOPE_HOLISTIC_AGENT_SOLVER=gurobi \
+uv --directory /path/to/HOPE/tools/hope_mcp_server run \
+  python -m unittest discover -s tests -p test_holistic_agent_integration.py -v
+```
+
+The integration test requires the restricted Maryland GTEP and PCM cases under
+`ModelCases/`. It asserts optimal termination, handoff and transfer validity,
+capability coverage, source immutability, and status recovery after a simulated
+MCP reconnect.
+
 If an agent launches a long-running Julia job and needs to stop it early, call
 `hope_cancel_job(job_id)` with the `job_id` returned by `hope_warmup`,
 `hope_run_hope`, `hope_run_holistic`, or `hope_run_erec`.
+
+For holistic runs, prefer `hope_holistic_status(request_id)` over relying only on
+the session-local job ID. The Julia worker writes `PUBLISHED` or `FAILED` to the
+persistent manifest even when the MCP client disconnects.
 
 If Claude appears to be running stale code or the wrong Julia environment, call
 `hope_debug_solver_environment(case_id, solver, timeout_seconds)` to inspect the active project,

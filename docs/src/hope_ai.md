@@ -12,7 +12,7 @@ HOPE supports agentic AI control via the [Model Context Protocol (MCP)](https://
 
 ## Available Tools
 
-Once configured, Claude Desktop will have access to **16 HOPE tools** organized into six groups:
+Once configured, Claude Desktop has access to HOPE tools organized into six groups:
 
 ### Job Execution
 
@@ -20,7 +20,8 @@ Once configured, Claude Desktop will have access to **16 HOPE tools** organized 
 | ------ | ------------- |
 | `hope_warmup` | Pre-compiles the Julia/HOPE environment in the background. Call once per session before the first run. Returns a `job_id` immediately. |
 | `hope_run_hope` | Launches a HOPE single-case optimization run (GTEP, PCM, or DART) in the background. Returns a `job_id` immediately. |
-| `hope_run_holistic` | Launches a two-stage GTEP→PCM holistic workflow: Stage 1 solves capacity expansion; Stage 2 fixes the built fleet and runs production-cost dispatch. Returns a `job_id` immediately. |
+| `hope_run_holistic` | Launches an isolated two-stage GTEP→PCM workflow. A stable `request_id` makes retries idempotent; source fingerprints prevent scenario crossover. |
+| `hope_holistic_status` | Reads reconnect-safe GTEP→PCM status and artifact paths from the persistent request manifest. |
 | `hope_run_erec` | Launches EREC (Equivalent Reliability Enhancement Capability) postprocessing on a completed run to quantify each resource's reliability contribution. Returns a `job_id` immediately. |
 | `hope_job_status` | Polls any background job for progress. Returns elapsed time, stdout tail, and the full output summary when the job completes. |
 
@@ -258,7 +259,11 @@ Claude calls `hope_validate_case` to detect any contradictions, then `hope_updat
 
 > *"Run the md_gtep_clean HOPE case."*
 
-Claude calls `hope_run_hope` (or `hope_run_holistic` for a two-stage GTEP-PCM run), which launches HOPE as a background process and returns a `job_id` immediately. Claude polls `hope_job_status` until the run completes. When done, the output summary is returned automatically.
+Claude calls `hope_run_hope` for a standalone model. For a two-stage GTEP-PCM run,
+`hope_run_holistic` creates an isolated workspace and returns both a session-local
+`job_id` and persistent `request_id`. Claude polls `hope_holistic_status` using the
+request ID. The status remains available after an MCP reconnect, and retrying the
+same request cannot silently start a conflicting scenario.
 
 **4. Inspect results**
 
@@ -320,6 +325,18 @@ The prompts below demonstrate what you can ask Claude in a typical session. Copy
 
 > "Run the holistic two-stage analysis: first solve capacity expansion, then re-run production cost with the built fleet fixed."
 > "Execute a holistic HOPE run for the `md_gtep_clean` case using the `md_pcm_clean` case for the PCM stage."
+> "Use request ID `md-reference-2035-v1`, run the GTEP-to-PCM workflow with Gurobi, and keep polling its persistent status."
+
+The tool rejects reversed model roles, unsupported solvers, unsafe request IDs,
+and reuse of a request ID after either source case changes. It excludes old output
+trees from the isolated copies. When the PCM case includes
+`HOPE_holistic_acceptance.yml`, publication also requires all declared coverage
+checks to pass.
+
+**`hope_holistic_status` — Poll a persistent GTEP→PCM request**
+
+> "What is the status of holistic request `md-reference-2035-v1`?"
+> "After reconnecting, locate the realized PCM inputs and handoff report for request `md-reference-2035-v1`."
 
 **`hope_run_erec` — EREC reliability postprocessing**
 
@@ -449,7 +466,10 @@ Set `save_postprocess_snapshot: 1` in `HOPE_model_settings.yml` (use `hope_updat
 LMP output requires `network_model > 0` and `write_shadow_prices: 1` in settings. Use `hope_update_settings` to enable both, then re-run.
 
 **Job ID not found**
-Job IDs are in-memory and only valid for the current MCP server session. If Claude Desktop was restarted, old job IDs are gone — start a new warmup/run.
+Job IDs for ordinary background jobs are in-memory and only valid for the current
+MCP server session. GTEP→PCM runs additionally have a persistent `request_id`; use
+`hope_holistic_status(request_id)` after a restart instead of starting a duplicate
+run.
 
 ---
 
