@@ -191,6 +191,143 @@ end
         invalid = copy(templates)
         invalid.Flag_UC .= 0
         @test_throws ArgumentError HOPE.validate_operational_resource_templates(invalid)
+
+        @test HOPE._holistic_template_float("0.75") == 0.75
+        @test_logs (:warn, r"no operational_resource_templates.csv") HOPE.apply_operational_resource_templates(
+            rows,
+            DataFrame();
+            resource_kind = "generation",
+        )
+
+        mktempdir() do case_path
+            data_path = joinpath(case_path, "Data")
+            mkpath(data_path)
+            config = Dict(
+                "DataCase" => "Data",
+                "model_mode" => "PCM",
+                "flexible_demand" => 0,
+                "resource_aggregation" => 0,
+            )
+
+            @test isempty(HOPE.load_operational_resource_templates(case_path, config))
+            CSV.write(joinpath(data_path, "operational_resource_templates.csv"), templates)
+            loaded_templates = HOPE.load_operational_resource_templates(case_path, config)
+            @test loaded_templates.Operational_Template_ID == ["MODERN_NGCC"]
+
+            CSV.write(joinpath(data_path, "zonedata.csv"), DataFrame(:Zone_id => ["Z1"]))
+            CSV.write(
+                joinpath(data_path, "linedata.csv"),
+                DataFrame(
+                    :From_zone => String[],
+                    :To_zone => String[],
+                    Symbol("Forward Capacity (MW)") => Float64[],
+                    Symbol("Reverse Capacity (MW)") => Float64[],
+                ),
+            )
+            CSV.write(
+                joinpath(data_path, "gendata.csv"),
+                DataFrame(
+                    :Zone => ["Z1"],
+                    :Type => ["NGCC"],
+                    Symbol("Pmax (MW)") => [100.0],
+                ),
+            )
+            CSV.write(
+                joinpath(data_path, "storagedata.csv"),
+                DataFrame(
+                    :Zone => String[],
+                    :Type => String[],
+                    Symbol("Capacity (MWh)") => Float64[],
+                    Symbol("Max Power (MW)") => Float64[],
+                ),
+            )
+            time_series = DataFrame(
+                Symbol("Time Period") => [1],
+                :Month => [1],
+                :Day => [1],
+                :Hours => [1],
+                :Z1 => [1.0],
+            )
+            CSV.write(joinpath(data_path, "wind_timeseries_regional.csv"), time_series)
+            CSV.write(joinpath(data_path, "solar_timeseries_regional.csv"), time_series)
+            CSV.write(joinpath(data_path, "load_timeseries_regional.csv"), time_series)
+            CSV.write(
+                joinpath(data_path, "carbonpolicies.csv"),
+                DataFrame(Symbol("Time Period") => [1]),
+            )
+            CSV.write(joinpath(data_path, "rpspolicies.csv"), DataFrame(:RPS => [0.0]))
+            CSV.write(
+                joinpath(data_path, "single_parameter.csv"),
+                DataFrame(:VOLL => [15000.0]),
+            )
+
+            loaded_input = HOPE.load_data(config, case_path)
+            @test loaded_input["OperationalResourceTemplates"].Operational_Template_ID ==
+                  ["MODERN_NGCC"]
+        end
+
+        candidate = DataFrame(
+            :Candidate_ID => ["GEN_LINKED"],
+            :Operational_Template_ID => ["MODERN_NGCC"],
+            :Zone => ["Z1"],
+            :Type => ["NGCC"],
+            Symbol("Pmax (MW)") => [100.0],
+            Symbol("Pmin (MW)") => [20.0],
+            :Flag_thermal => [1],
+            :Flag_UC => [0],
+        )
+        empty_storage = DataFrame(
+            :Zone => String[],
+            :Type => String[],
+            Symbol("Capacity (MWh)") => Float64[],
+            Symbol("Max Power (MW)") => Float64[],
+        )
+        empty_lines = DataFrame(
+            :From_zone => String[],
+            :To_zone => String[],
+            Symbol("Forward Capacity (MW)") => Float64[],
+            Symbol("Reverse Capacity (MW)") => Float64[],
+        )
+        linked = HOPE.prepare_pcm_inputs_from_gtep_linked(
+            Dict{String,Any}(
+                "capacity" => DataFrame(
+                    :EC_Category => ["Candidate"],
+                    :New_Build => [1.0],
+                    Symbol("Capacity_INI (MW)") => [0.0],
+                    Symbol("Capacity_RET (MW)") => [0.0],
+                    Symbol("Capacity_FIN (MW)") => [50.0],
+                ),
+                "es_capacity" => DataFrame(
+                    :EC_Category => String[],
+                    :New_Build => Float64[],
+                    Symbol("Capacity (MW)") => Float64[],
+                    Symbol("EnergyCapacity (MWh)") => Float64[],
+                ),
+                "line" => DataFrame(
+                    :New_Build => Float64[],
+                    :From_zone => String[],
+                    :To_zone => String[],
+                    Symbol("Forward Capacity (MW)") => Float64[],
+                    Symbol("Reverse Capacity (MW)") => Float64[],
+                ),
+            ),
+            Dict{String,Any}(
+                "Gendata" => candidate[1:0, :],
+                "Gendata_candidate" => candidate,
+                "Estoragedata_candidate" => empty_storage,
+                "Linedata_candidate" => empty_lines,
+            ),
+            Dict("resource_aggregation" => 0),
+            Dict{String,Any}(
+                "Gendata" => candidate[1:0, :],
+                "Storagedata" => empty_storage,
+                "Linedata" => empty_lines,
+                "OperationalResourceTemplates" => templates,
+            ),
+            Dict("resource_aggregation" => 0, "unit_commitment" => 1, "network_model" => 1),
+        )
+        @test linked["LinkageAudit"]["operational_summary"]["new_thermal_generation_uc_rows"] ==
+              1
     end
 
     @testset "Aggregate generation builds can become fixed physical units" begin
