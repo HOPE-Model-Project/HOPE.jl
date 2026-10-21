@@ -37,6 +37,7 @@ include("utils.jl")                #utility functions
 include("rep_day.jl")              #representative-day utilities
 include("aggregation.jl")          #resource aggregation settings/utilities
 include("network_utils.jl")        #network/DCOPF helper utilities
+include("holistic_operational_templates.jl") #PCM operating templates for GTEP builds
 include("read_input_data.jl")#read input data module
 include("GTEP.jl")#capacity expansion model
 include("PCM.jl")#production cost model
@@ -121,6 +122,8 @@ export holistic_coverage_metrics
 export holistic_model_activity_metrics
 export holistic_case_fingerprint
 export load_holistic_physical_realization
+export load_operational_resource_templates
+export validate_operational_resource_templates
 export validate_holistic_handoff_contract
 export validate_holistic_transfer_reconciliation
 export validate_holistic_source_immutability!

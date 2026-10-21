@@ -89,19 +89,26 @@ rules below.
 Existing resources remain owned by each model's source input. `Asset_ID`
 provides the crosswalk, and a GTEP retirement changes the corresponding PCM
 capacity; the linkage does not replace the PCM resource's other operational
-parameters. For a new resource, candidate values are copied first. Missing PCM
-numeric fields are filled from existing PCM resources in this order:
+parameters. For a new resource, candidate values are copied first. A PCM case
+may define `operational_resource_templates.csv`; the candidate's
+`Operational_Template_ID` selects one generation or storage template. Missing
+operating values are resolved in this order:
 
-1. mean for the same `Zone` and `Type`;
-2. mean for the same `Type`; and
-3. a conservative code default.
+1. an explicit candidate value;
+2. the referenced PCM operational template;
+3. mean for the same `Zone` and `Type`;
+4. mean for the same `Type`; and
+5. a documented code default.
 
-`Operational_Template_ID` is currently retained in the realized row and audit
-trail as provenance. It does not yet select a separate parameter-registry row.
-Cases that require technology-specific commitment, ramp, reserve, startup, or
-minimum-output behavior must therefore provide those values on the candidate
-row. A future template registry can make this precedence explicit without
-changing the GTEP or PCM formulations.
+The registry belongs to PCM because it describes operational—not investment—
+behavior. It can provide technology-specific commitment, ramp, reserve,
+startup, outage, and storage parameters without changing the GTEP or PCM
+formulations. Template IDs and resource types are validated strictly. New
+thermal generation is always assigned `Flag_UC = 1`, including when an older
+candidate row contains a zero placeholder. Existing PCM resources are not
+overwritten. Field-level candidate, template, and thermal-policy decisions are
+written to `operational_parameters_audit.csv` with the other realized-input
+audits. Cases without the optional registry retain the legacy fallback path.
 
 `legacy_zone` is backward compatibility for already compatible zonal pairs. It
 is not a general zonal-to-nodal siting algorithm. A zonal-only GTEP paired with

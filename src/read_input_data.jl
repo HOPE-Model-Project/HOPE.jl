@@ -1319,6 +1319,17 @@ function load_data(config_set::Dict, path::AbstractString)
             println("CSV Files Successfully Load From $folderpath")
         end
     end
+    if model_mode == "PCM"
+        operational_template_path =
+            joinpath(folderpath, HOLISTIC_OPERATIONAL_TEMPLATE_FILENAME)
+        if isfile(operational_template_path)
+            input_data["OperationalResourceTemplates"] =
+                validate_operational_resource_templates(
+                    CSV.read(operational_template_path, DataFrame),
+                )
+            println("Reading optional operational_resource_templates.csv")
+        end
+    end
     if haskey(input_data, "Linedata")
         parse_directional_line_limits(input_data["Linedata"]; context = "linedata")
     end

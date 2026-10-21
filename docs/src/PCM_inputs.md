@@ -91,6 +91,24 @@ This is the input dataset for existing generators.
 
 ---
 
+## operational_resource_templates (optional holistic input)
+
+`operational_resource_templates.csv` is an optional PCM-owned registry used by
+the GTEP-to-PCM holistic workflow. A candidate generator or storage row selects
+a template through `Operational_Template_ID`. The table must contain unique
+`Operational_Template_ID`, `Resource_Kind`, and `Type` values and may include
+the operating columns used by `gendata.csv` or `storagedata.csv`.
+
+The precedence is candidate-specific value, referenced template, existing PCM
+zone/type average, existing PCM type average, and finally the documented code
+default. New thermal generators are always assigned `Flag_UC = 1`. The registry
+does not modify existing PCM resources and is ignored by a standalone PCM run;
+it is consumed only when GTEP builds are realized into PCM inputs. Cases without
+the file remain backward compatible.
+
+The realized-input directory records template decisions in
+`operational_parameters_audit.csv`.
+
 ## gen_availability_timeseries (optional)
 
 This optional dataset provides hourly **generator-level** availability factors for PCM. It can be used for plant-based VRE profiles and for thermal derating.

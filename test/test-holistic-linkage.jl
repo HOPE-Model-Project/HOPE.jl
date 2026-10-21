@@ -136,6 +136,63 @@ end
         @test audit.RealizationMode == ["aggregate_row"]
     end
 
+    @testset "Operational templates populate new resources and enforce thermal UC" begin
+        templates = DataFrame(
+            :Operational_Template_ID => ["MODERN_NGCC"],
+            :Resource_Kind => ["generation"],
+            :Type => ["NGCC"],
+            :Flag_thermal => [1],
+            :Flag_UC => [1],
+            :Min_up_time => [2],
+            :Min_down_time => [2],
+            Symbol("Start_up_cost (\$/MW)") => [15.0],
+            :RU => [0.6],
+        )
+        rows = DataFrame(
+            :Candidate_ID => ["GEN_MODERN"],
+            :Asset_ID => ["GEN_MODERN__UNIT_001"],
+            :Operational_Template_ID => ["MODERN_NGCC"],
+            :Zone => ["Z1"],
+            :Type => ["NGCC"],
+            :Flag_thermal => [1],
+            :Flag_UC => [0],
+            :RU => [0.8],
+        )
+
+        populated, audit = HOPE.apply_operational_resource_templates(
+            rows,
+            templates;
+            resource_kind = "generation",
+        )
+        @test populated.Flag_UC == [1]
+        @test populated.Min_up_time == Any[2]
+        @test populated.Min_down_time == Any[2]
+        @test populated[1, Symbol("Start_up_cost (\$/MW)")] == 15.0
+        @test populated.RU == Any[0.8]
+        @test any(
+            (audit.Parameter .== "Min_up_time") .&
+            (audit.Source .== "template:MODERN_NGCC"),
+        )
+        @test any((audit.Parameter .== "RU") .& (audit.Source .== "candidate"))
+        @test any(
+            (audit.Parameter .== "Flag_UC") .&
+            (audit.Source .== "thermal_commitment_policy"),
+        )
+
+        legacy_rows = select(rows, Not(:Operational_Template_ID))
+        legacy_rows.Flag_UC .= 0
+        legacy_populated, _ = HOPE.apply_operational_resource_templates(
+            legacy_rows,
+            DataFrame();
+            resource_kind = "generation",
+        )
+        @test legacy_populated.Flag_UC == Any[1]
+
+        invalid = copy(templates)
+        invalid.Flag_UC .= 0
+        @test_throws ArgumentError HOPE.validate_operational_resource_templates(invalid)
+    end
+
     @testset "Aggregate generation builds can become fixed physical units" begin
         candidates = DataFrame(
             :Zone => ["Z1"],

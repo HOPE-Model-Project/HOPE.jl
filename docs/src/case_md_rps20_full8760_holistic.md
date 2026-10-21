@@ -32,6 +32,14 @@ case unchanged. The physical-realization audit checks 271 existing generators,
 12 generation candidates, 4 storage candidates, all 838 branches, and all 656
 buses.
 
+The PCM case owns `operational_resource_templates.csv`. Each candidate selects
+a template by `Operational_Template_ID`; explicit candidate values take
+precedence, and remaining gaps retain the legacy fleet-average/default fallback.
+In the validated result, all three built NGCC resources receive `Flag_UC = 1`,
+two-hour minimum up/down times, and the documented 15 USD/MW startup-cost
+assumption. `operational_parameters_audit.csv` records every candidate,
+template, and thermal-policy choice.
+
 GTEP has one upward operating-reserve product, while PCM has 1% REG-UP, 3%
 SPIN, and 3% NSPIN. The GTEP proxy is therefore 7% of load so planning does not
 understate the aggregate upward capability required in operations.

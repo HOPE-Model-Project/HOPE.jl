@@ -212,16 +212,21 @@ cases may optionally provide:
 - `Corridor_ID` on candidate and realized transmission rows.
 
 When IDs are supplied, they must be nonblank and unique in their table. New
-generator and storage builds inherit compatible operating parameters from their
-candidate rows. Parallel zonal corridors share an expansion in proportion to
+generator and storage builds first inherit operating parameters from their
+candidate rows. A PCM case may also provide
+`operational_resource_templates.csv`; `Operational_Template_ID` fills missing
+new-resource values before the existing PCM fleet-average/default fallback.
+New thermal builds are always unit committed, while existing PCM resources are
+left unchanged. Parallel zonal corridors share an expansion in proportion to
 their existing directional ratings; ambiguous multi-branch nodal mappings stop
 with an error unless `Corridor_ID` resolves the target.
 
 After a successful PCM solve, HOPE writes the realized handoff under
 `output_holistic/realized_inputs/` (or the actual timestamped backup output
 selected by the standard output writer). It contains `gendata.csv`,
-`storagedata.csv`, `linedata.csv`, optional nodal `branchdata.csv`, mapping audit CSVs, and
-`handoff_manifest.yml` with source hashes and transfer totals.
+`storagedata.csv`, `linedata.csv`, optional nodal `branchdata.csv`, mapping audit
+CSVs including `operational_parameters_audit.csv`, and `handoff_manifest.yml`
+with source hashes and transfer totals.
 
 A case may opt into strict physical-realization validation by adding
 `Settings/HOPE_physical_realization.yml`. The holistic runner discovers this
