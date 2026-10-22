@@ -289,7 +289,12 @@ Claude calls `hope_run_hope` for a standalone model. For a two-stage GTEP-PCM ru
 `hope_run_holistic` creates an isolated workspace and returns both a session-local
 `job_id` and persistent `request_id`. Claude polls `hope_holistic_status` using the
 request ID. The status remains available after an MCP reconnect, and retrying the
-same request cannot silently start a conflicting scenario.
+same request cannot silently start a conflicting scenario. The public status is
+stable across reconnects (`done`, `failed`, or `cancelled`), and the persistent
+manifest records process IDs so an interrupted Julia or MCP process becomes a
+durable failure instead of remaining `running` forever. This workflow requires a
+HOPE checkout containing `tools/repo_utils/run_holistic_agent_job.jl` (revision
+`8126f0f` or later).
 
 **4. Inspect results**
 
@@ -532,7 +537,8 @@ LMP output requires `network_model > 0` and `write_shadow_prices: 1` in settings
 Job IDs for ordinary background jobs are in-memory and only valid for the current
 MCP server session. GTEP→PCM runs additionally have a persistent `request_id`; use
 `hope_holistic_status(request_id)` after a restart instead of starting a duplicate
-run.
+run. If the previous Julia or launcher process died before publishing a terminal
+result, the status call returns a structured failed result.
 
 ---
 

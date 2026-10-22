@@ -203,6 +203,11 @@ an isolated per-request workspace before launching Julia. Existing model outputs
 are not copied. The default workspace root is `artifacts/agent_runs/`; set
 `HOPE_AGENT_RUNS_ROOT` to place these run records elsewhere.
 
+This workflow requires a HOPE.jl checkout containing
+`tools/repo_utils/run_holistic_agent_job.jl`, first shipped with revision
+`8126f0f`. The MCP server checks for the runner before copying either case and
+returns `incompatible_hope_checkout` when an older checkout is configured.
+
 Use a stable `request_id` when a caller may retry after a timeout. Repeating the
 same request ID with identical source fingerprints returns the existing run;
 reusing it for different cases, inputs, or a different solver is rejected. Poll
@@ -211,6 +216,18 @@ Each workspace contains `run_manifest.yml`, isolated GTEP and PCM cases, realize
 PCM inputs, handoff audits, and model outputs. If the PCM case supplies
 `Settings/HOPE_holistic_acceptance.yml`, the Julia wrapper also requires all
 declared capability checks to pass before publishing the run.
+
+The manifest records both the preparing MCP process and the launched Julia PID.
+After a reconnect, a nonterminal manifest whose owning process is no longer
+alive is converted to a durable failed result instead of remaining `running`
+forever. Public status values are stable across reconnects: successful runs are
+`done`, failed runs return `ok: false` with `status: failed`, and cancellations
+are `cancelled`.
+
+Agent workspaces are retained intentionally as auditable run records. HOPE does
+not delete them automatically; operators should archive or remove completed
+request directories under `HOPE_AGENT_RUNS_ROOT` according to their own data
+retention policy.
 
 ## Local run
 

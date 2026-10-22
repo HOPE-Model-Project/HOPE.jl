@@ -147,6 +147,11 @@ idempotent reuse of the original request ID. Keep this test opt-in because its
 annual GTEP and monthly nodal PCM solves are too expensive for every pull
 request.
 
+The normal MCP unit suite includes a synchronized fake-process state-machine
+test. It covers process identity, orphan recovery, stable reconnect semantics,
+invalid YAML and manifest handling, checkout compatibility, and equivalent case
+identifier normalization without launching Julia.
+
 ## Working on a new issue
 
 We try to keep a linear history in this repo, so it is important to keep your branches up-to-date.

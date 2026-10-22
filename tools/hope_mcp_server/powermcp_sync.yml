@@ -12,6 +12,7 @@ downstream:
 # byte-for-byte copies made by scripts/sync_to_powermcp.py.
 managed_files:
   - src/hope_mcp_server/core.py
+  - tests/test_holistic_state_machine.py
   - tests/test_holistic_agent_integration.py
   - tests/test_holistic_agent_md_july_integration.py
   - tests/test_path_traversal.py

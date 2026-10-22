@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -570,6 +571,9 @@ class HolisticAgentWorkflowTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         self.runs = self.root / "agent-runs"
+        runner = self.root / "tools" / "repo_utils" / "run_holistic_agent_job.jl"
+        runner.parent.mkdir(parents=True)
+        runner.write_text("# test runner\n", encoding="utf-8")
         self.gtep = self._write_case("gtep_case", "GTEP", "gtep")
         self.pcm = self._write_case("pcm_case", "PCM", "pcm")
         self.env_patch = mock.patch.dict(
@@ -589,6 +593,9 @@ class HolisticAgentWorkflowTests(unittest.TestCase):
         for request_id in list(_holistic_request_jobs):
             if request_id.startswith("test-"):
                 _holistic_request_jobs.pop(request_id, None)
+        for job_id, job in list(_jobs.items()):
+            if job.request_id.startswith("test-"):
+                _jobs.pop(job_id, None)
         self.temporary.cleanup()
 
     def _write_case(self, name: str, mode: str, marker: str) -> Path:
@@ -608,12 +615,29 @@ class HolisticAgentWorkflowTests(unittest.TestCase):
         return case
 
     def _launch(self, request_id: str = "test-request", solver: str | None = "highs") -> dict:
+        def fake_launch(command: list[str], repo_root: Path, case_id: str = "", **kwargs: object) -> str:
+            process = mock.Mock()
+            process.pid = os.getpid()
+            process.poll.return_value = None
+            _jobs["job123"] = _Job(
+                job_id="job123",
+                command=command,
+                process=process,
+                case_id=case_id,
+                job_kind=str(kwargs.get("job_kind", "generic")),
+                request_id=str(kwargs.get("request_id", "")),
+                workspace_path=str(kwargs.get("workspace_path", "")),
+                manifest_path=str(kwargs.get("manifest_path", "")),
+                output_case_path=str(kwargs.get("output_case_path", "")),
+            )
+            return "job123"
+
         with (
             mock.patch(
                 "hope_mcp_server.core.validate_julia_command",
                 return_value=(JULIA_BIN, None),
             ),
-            mock.patch("hope_mcp_server.core._launch_job", return_value="job123") as launch,
+            mock.patch("hope_mcp_server.core._launch_job", side_effect=fake_launch) as launch,
         ):
             result = hope_run_holistic(
                 "gtep_case",
@@ -932,7 +956,7 @@ class HolisticAgentWorkflowTests(unittest.TestCase):
 
         _holistic_request_jobs.pop("test-complete", None)
         persisted = hope_holistic_status("test-complete")
-        self.assertEqual(persisted["status"], "published")
+        self.assertEqual(persisted["status"], "done")
         self.assertEqual(
             persisted["result"]["pcm_output_path"],
             "/run/pcm/output_holistic",
@@ -962,7 +986,8 @@ class HolisticAgentWorkflowTests(unittest.TestCase):
 
         _holistic_request_jobs.pop("test-failed", None)
         persisted = hope_holistic_status("test-failed")
-        self.assertTrue(persisted["ok"])
+        self.assertFalse(persisted["ok"])
+        self.assertEqual(persisted["error_type"], "job_failed")
         self.assertEqual(persisted["status"], "failed")
         self.assertEqual(persisted["error"]["stderr"], "solver failed")
 
