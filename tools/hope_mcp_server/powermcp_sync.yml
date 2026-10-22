@@ -25,5 +25,7 @@ downstream_owned_files:
   - pyproject.toml
   - uv.lock
   - src/hope_mcp_server/chatgpt.py
+  - src/hope_mcp_server/powermcp_adapter.py
   - src/hope_mcp_server/server.py
   - tests/test_core.py
+  - tests/test_powermcp_adapter.py
