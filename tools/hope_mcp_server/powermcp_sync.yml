@@ -14,6 +14,7 @@ managed_files:
   - src/hope_mcp_server/core.py
   - tests/test_holistic_agent_integration.py
   - tests/test_holistic_agent_md_july_integration.py
+  - tests/test_path_traversal.py
 
 # PowerMCP owns its MCP SDK version, transport entrypoints, package metadata,
 # lockfile, and installation documentation. The sync utility never overwrites

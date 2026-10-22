@@ -1622,9 +1622,20 @@ def hope_read_output(
     if error is not None:
         return error
 
-    output_dir = output_dir_for_case(case_path)
+    output_dir = output_dir_for_case(case_path).resolve()
     # Allow subdirectory paths like "postprocess_snapshot/metadata.yml"
-    csv_path = output_dir / filename
+    requested_path = Path(filename)
+    try:
+        csv_path = (output_dir / requested_path).resolve()
+        csv_path.relative_to(output_dir)
+    except (OSError, ValueError):
+        return error_result(
+            "path_traversal",
+            "Requested output file must remain inside the case output directory.",
+            case_id=case_id,
+            requested_file=filename,
+            output_path=str(output_dir),
+        )
     if not csv_path.is_file():
         available = list_top_level_output_csvs(output_dir)
         return error_result(
