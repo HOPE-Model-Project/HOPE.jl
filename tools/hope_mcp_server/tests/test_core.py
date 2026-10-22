@@ -19,7 +19,9 @@ from hope_mcp_server.core import (
     _validate_settings_dict,
     build_debug_solver_environment_command,
     build_holistic_run_command,
+    build_optional_solver_probe_command,
     build_run_command,
+    check_optional_solvers_available,
     hope_cancel_job,
     hope_case_info,
     hope_debug_solver_environment,
@@ -31,6 +33,7 @@ from hope_mcp_server.core import (
     hope_run_holistic,
     hope_run_hope,
     julia_string_literal,
+    modelcases_root,
     parse_dart_output_summary,
     setup_command,
 )
@@ -48,6 +51,7 @@ class HopeCoreTests(unittest.TestCase):
             "os.environ",
             {
                 "HOPE_REPO_ROOT": str(REPO_ROOT),
+                "HOPE_MODELCASES_PATH": str(REPO_ROOT / "ModelCases"),
                 "HOPE_JULIA_BIN": JULIA_BIN,
             },
             clear=False,
@@ -60,6 +64,35 @@ class HopeCoreTests(unittest.TestCase):
     def test_default_repo_root_is_this_source_checkout(self) -> None:
         self.assertEqual(DEFAULT_HOPE_REPO_ROOT, REPO_ROOT)
         self.assertTrue((DEFAULT_HOPE_REPO_ROOT / "src" / "HOPE.jl").is_file())
+
+    def test_modelcases_root_honors_environment_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            configured = Path(tmp) / "external-model-cases"
+            with mock.patch.dict(
+                "os.environ",
+                {"HOPE_MODELCASES_PATH": str(configured)},
+                clear=False,
+            ):
+                self.assertEqual(modelcases_root(REPO_ROOT), configured.resolve())
+
+    def test_case_discovery_uses_external_modelcases_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cases_root = Path(tmp) / "external-model-cases"
+            case = cases_root / "external_pcm_case"
+            (case / "Settings").mkdir(parents=True)
+            (case / "Settings" / "HOPE_model_settings.yml").write_text(
+                "model_mode: PCM\nsolver: highs\nDataCase: Data/\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                "os.environ",
+                {"HOPE_MODELCASES_PATH": str(cases_root)},
+                clear=False,
+            ):
+                result = hope_case_info("external_pcm_case")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["model_mode"], "PCM")
+        self.assertEqual(Path(result["case_path"]), case.resolve())
 
     def test_case_info_reads_yaml_and_output_inventory(self) -> None:
         result = hope_case_info()
@@ -247,6 +280,72 @@ class HopeCoreTests(unittest.TestCase):
         self.assertNotIn(str(case_path), script)
         self.assertNotIn("$solver", script)
         self.assertEqual(command[script_index + 1 :], [str(case_path), "$solver"])
+
+    def test_optional_solver_probe_does_not_load_hope(self) -> None:
+        command = build_optional_solver_probe_command(REPO_ROOT, JULIA_BIN, "Gurobi")
+        script = command[command.index("-e") + 1]
+        self.assertIn("Base.find_package(pkg)", script)
+        self.assertIn("Sys.iswindows()", script)
+        self.assertNotIn("using HOPE", script)
+        self.assertEqual(command[-1], "Gurobi")
+        self.assertIn(f"--project={REPO_ROOT}", command)
+
+    def test_optional_solver_probe_maps_supported_wrappers(self) -> None:
+        for solver, package in (("gurobi", "Gurobi"), ("cplex", "CPLEX"), ("scip", "SCIP")):
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=3,
+                stdout="DEPOT_PATH=/depot\nLOAD_PATH=/project:/version\nPACKAGE_PATH=\n",
+                stderr="",
+            )
+            with self.subTest(solver=solver), mock.patch(
+                "hope_mcp_server.core.subprocess.run",
+                return_value=completed,
+            ) as run_mock:
+                result = check_optional_solvers_available(
+                    REPO_ROOT,
+                    JULIA_BIN,
+                    [solver],
+                )
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result["error_type"], "optional_solver_unavailable")
+            self.assertEqual(result["package"], package)
+            self.assertIn("Pkg.add", result["install_command"])
+            self.assertIn("Pkg.add", result["install_command_powershell"])
+            self.assertEqual(run_mock.call_args.args[0][-1], package)
+
+    def test_standalone_missing_optional_solver_is_rejected_before_launch(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=3,
+            stdout="DEPOT_PATH=E:/julia_depot\nLOAD_PATH=project;version\nPACKAGE_PATH=\n",
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            case = Path(tmp) / "case"
+            (case / "Settings").mkdir(parents=True)
+            (case / "Settings" / "HOPE_model_settings.yml").write_text(
+                "model_mode: PCM\nsolver: gurobi\nDataCase: Data/\n",
+                encoding="utf-8",
+            )
+            with (
+                mock.patch("hope_mcp_server.core.resolve_case", return_value=(case, None)),
+                mock.patch(
+                    "hope_mcp_server.core.validate_julia_command",
+                    return_value=(JULIA_BIN, None),
+                ),
+                mock.patch(
+                    "hope_mcp_server.core.subprocess.run",
+                    return_value=completed,
+                ),
+                mock.patch("hope_mcp_server.core._launch_job") as launch,
+            ):
+                result = hope_run_hope("standalone_gurobi")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "optional_solver_unavailable")
+        self.assertEqual(result["case_id"], "standalone_gurobi")
+        launch.assert_not_called()
 
     def test_missing_julia_path_returns_structured_error(self) -> None:
         with mock.patch.dict(
@@ -477,6 +576,7 @@ class HolisticAgentWorkflowTests(unittest.TestCase):
             "os.environ",
             {
                 "HOPE_REPO_ROOT": str(self.root),
+                "HOPE_MODELCASES_PATH": str(self.root / "ModelCases"),
                 "HOPE_AGENT_RUNS_ROOT": str(self.runs),
                 "HOPE_JULIA_BIN": JULIA_BIN,
             },
@@ -603,6 +703,181 @@ class HolisticAgentWorkflowTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["error_type"], "invalid_holistic_model_modes")
         launch.assert_not_called()
+
+    def test_missing_optional_solver_is_rejected_without_workspace(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=3,
+            stdout="DEPOT_PATH=E:/julia_depot\nLOAD_PATH=project;version\nPACKAGE_PATH=\n",
+            stderr="",
+        )
+        with (
+            mock.patch(
+                "hope_mcp_server.core.validate_julia_command",
+                return_value=(JULIA_BIN, None),
+            ),
+            mock.patch(
+                "hope_mcp_server.core.subprocess.run",
+                return_value=completed,
+            ) as run_mock,
+            mock.patch("hope_mcp_server.core._launch_job") as launch,
+        ):
+            result = hope_run_holistic(
+                "gtep_case",
+                "pcm_case",
+                request_id="test-missing-gurobi",
+                solver="gurobi",
+            )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "optional_solver_unavailable")
+        self.assertEqual(result["package"], "Gurobi")
+        self.assertEqual(run_mock.call_args.args[0][-1], "Gurobi")
+        launch.assert_not_called()
+        self.assertFalse((self.runs / "test-missing-gurobi").exists())
+
+    def test_available_optional_solver_launches(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="PACKAGE_PATH=/depot/Gurobi.jl\n",
+            stderr="",
+        )
+        with mock.patch("hope_mcp_server.core.subprocess.run", return_value=completed):
+            result = self._launch("test-gurobi-ok", solver="gurobi")
+        self.assertTrue(result["ok"])
+
+    def test_open_source_solver_skips_optional_probe(self) -> None:
+        with mock.patch("hope_mcp_server.core.subprocess.run") as run_mock:
+            result = self._launch("test-highs-no-probe", solver="highs")
+        self.assertTrue(result["ok"])
+        run_mock.assert_not_called()
+
+    def test_configured_optional_solvers_are_probed_once_each(self) -> None:
+        (self.gtep / "Settings" / "HOPE_model_settings.yml").write_text(
+            "model_mode: GTEP\nsolver: gurobi\nDataCase: Data/\n",
+            encoding="utf-8",
+        )
+        (self.pcm / "Settings" / "HOPE_model_settings.yml").write_text(
+            "model_mode: PCM\nsolver: cplex\nDataCase: Data/\n",
+            encoding="utf-8",
+        )
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="PACKAGE_PATH=/depot/wrapper.jl\n",
+            stderr="",
+        )
+        with mock.patch(
+            "hope_mcp_server.core.subprocess.run",
+            return_value=completed,
+        ) as run_mock:
+            result = self._launch("test-configured-solvers", solver=None)
+        self.assertTrue(result["ok"])
+        self.assertEqual(run_mock.call_count, 2)
+        self.assertEqual(
+            [call.args[0][-1] for call in run_mock.call_args_list],
+            ["Gurobi", "CPLEX"],
+        )
+
+    def test_duplicate_configured_optional_solver_is_probed_once(self) -> None:
+        for case, mode in ((self.gtep, "GTEP"), (self.pcm, "PCM")):
+            (case / "Settings" / "HOPE_model_settings.yml").write_text(
+                f"model_mode: {mode}\nsolver: gurobi\nDataCase: Data/\n",
+                encoding="utf-8",
+            )
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="PACKAGE_PATH=/depot/Gurobi.jl\n",
+            stderr="",
+        )
+        with mock.patch(
+            "hope_mcp_server.core.subprocess.run",
+            return_value=completed,
+        ) as run_mock:
+            result = self._launch("test-duplicate-solver-probe", solver=None)
+        self.assertTrue(result["ok"])
+        run_mock.assert_called_once()
+
+    def test_existing_request_is_reused_without_optional_probe(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="PACKAGE_PATH=/depot/Gurobi.jl\n",
+            stderr="",
+        )
+        with mock.patch("hope_mcp_server.core.subprocess.run", return_value=completed):
+            first = self._launch("test-reuse-gurobi", solver="gurobi")
+        self.assertTrue(first["ok"])
+
+        with (
+            mock.patch(
+                "hope_mcp_server.core.validate_julia_command",
+                return_value=(JULIA_BIN, None),
+            ),
+            mock.patch("hope_mcp_server.core.subprocess.run") as run_mock,
+            mock.patch("hope_mcp_server.core._launch_job") as launch,
+        ):
+            second = hope_run_holistic(
+                "gtep_case",
+                "pcm_case",
+                request_id="test-reuse-gurobi",
+                solver="gurobi",
+            )
+        self.assertTrue(second["ok"])
+        self.assertTrue(second["reused"])
+        run_mock.assert_not_called()
+        launch.assert_not_called()
+
+    def test_optional_solver_probe_failure_does_not_launch(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=2,
+            stdout="DEPOT_PATH=E:/julia_depot\n",
+            stderr="probe failed",
+        )
+        with (
+            mock.patch(
+                "hope_mcp_server.core.validate_julia_command",
+                return_value=(JULIA_BIN, None),
+            ),
+            mock.patch("hope_mcp_server.core.subprocess.run", return_value=completed),
+            mock.patch("hope_mcp_server.core._launch_job") as launch,
+        ):
+            result = hope_run_holistic(
+                "gtep_case",
+                "pcm_case",
+                request_id="test-probe-failure",
+                solver="gurobi",
+            )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "optional_solver_probe_failed")
+        self.assertEqual(result["exit_code"], 2)
+        self.assertEqual(result["stderr"], "probe failed")
+        launch.assert_not_called()
+        self.assertFalse((self.runs / "test-probe-failure").exists())
+
+    def test_optional_solver_probe_timeout_does_not_launch(self) -> None:
+        timeout = subprocess.TimeoutExpired(cmd=[JULIA_BIN], timeout=60)
+        with (
+            mock.patch(
+                "hope_mcp_server.core.validate_julia_command",
+                return_value=(JULIA_BIN, None),
+            ),
+            mock.patch("hope_mcp_server.core.subprocess.run", side_effect=timeout),
+            mock.patch("hope_mcp_server.core._launch_job") as launch,
+        ):
+            result = hope_run_holistic(
+                "gtep_case",
+                "pcm_case",
+                request_id="test-probe-timeout",
+                solver="gurobi",
+            )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "optional_solver_probe_failed")
+        self.assertEqual(result["timeout_seconds"], 60.0)
+        launch.assert_not_called()
+        self.assertFalse((self.runs / "test-probe-timeout").exists())
 
     def test_invalid_request_id_and_solver_are_rejected(self) -> None:
         invalid_id = hope_run_holistic(

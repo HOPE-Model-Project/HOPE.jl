@@ -394,6 +394,14 @@ slice of this protocol without fixing a final multi-agent hierarchy:
 - `hope_holistic_status` can recover the terminal state after an MCP restart; and
 - cases with a holistic acceptance contract must pass their declared capability checks before publication.
 
+Two opt-in real-solver tests exercise this boundary. The restricted Maryland
+pair provides a fast lifecycle test. The high-resolution test retains the annual
+8760-hour four-zone GTEP stage, derives an isolated July slice of the 656-bus PCM
+case, and verifies scientific acceptance, reconnect recovery, idempotent retry,
+and source immutability through the public MCP functions. The latter is a
+release-level test rather than a routine pull-request check because of its solve
+time and memory requirements.
+
 This is an orchestration and test boundary around the existing mathematical
 models. Standalone `run_hope` and direct Julia GTEP-to-PCM workflows remain
 available and unchanged.

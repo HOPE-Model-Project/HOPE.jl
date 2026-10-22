@@ -62,6 +62,7 @@ pages = OrderedDict(
     "HOPE-AI" => [
         "HOPE-AI (LLM Agent)" => "hope_ai.md",
         "Multi-Model and Multi-Agent Design" => "multi_agent_system_design.md",
+        "Multi-Agent Mechanism" => "multi_agent_mechanism.md",
     ],
     "Project" => [
         "Contributing" => "90-contributing.md",

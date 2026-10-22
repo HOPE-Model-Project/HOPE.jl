@@ -75,7 +75,10 @@ def configured_julia_command() -> str:
 
 
 def modelcases_root(repo_root: Path) -> Path:
-    return repo_root / "ModelCases"
+    configured = os.environ.get("HOPE_MODELCASES_PATH")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return (repo_root / "ModelCases").resolve()
 
 
 def settings_path_for_case(case_path: Path) -> Path:
@@ -542,6 +545,148 @@ def build_holistic_run_command(
         str(manifest_path),
         solver or "",
     ]
+
+
+_OPTIONAL_SOLVER_PACKAGES = {
+    "gurobi": "Gurobi",
+    "cplex": "CPLEX",
+    "scip": "SCIP",
+}
+
+
+def build_optional_solver_probe_command(
+    repo_root: Path,
+    julia_bin: str,
+    package_name: str,
+) -> list[str]:
+    """Build a lightweight Julia package-discovery probe without loading HOPE."""
+    return [
+        *build_project_julia_command(repo_root, julia_bin),
+        "-e",
+        (
+            "pkg = ARGS[1]; "
+            "path = Base.find_package(pkg); "
+            "sep = Sys.iswindows() ? \";\" : \":\"; "
+            "println(\"DEPOT_PATH=\" * join(DEPOT_PATH, sep)); "
+            "println(\"LOAD_PATH=\" * join(Base.load_path(), sep)); "
+            "println(\"PACKAGE_PATH=\" * (path === nothing ? \"\" : path)); "
+            "exit(path === nothing ? 3 : 0)"
+        ),
+        package_name,
+    ]
+
+
+def _subprocess_error_output(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return str(value)
+
+
+def check_optional_solvers_available(
+    repo_root: Path,
+    julia_bin: str,
+    solver_names: list[str],
+    timeout_seconds: float = 60.0,
+) -> dict[str, Any] | None:
+    """Return a structured error if an optional solver wrapper cannot be resolved."""
+    normalized_solvers = dict.fromkeys(
+        str(name).strip().lower() for name in solver_names if str(name).strip()
+    )
+    for solver_name in normalized_solvers:
+        package_name = _OPTIONAL_SOLVER_PACKAGES.get(solver_name)
+        if package_name is None:
+            continue
+
+        command = build_optional_solver_probe_command(repo_root, julia_bin, package_name)
+        proc_env = _build_julia_process_env()
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=repo_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=proc_env,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            return error_result(
+                "optional_solver_probe_failed",
+                (
+                    f"Timed out after {timeout_seconds:g} seconds while checking whether "
+                    f"{package_name}.jl is visible to the Julia environment used by HOPE."
+                ),
+                solver=solver_name,
+                package=package_name,
+                repo_root=str(repo_root),
+                julia_bin=julia_bin,
+                julia_depot_path=proc_env.get("JULIA_DEPOT_PATH"),
+                timeout_seconds=timeout_seconds,
+                stdout=_subprocess_error_output(exc.stdout),
+                stderr=_subprocess_error_output(exc.stderr),
+                command=command,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return error_result(
+                "optional_solver_probe_failed",
+                f"Could not check whether {package_name}.jl is visible to Julia: {exc}",
+                solver=solver_name,
+                package=package_name,
+                repo_root=str(repo_root),
+                julia_bin=julia_bin,
+                julia_depot_path=proc_env.get("JULIA_DEPOT_PATH"),
+                command=command,
+            )
+
+        stdout = completed.stdout or ""
+        stderr = completed.stderr or ""
+        parsed = _parse_key_value_lines(stdout)
+        depot = proc_env.get("JULIA_DEPOT_PATH") or parsed.get("DEPOT_PATH", "")
+        common = {
+            "solver": solver_name,
+            "package": package_name,
+            "repo_root": str(repo_root),
+            "julia_bin": julia_bin,
+            "julia_depot_path": depot or None,
+            "load_path": parsed.get("LOAD_PATH"),
+            "package_path": parsed.get("PACKAGE_PATH") or None,
+            "command": command,
+        }
+        if completed.returncode == 0:
+            continue
+
+        if completed.returncode == 3:
+            install_expression = (
+                f'import Pkg; Pkg.activate(); Pkg.add("{package_name}")'
+            )
+            install_command = f"julia -e '{install_expression}'"
+            install_command_powershell = f'& "{julia_bin}" -e \'{install_expression}\''
+            return error_result(
+                "optional_solver_unavailable",
+                (
+                    f"solver='{solver_name}' requested, but {package_name}.jl cannot be "
+                    "found on the Julia load path used by HOPE jobs. Add it to Julia's "
+                    "version environment using the same Julia binary and JULIA_DEPOT_PATH."
+                ),
+                **common,
+                install_command=install_command,
+                install_command_powershell=install_command_powershell,
+            )
+
+        return error_result(
+            "optional_solver_probe_failed",
+            (
+                f"Julia exited with code {completed.returncode} while checking whether "
+                f"{package_name}.jl is visible. The HOPE job was not launched."
+            ),
+            **common,
+            exit_code=completed.returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+    return None
 
 
 def build_debug_solver_environment_command(
@@ -1200,6 +1345,24 @@ def hope_run_hope(case_id: str = "md_gtep_clean") -> dict[str, Any]:
     if julia_error is not None:
         return julia_error
 
+    try:
+        settings = read_yaml(settings_path_for_case(case_path))
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return error_result(
+            "invalid_case_settings",
+            str(exc),
+            case_id=case_id,
+            settings_path=str(settings_path_for_case(case_path)),
+        )
+    solver_error = check_optional_solvers_available(
+        repo_root,
+        julia_bin,
+        [str(settings.get("solver", ""))],
+    )
+    if solver_error is not None:
+        solver_error.update(case_id=case_id)
+        return solver_error
+
     command = build_run_command(repo_root, julia_bin, case_path)
     job_id = _launch_job(
         command,
@@ -1777,6 +1940,42 @@ def _holistic_manifest_response(manifest: dict[str, Any], *, reused: bool) -> di
     )
 
 
+def _existing_holistic_request_response(
+    workspace_path: Path,
+    manifest_path: Path,
+    request_id: str,
+    request_sha256: str,
+) -> dict[str, Any] | None:
+    """Return an existing request response or conflict error, if one exists."""
+    if not workspace_path.exists():
+        return None
+    if not manifest_path.is_file():
+        return error_result(
+            "holistic_workspace_conflict",
+            f"Workspace already exists without a valid run manifest: {workspace_path}",
+            request_id=request_id,
+            workspace_path=str(workspace_path),
+        )
+    try:
+        existing = _read_holistic_manifest(manifest_path)
+    except ValueError as exc:
+        return error_result(
+            "invalid_holistic_manifest",
+            str(exc),
+            request_id=request_id,
+            manifest_path=str(manifest_path),
+        )
+    if existing.get("request_sha256") != request_sha256:
+        return error_result(
+            "request_id_conflict",
+            "request_id already belongs to a different GTEP-PCM request or source version.",
+            request_id=request_id,
+            existing_request_sha256=existing.get("request_sha256"),
+            requested_sha256=request_sha256,
+        )
+    return _holistic_manifest_response(existing, reused=True)
+
+
 def _record_holistic_job_status(
     job: _Job,
     status: str,
@@ -1849,6 +2048,7 @@ def hope_holistic_status(request_id: str) -> dict[str, Any]:
         )
     return _holistic_manifest_response(manifest, reused=True)
 
+
 def hope_run_holistic(
     gtep_case_id: str,
     pcm_case_id: str,
@@ -1920,33 +2120,43 @@ def hope_run_holistic(
     workspace_path = holistic_runs_root(repo_root) / normalized_request_id
     manifest_path = workspace_path / "run_manifest.yml"
 
+    # Existing requests remain queryable even if the local optional-solver
+    # installation changes after launch. Probe only when a new workspace is
+    # actually required.
     with _holistic_request_lock:
-        if workspace_path.exists():
-            if not manifest_path.is_file():
-                return error_result(
-                    "holistic_workspace_conflict",
-                    f"Workspace already exists without a valid run manifest: {workspace_path}",
-                    request_id=normalized_request_id,
-                    workspace_path=str(workspace_path),
-                )
-            try:
-                existing = _read_holistic_manifest(manifest_path)
-            except ValueError as exc:
-                return error_result(
-                    "invalid_holistic_manifest",
-                    str(exc),
-                    request_id=normalized_request_id,
-                    manifest_path=str(manifest_path),
-                )
-            if existing.get("request_sha256") != request_sha256:
-                return error_result(
-                    "request_id_conflict",
-                    "request_id already belongs to a different GTEP-PCM request or source version.",
-                    request_id=normalized_request_id,
-                    existing_request_sha256=existing.get("request_sha256"),
-                    requested_sha256=request_sha256,
-                )
-            return _holistic_manifest_response(existing, reused=True)
+        existing_response = _existing_holistic_request_response(
+            workspace_path,
+            manifest_path,
+            normalized_request_id,
+            request_sha256,
+        )
+    if existing_response is not None:
+        return existing_response
+
+    requested_solvers = (
+        [selected_solver]
+        if selected_solver is not None
+        else [str(gtep_settings.get("solver", "")), str(pcm_settings.get("solver", ""))]
+    )
+    solver_error = check_optional_solvers_available(
+        repo_root,
+        julia_bin,
+        requested_solvers,
+    )
+    if solver_error is not None:
+        solver_error.update(gtep_case_id=gtep_case_id, pcm_case_id=pcm_case_id)
+        return solver_error
+
+    with _holistic_request_lock:
+        # Another caller can reserve the same request while the probe runs.
+        existing_response = _existing_holistic_request_response(
+            workspace_path,
+            manifest_path,
+            normalized_request_id,
+            request_sha256,
+        )
+        if existing_response is not None:
+            return existing_response
 
         workspace_path.parent.mkdir(parents=True, exist_ok=True)
         final_gtep = workspace_path / "gtep_case"
@@ -2375,7 +2585,7 @@ def _dashboard_launch_env(repo_root: Path, effective_port: int) -> dict[str, str
             continue
         if upper_key.startswith("UV_"):
             env.pop(key, None)
-    env["HOPE_MODELCASES_PATH"] = str(repo_root / "ModelCases")
+    env["HOPE_MODELCASES_PATH"] = str(modelcases_root(repo_root))
     env["HOPE_DASHBOARD_PORT"] = str(effective_port)
     env["PYTHONUNBUFFERED"] = "1"
     return env

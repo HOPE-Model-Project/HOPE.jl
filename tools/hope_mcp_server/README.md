@@ -10,6 +10,29 @@ This package provides two MCP server entrypoints for the HOPE Julia repository:
 Both variants resolve cases dynamically from `ModelCases/` by looking for
 `Settings/HOPE_model_settings.yml`.
 
+## Relationship to PowerMCP
+
+This directory is the upstream development copy of the HOPE-specific MCP
+adapter. `Power-Agent/PowerMCP` vendors a downstream copy under `HOPE/` so it
+can distribute HOPE together with its other power-system connectors. The two
+directories are intentionally duplicated; they are not a symlink or Git
+submodule.
+
+HOPE owns the model-aware core and its Python tests. PowerMCP owns the MCP SDK
+version, transport entrypoints, package metadata, lockfile, and installation
+documentation. The exact boundary is recorded in `powermcp_sync.yml`. After
+committing an upstream HOPE change, check a local PowerMCP checkout with:
+
+```bash
+python tools/hope_mcp_server/scripts/sync_to_powermcp.py \
+  --powermcp-root /path/to/PowerMCP --check
+```
+
+Apply the managed-file update with `--apply`, then review and test the resulting
+PowerMCP changes before committing them there. The sync records the originating
+HOPE commit in `PowerMCP/HOPE/SYNCED_FROM_HOPE.yml` and refuses to publish
+uncommitted managed source files.
+
 ## Tool split
 
 Claude/local full-access server:
@@ -78,6 +101,32 @@ julia --project=/path/to/HOPE /path/to/HOPE/tools/repo_utils/agent_preflight_che
   ModelCases/MD_GTEP_clean_case --solver gurobi
 ```
 
+Gurobi, CPLEX, and SCIP are optional (weak) dependencies of HOPE. Their Julia
+wrapper packages must be installed in an environment on Julia's load path, using
+the same Julia version and `JULIA_DEPOT_PATH` as the MCP server. On macOS or
+Linux, for example:
+
+```bash
+JULIA_DEPOT_PATH=/path/to/julia_depot julia -e \
+  'import Pkg; Pkg.activate(); Pkg.add("Gurobi")'
+```
+
+The corresponding Windows PowerShell commands are:
+
+```powershell
+$env:JULIA_DEPOT_PATH = "E:\julia_depot"
+& "C:\path\to\julia.exe" -e 'import Pkg; Pkg.activate(); Pkg.add("Gurobi")'
+```
+
+Repeat the installation after upgrading to a new Julia minor version because it
+uses a new version environment, such as `@v1.13`. Before launching a new
+standalone or holistic model job, the MCP performs a lightweight package-discovery
+check. A missing wrapper returns `optional_solver_unavailable`; a probe failure or
+timeout returns `optional_solver_probe_failed`. Neither condition launches the
+model or creates a new holistic workspace. This lightweight check does not test
+the native solver library or license; use the full preflight command above for
+that.
+
 ## Claude Desktop config
 
 Add this server entry to your Claude Desktop MCP config:
@@ -141,6 +190,10 @@ Both servers accept:
 - prefixed paths such as `ModelCases/USA_64zone_GTEP_case`
 - the legacy alias `md_gtep_clean`
 
+Case discovery uses `HOPE_MODELCASES_PATH` when it is set and otherwise falls
+back to `<HOPE_REPO_ROOT>/ModelCases`. This permits generated validation cases
+to remain outside the registered ModelCases checkout.
+
 ## Agent-safe GTEP-to-PCM runs
 
 `hope_run_holistic(gtep_case_id, pcm_case_id, request_id, solver)` validates the
@@ -197,6 +250,22 @@ The integration test requires the restricted Maryland GTEP and PCM cases under
 `ModelCases/`. It asserts optimal termination, handoff and transfer validity,
 capability coverage, source immutability, and status recovery after a simulated
 MCP reconnect.
+
+The opt-in high-resolution test keeps the annual 8760-hour four-zone GTEP stage
+and derives an isolated calendar-month slice of the 656-bus PCM case. On Windows,
+run the July test with:
+
+```powershell
+.\scripts\run_md_july_agent_integration.ps1
+```
+
+The launcher defaults to July and Gurobi. Optional arguments include
+`-Month`, `-Solver`, and `-TimeoutSeconds`. The test generates temporary cases,
+launches them through `hope_run_holistic`, checks the scientific acceptance
+contract, simulates an MCP reconnect, verifies idempotent retry behavior, and
+removes the temporary cases afterward. It is intentionally excluded from the
+normal test suite because it performs a full annual GTEP solve and a detailed
+monthly nodal PCM solve.
 
 If an agent launches a long-running Julia job and needs to stop it early, call
 `hope_cancel_job(job_id)` with the `job_id` returned by `hope_warmup`,

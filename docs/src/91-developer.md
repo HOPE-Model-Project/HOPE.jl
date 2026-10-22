@@ -129,6 +129,24 @@ The GitHub workflow runs the restricted benchmark for relevant pull requests
 and pushes. The public 20% RPS benchmark runs weekly or through manual workflow
 dispatch so routine contributions do not pay its full runtime cost.
 
+### Agent-safe holistic integration tests
+
+The MCP package has two opt-in real-solver tests. The restricted test is the
+fast lifecycle smoke test. The high-resolution test retains the annual Maryland
+GTEP stage and uses a bounded-memory July slice for the 656-bus PCM stage:
+
+```powershell
+.\scripts\run_md_july_agent_integration.ps1
+```
+
+The high-resolution launcher sets an external `HOPE_MODELCASES_PATH`, generates
+temporary validation cases, and invokes the public MCP functions rather than a
+private solver shortcut. It requires successful scientific acceptance,
+persistent status recovery after the in-memory job mapping is removed, and
+idempotent reuse of the original request ID. Keep this test opt-in because its
+annual GTEP and monthly nodal PCM solves are too expensive for every pull
+request.
+
 ## Working on a new issue
 
 We try to keep a linear history in this repo, so it is important to keep your branches up-to-date.

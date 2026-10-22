@@ -1,0 +1,27 @@
+schema_version: 1
+
+upstream:
+  repository: https://github.com/HOPE-Model-Project/HOPE.jl
+  path: tools/hope_mcp_server
+
+downstream:
+  repository: https://github.com/Power-Agent/PowerMCP
+  path: HOPE
+
+# These files contain HOPE-specific behavior and tests. PowerMCP should carry
+# byte-for-byte copies made by scripts/sync_to_powermcp.py.
+managed_files:
+  - src/hope_mcp_server/core.py
+  - tests/test_core.py
+  - tests/test_holistic_agent_integration.py
+  - tests/test_holistic_agent_md_july_integration.py
+
+# PowerMCP owns its MCP SDK version, transport entrypoints, package metadata,
+# lockfile, and installation documentation. The sync utility never overwrites
+# these files.
+downstream_owned_files:
+  - README.md
+  - pyproject.toml
+  - uv.lock
+  - src/hope_mcp_server/chatgpt.py
+  - src/hope_mcp_server/server.py
