@@ -52,7 +52,10 @@ class PowerMCPSyncTests(unittest.TestCase):
                 "power-mcp-owned\n",
             )
             self.assertTrue((destination / "src/hope_mcp_server/core.py").is_file())
-            self.assertTrue((destination / "tests/test_core.py").is_file())
+            self.assertTrue(
+                (destination / "tests/test_holistic_agent_integration.py").is_file()
+            )
+            self.assertFalse((destination / "tests/test_core.py").exists())
             self.assertIn(
                 "upstream_commit: " + "a" * 40,
                 (destination / "SYNCED_FROM_HOPE.yml").read_text(encoding="utf-8"),

@@ -18,9 +18,10 @@ can distribute HOPE together with its other power-system connectors. The two
 directories are intentionally duplicated; they are not a symlink or Git
 submodule.
 
-HOPE owns the model-aware core and its Python tests. PowerMCP owns the MCP SDK
-version, transport entrypoints, package metadata, lockfile, and installation
-documentation. The exact boundary is recorded in `powermcp_sync.yml`. After
+HOPE owns the model-aware core and cross-repository integration tests. PowerMCP
+owns the MCP SDK version, transport entrypoints, package metadata, lockfile,
+installation documentation, and its layout-specific unit tests. The exact
+boundary is recorded in `powermcp_sync.yml`. After
 committing an upstream HOPE change, check a local PowerMCP checkout with:
 
 ```bash

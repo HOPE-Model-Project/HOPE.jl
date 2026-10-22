@@ -12,7 +12,9 @@ from unittest import mock
 import yaml
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(
+    os.environ.get("HOPE_REPO_ROOT", Path(__file__).resolve().parents[3])
+).expanduser().resolve()
 sys.path.insert(0, str(PACKAGE_ROOT / "src"))
 
 from hope_mcp_server.core import (  # noqa: E402

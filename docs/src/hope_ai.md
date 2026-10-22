@@ -341,10 +341,12 @@ The copies are synchronized rather than linked at runtime because PowerMCP owns
 its MCP SDK version, transport entrypoints, and packaging metadata.
 
 `tools/hope_mcp_server/powermcp_sync.yml` defines the ownership boundary. The
-HOPE-owned core and tests can be checked or copied into a local PowerMCP checkout
-with `tools/hope_mcp_server/scripts/sync_to_powermcp.py`. A successful apply
-records the exact upstream HOPE commit, making downstream updates auditable and
-preventing silent drift between the two repositories.
+HOPE-owned core and opt-in integration tests can be checked or copied into a
+local PowerMCP checkout with
+`tools/hope_mcp_server/scripts/sync_to_powermcp.py`. PowerMCP retains its own
+layout- and SDK-specific unit tests. A successful apply records the exact
+upstream HOPE commit, making downstream updates auditable and preventing silent
+drift between the two repositories.
 
 ### Agent integration tests
 

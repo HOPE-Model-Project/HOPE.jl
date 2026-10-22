@@ -12,7 +12,6 @@ downstream:
 # byte-for-byte copies made by scripts/sync_to_powermcp.py.
 managed_files:
   - src/hope_mcp_server/core.py
-  - tests/test_core.py
   - tests/test_holistic_agent_integration.py
   - tests/test_holistic_agent_md_july_integration.py
 
@@ -25,3 +24,4 @@ downstream_owned_files:
   - uv.lock
   - src/hope_mcp_server/chatgpt.py
   - src/hope_mcp_server/server.py
+  - tests/test_core.py
