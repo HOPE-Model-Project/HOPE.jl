@@ -61,6 +61,18 @@ class PowerMCPSyncTests(unittest.TestCase):
                 (destination / "SYNCED_FROM_HOPE.yml").read_text(encoding="utf-8"),
             )
 
+            with mock.patch(
+                "sync_to_powermcp._upstream_revision",
+                return_value="b" * 40,
+            ):
+                unchanged = synchronize(power_mcp, apply_changes=True)
+
+            self.assertEqual(unchanged, [])
+            self.assertIn(
+                "upstream_commit: " + "b" * 40,
+                (destination / "SYNCED_FROM_HOPE.yml").read_text(encoding="utf-8"),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

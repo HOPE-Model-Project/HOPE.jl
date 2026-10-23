@@ -135,7 +135,7 @@ def synchronize(
     managed_files = _managed_files(manifest)
     destination_root = _resolve_destination(power_mcp_root, manifest)
     differences = compare_managed_files(PACKAGE_ROOT, destination_root, managed_files)
-    if not apply_changes or not differences:
+    if not apply_changes:
         return differences
 
     revision = _upstream_revision(PACKAGE_ROOT, managed_files)
