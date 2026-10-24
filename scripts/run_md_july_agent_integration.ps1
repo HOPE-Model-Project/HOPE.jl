@@ -6,6 +6,9 @@ param(
     [ValidateRange(1, 12)]
     [int]$Month = 7,
 
+    [ValidateRange(0, 168)]
+    [int]$WarmupHours = 48,
+
     [ValidateRange(60, 86400)]
     [int]$TimeoutSeconds = 3600
 )
@@ -29,6 +32,7 @@ $environmentUpdates = [ordered]@{
     HOPE_RUN_HOLISTIC_AGENT_MD_JULY_INTEGRATION    = "1"
     HOPE_HOLISTIC_AGENT_MD_JULY_SOLVER              = $Solver
     HOPE_HOLISTIC_AGENT_MD_JULY_MONTH               = "$Month"
+    HOPE_HOLISTIC_AGENT_MD_JULY_WARMUP_HOURS        = "$WarmupHours"
     HOPE_HOLISTIC_AGENT_MD_JULY_TIMEOUT             = "$TimeoutSeconds"
 }
 $previousEnvironment = @{}
@@ -44,6 +48,7 @@ try {
 
     Write-Host "Running annual GTEP / month-$Month nodal PCM agent integration test."
     Write-Host "Solver: $Solver"
+    Write-Host "PCM warm-up: $WarmupHours hours before month $Month"
     Write-Host "ModelCases: $modelCasesRoot"
     Write-Host "Temporary work root: $workRoot"
 

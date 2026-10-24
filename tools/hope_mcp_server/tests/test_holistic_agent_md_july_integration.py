@@ -60,6 +60,9 @@ class MarylandJulyHolisticAgentIntegrationTests(unittest.TestCase):
 
         solver = os.environ.get("HOPE_HOLISTIC_AGENT_MD_JULY_SOLVER", "gurobi")
         month = int(os.environ.get("HOPE_HOLISTIC_AGENT_MD_JULY_MONTH", "7"))
+        warmup_hours = int(
+            os.environ.get("HOPE_HOLISTIC_AGENT_MD_JULY_WARMUP_HOURS", "48")
+        )
         timeout_seconds = float(
             os.environ.get("HOPE_HOLISTIC_AGENT_MD_JULY_TIMEOUT", "3600")
         )
@@ -77,6 +80,10 @@ class MarylandJulyHolisticAgentIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(
             prefix="hope-md-july-agent-",
             dir=str(work_parent) if work_parent is not None else None,
+            # Cloud-sync clients on Windows can briefly retain a handle after
+            # Julia exits.  Cleanup residue must not turn a scientifically
+            # successful integration run into a failed test result.
+            ignore_cleanup_errors=True,
         ) as tmp:
             temporary_root = Path(tmp)
             generated_cases = temporary_root / "model-cases"
@@ -94,6 +101,8 @@ class MarylandJulyHolisticAgentIntegrationTests(unittest.TestCase):
                     str(month),
                     "--validation-root",
                     str(generated_cases),
+                    "--validation-warmup-hours",
+                    str(warmup_hours),
                 ],
                 cwd=REPO_ROOT,
                 check=True,
@@ -105,8 +114,18 @@ class MarylandJulyHolisticAgentIntegrationTests(unittest.TestCase):
             self.assertEqual(validation_slice["gtep_hours"], 8760)
             self.assertEqual(validation_slice["pcm_month"], month)
             self.assertGreater(validation_slice["pcm_hours"], 0)
+            self.assertEqual(
+                validation_slice["pcm_warmup_hours"], warmup_hours
+            )
+            self.assertEqual(
+                validation_slice["pcm_hours"],
+                validation_slice["pcm_evaluation_hours"] + warmup_hours,
+            )
+            self.assertEqual(
+                validation_slice["pcm_evaluation_start_hour"], warmup_hours + 1
+            )
             if month == 7:
-                self.assertEqual(validation_slice["pcm_hours"], 744)
+                self.assertEqual(validation_slice["pcm_evaluation_hours"], 744)
 
             with mock.patch.dict(
                 "os.environ",

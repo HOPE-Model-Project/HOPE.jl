@@ -141,11 +141,14 @@ GTEP stage and uses a bounded-memory July slice for the 656-bus PCM stage:
 
 The high-resolution launcher sets an external `HOPE_MODELCASES_PATH`, generates
 temporary validation cases, and invokes the public MCP functions rather than a
-private solver shortcut. It requires successful scientific acceptance,
-persistent status recovery after the in-memory job mapping is removed, and
-idempotent reuse of the original request ID. Keep this test opt-in because its
-annual GTEP and monthly nodal PCM solves are too expensive for every pull
-request.
+private solver shortcut. By default it prepends 48 chronological hours from the
+prior month as a PCM warm-up period, so commitment and storage state at the
+evaluation-month boundary are endogenous rather than free. The manifest records
+the warm-up and evaluation-hour ranges separately. The test requires successful
+scientific acceptance, persistent status recovery after the in-memory job
+mapping is removed, and idempotent reuse of the original request ID. Keep this
+test opt-in because its annual GTEP and monthly nodal PCM solves are too
+expensive for every pull request.
 
 The normal MCP unit suite includes a synchronized fake-process state-machine
 test. It covers process identity, orphan recovery, stable reconnect semantics,
