@@ -17,6 +17,8 @@ from hope_mcp_server.core import (
     _holistic_request_jobs,
     _Job,
     _jobs,
+    _launch_job,
+    _write_yaml_atomic,
     _validate_settings_dict,
     build_debug_solver_environment_command,
     build_holistic_run_command,
@@ -217,6 +219,10 @@ class HopeCoreTests(unittest.TestCase):
         self.assertIn("hope_debug_solver_environment", tool_names)
         self.assertIn("hope_debug_solver_environment_async", tool_names)
         self.assertIn("hope_holistic_status", tool_names)
+        self.assertIn("hope_prepare_holistic_study", tool_names)
+        self.assertIn("hope_launch_holistic_study", tool_names)
+        self.assertIn("hope_holistic_study_status", tool_names)
+        self.assertIn("hope_audit_holistic_study", tool_names)
 
     def test_read_only_server_accepts_configured_public_hostname(self) -> None:
         with mock.patch.dict(
@@ -315,6 +321,44 @@ class HopeCoreTests(unittest.TestCase):
             self.assertIn("Pkg.add", result["install_command"])
             self.assertIn("Pkg.add", result["install_command_powershell"])
             self.assertEqual(run_mock.call_args.args[0][-1], package)
+            self.assertEqual(run_mock.call_args.kwargs["stdin"], subprocess.DEVNULL)
+
+    def test_background_julia_jobs_do_not_inherit_mcp_stdin(self) -> None:
+        process = mock.Mock()
+        process.pid = 1234
+        process.stdout = []
+        process.stderr = []
+        with (
+            mock.patch("hope_mcp_server.core.subprocess.Popen", return_value=process) as popen,
+            mock.patch("hope_mcp_server.core.threading.Thread") as thread,
+        ):
+            job_id = _launch_job([JULIA_BIN, "--version"], REPO_ROOT)
+        self.addCleanup(lambda: _jobs.pop(job_id, None))
+        self.assertEqual(popen.call_args.kwargs["stdin"], subprocess.DEVNULL)
+        self.assertEqual(thread.call_count, 2)
+
+    def test_atomic_yaml_write_retries_transient_windows_file_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "manifest.yml"
+            real_replace = os.replace
+            attempts = 0
+
+            def transient_lock(source: Path, destination: Path) -> None:
+                nonlocal attempts
+                attempts += 1
+                if attempts < 3:
+                    raise PermissionError(13, "file temporarily locked")
+                real_replace(source, destination)
+
+            with (
+                mock.patch("hope_mcp_server.core.os.replace", side_effect=transient_lock),
+                mock.patch("hope_mcp_server.core.time.sleep") as sleep,
+            ):
+                _write_yaml_atomic(path, {"status": "PUBLISHED"})
+
+            self.assertEqual(attempts, 3)
+            self.assertEqual(sleep.call_count, 2)
+            self.assertIn("PUBLISHED", path.read_text(encoding="utf-8"))
 
     def test_standalone_missing_optional_solver_is_rejected_before_launch(self) -> None:
         completed = subprocess.CompletedProcess(
@@ -461,6 +505,7 @@ class HopeCoreTests(unittest.TestCase):
         self.assertEqual(result["probe"]["OPTIMIZER_CONSTRUCTOR_VALUE"], "Gurobi.Optimizer")
         self.assertEqual(result["probe"]["PROBE_STATUS"], "ok")
         run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_args.kwargs["stdin"], subprocess.DEVNULL)
 
     def test_debug_solver_environment_rejects_invalid_solver(self) -> None:
         with (

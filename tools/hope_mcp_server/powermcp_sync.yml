@@ -15,6 +15,8 @@ managed_files:
   - tests/test_holistic_state_machine.py
   - tests/test_holistic_agent_integration.py
   - tests/test_holistic_agent_md_july_integration.py
+  - tests/test_holistic_multi_agent_protocol.py
+  - tests/test_holistic_multi_agent_integration.py
   - tests/test_path_traversal.py
 
 # PowerMCP owns its MCP SDK version, transport entrypoints, package metadata,

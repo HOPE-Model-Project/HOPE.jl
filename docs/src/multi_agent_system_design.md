@@ -373,6 +373,15 @@ network from sources such as OpenStreetMap is also separate from the current
 case-defined realization contract. These are later design and evaluation tasks,
 not assumptions hidden inside the completed GTEP-to-PCM transaction.
 
+As a bounded experiment, the MCP layer now implements a durable
+coordinator/executor/auditor protocol. Preparation pins source fingerprints and
+solver choice; execution revalidates them and invokes the existing holistic
+transaction; audit independently checks the published manifests and scientific
+acceptance artifacts. Each role writes a receipt to a study manifest, allowing
+different LLM tasks or clients to exchange only a study ID. This validates
+role separation and reconnect behavior while intentionally keeping GTEP,
+physical realization, and PCM inside the proven deterministic transaction.
+
 The recommended sequence is therefore to strengthen request-based artifact
 inspection and scientific evaluation before splitting the workflow among multiple
 agents. A future agent evaluation should test whether the agent selects compatible

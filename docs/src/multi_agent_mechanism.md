@@ -87,6 +87,35 @@ planning run followed by a chronological July PCM run on the detailed network.
 This is a linkage and operability benchmark, not a claim that one month replaces
 a full-year production-cost study.
 
+## First role-separated protocol
+
+HOPE now exposes a minimal durable protocol for testing cooperation among
+agents without changing the GTEP, physical-realization, or PCM mathematics:
+
+1. A coordinator calls `hope_prepare_holistic_study`. HOPE validates the model
+   roles, fingerprints both source cases, pins the solver, and publishes a
+   `PREPARED` study manifest.
+2. An executor calls `hope_launch_holistic_study` using only the study ID. HOPE
+   rejects changed source inputs, then delegates the numerical work to the
+   existing isolated and idempotent `hope_run_holistic` transaction.
+3. Any client can call `hope_holistic_study_status` after a disconnect. The
+   durable study record reconciles its state with the durable run manifest and
+   reports the next allowed action.
+4. A validation agent calls `hope_audit_holistic_study`. It independently reads
+   the published run and verifies source hashes, request identity, artifact
+   scope, handoff and transfer validity, coverage, and every acceptance check.
+   It then publishes an `ACCEPTED` or `REJECTED` audit receipt.
+
+Study records default to `artifacts/agent_studies/`; run records remain under
+`artifacts/agent_runs/`. The roots can be changed with
+`HOPE_AGENT_STUDIES_ROOT` and `HOPE_AGENT_RUNS_ROOT`.
+
+The coordinator, executor, and auditor are logical roles. They can be three LLM
+agents, three tasks in one agent application, or one agent invoking the steps
+sequentially. Agent labels are provenance labels, not authentication. This is
+the first multi-agent experiment, not a claim that the internal GTEP,
+realization, and PCM stages are already independent restartable services.
+
 ## Durable communication contract
 
 Agents exchange references to artifacts, not unstructured copies of model data.
@@ -130,11 +159,12 @@ retries, and creation of derived cases can remain automated.
 ## Current scope and next evolution
 
 The repository currently demonstrates the GTEP-to-PCM portion of this mechanism,
-including stable request IDs, asynchronous status, reconnect-safe polling,
-immutable source cases, handoff validation, operational templates, and
-restricted and high-resolution integration tests. The next architectural work
-should deepen physical realization and operational feedback between GTEP and
-PCM before adding DART to the connected workflow.
+including stable request and study IDs, coordinator/executor/auditor receipts,
+asynchronous status, reconnect-safe polling, immutable source cases, handoff
+validation, operational templates, and restricted and high-resolution
+integration tests. The next architectural work should evaluate this protocol
+with independent LLM tasks and deepen physical realization and operational
+feedback between GTEP and PCM before adding DART to the connected workflow.
 
 See [Multi-Model and Multi-Agent System Design](multi_agent_system_design.md) for
 the broader design rationale and development roadmap.

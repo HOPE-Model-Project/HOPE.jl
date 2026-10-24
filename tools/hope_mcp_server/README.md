@@ -229,6 +229,23 @@ not delete them automatically; operators should archive or remove completed
 request directories under `HOPE_AGENT_RUNS_ROOT` according to their own data
 retention policy.
 
+### Role-separated multi-agent studies
+
+The full local server also exposes a four-step durable protocol:
+
+- `hope_prepare_holistic_study(...)` for the study coordinator;
+- `hope_launch_holistic_study(study_id, ...)` for the workflow executor;
+- `hope_holistic_study_status(study_id)` for reconnect-safe monitoring; and
+- `hope_audit_holistic_study(study_id, ...)` for independent acceptance.
+
+Preparation does not launch Julia. It pins the source fingerprints and request
+hash in `artifacts/agent_studies/<study_id>/study_manifest.yml`. Execution
+rechecks those fingerprints before delegating to `hope_run_holistic`. Audit
+reads the durable run evidence and writes `audit_report.yml`, then records an
+`ACCEPTED` or `REJECTED` receipt. Set `HOPE_AGENT_STUDIES_ROOT` to relocate
+study manifests. These are logical roles and can be called by separate agents
+or sequentially by one MCP client.
+
 ## Local run
 
 Full local server:
@@ -268,6 +285,17 @@ The integration test requires the restricted Maryland GTEP and PCM cases under
 `ModelCases/`. It asserts optimal termination, handoff and transfer validity,
 capability coverage, source immutability, and status recovery after a simulated
 MCP reconnect.
+
+To exercise the same restricted case through separate coordinator, executor,
+and auditor calls on Windows:
+
+```powershell
+.\scripts\run_holistic_multi_agent_integration.ps1 -Solver gurobi
+```
+
+This opt-in test publishes all three role receipts, removes the in-memory job
+mapping to simulate a reconnect, and accepts the study only after independently
+checking its manifests and scientific evidence.
 
 The opt-in high-resolution test keeps the annual 8760-hour four-zone GTEP stage
 and derives an isolated calendar-month slice of the 656-bus PCM case. On Windows,

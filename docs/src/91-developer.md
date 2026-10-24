@@ -155,6 +155,19 @@ test. It covers process identity, orphan recovery, stable reconnect semantics,
 invalid YAML and manifest handling, checkout compatibility, and equivalent case
 identifier normalization without launching Julia.
 
+The first role-separated multi-agent test uses the restricted Maryland pair and
+the public prepare, launch, status, and audit tools:
+
+```powershell
+.\scripts\run_holistic_multi_agent_integration.ps1 -Solver gurobi
+```
+
+This is intentionally a protocol test around the existing deterministic
+GTEP-to-PCM transaction. It checks coordinator, executor, and auditor receipts,
+source-drift rejection, durable reconnect, artifact scoping, and independent
+acceptance. It does not yet split the three numerical stages into independently
+restartable services or evaluate an LLM's scientific reasoning.
+
 ## Working on a new issue
 
 We try to keep a linear history in this repo, so it is important to keep your branches up-to-date.
