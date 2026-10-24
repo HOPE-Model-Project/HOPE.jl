@@ -28,6 +28,7 @@ from .core import (
     hope_run_erec,
     hope_run_holistic,
     hope_prepare_holistic_study,
+    hope_prepare_holistic_validation_study,
     hope_run_hope,
     hope_update_settings,
     hope_validate_case,
@@ -117,7 +118,9 @@ def create_mcp_server(
         "The legacy alias md_gtep_clean also still works. "
         "Typical workflow: hope_warmup -> hope_job_status (poll) -> hope_run_hope -> "
         "hope_job_status (poll) -> hope_output_summary / hope_read_output. "
-        "For a role-separated GTEP-to-PCM study use hope_prepare_holistic_study -> "
+        "For the registered annual-GTEP/monthly-PCM validation profile, start with "
+        "hope_prepare_holistic_validation_study. For other role-separated GTEP-to-PCM "
+        "studies start with hope_prepare_holistic_study. Then use "
         "hope_launch_holistic_study -> hope_holistic_study_status (poll) -> "
         "hope_audit_holistic_study. "
         "If a Julia run needs to be stopped early, call hope_cancel_job with its job_id."
@@ -422,6 +425,32 @@ def register_write_tools(mcp: FastMCP) -> None:
             gtep_case_id=gtep_case_id,
             pcm_case_id=pcm_case_id,
             study_id=study_id,
+            solver=solver,
+            agent_label=agent_label,
+        )
+
+    @mcp.tool(
+        name="hope_prepare_holistic_validation_study",
+        description=(
+            "Coordinator step for a registered bounded-memory validation profile. The Maryland "
+            "profile keeps the published 8,760-hour GTEP case, creates an isolated PCM calendar "
+            "month with preceding chronological warm-up hours, verifies temporal metadata and "
+            "source immutability, and publishes a durable study manifest without solving."
+        ),
+    )
+    def hope_prepare_holistic_validation_study_tool(
+        study_id: str | None = None,
+        profile: str = "md-rps20-annual-gtep-monthly-pcm",
+        evaluation_month: int = 7,
+        warmup_hours: int = 48,
+        solver: str | None = "gurobi",
+        agent_label: str | None = None,
+    ) -> dict[str, Any]:
+        return hope_prepare_holistic_validation_study(
+            study_id=study_id,
+            profile=profile,
+            evaluation_month=evaluation_month,
+            warmup_hours=warmup_hours,
             solver=solver,
             agent_label=agent_label,
         )

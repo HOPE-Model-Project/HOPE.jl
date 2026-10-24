@@ -234,6 +234,8 @@ retention policy.
 The full local server also exposes a four-step durable protocol:
 
 - `hope_prepare_holistic_study(...)` for the study coordinator;
+- `hope_prepare_holistic_validation_study(...)` to materialize the registered
+  annual-GTEP/monthly-PCM Maryland profile in an isolated study workspace;
 - `hope_launch_holistic_study(study_id, ...)` for the workflow executor;
 - `hope_holistic_study_status(study_id)` for reconnect-safe monitoring; and
 - `hope_audit_holistic_study(study_id, ...)` for independent acceptance.
@@ -306,12 +308,15 @@ run the July test with:
 ```
 
 The launcher defaults to July and Gurobi. Optional arguments include
-`-Month`, `-Solver`, and `-TimeoutSeconds`. The test generates temporary cases,
-launches them through `hope_run_holistic`, checks the scientific acceptance
-contract, simulates an MCP reconnect, verifies idempotent retry behavior, and
-removes the temporary cases afterward. It is intentionally excluded from the
-normal test suite because it performs a full annual GTEP solve and a detailed
-monthly nodal PCM solve.
+`-Month`, `-Solver`, and `-TimeoutSeconds`. For an interactive multi-agent run,
+the coordinator can call `hope_prepare_holistic_validation_study` with profile
+`md-rps20-annual-gtep-monthly-pcm`, the desired month, and the number of prior
+warm-up hours. HOPE materializes the derived cases under that study's artifact
+directory, validates the temporal manifest, fingerprints the derived inputs,
+and leaves both published ModelCases unchanged. The executor and auditor then
+use the normal `hope_launch_holistic_study` and `hope_audit_holistic_study`
+steps. This is intentionally excluded from the normal test suite because it
+performs a full annual GTEP solve and a detailed monthly nodal PCM solve.
 
 If an agent launches a long-running Julia job and needs to stop it early, call
 `hope_cancel_job(job_id)` with the `job_id` returned by `hope_warmup`,

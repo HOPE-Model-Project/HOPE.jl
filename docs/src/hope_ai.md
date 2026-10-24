@@ -363,6 +363,12 @@ four-zone GTEP stage and derives an isolated July slice of the 656-bus PCM case:
 .\scripts\run_md_july_agent_integration.ps1
 ```
 
+The coordinator-facing `hope_prepare_holistic_validation_study` tool makes this
+same derivation available through the registered
+`md-rps20-annual-gtep-monthly-pcm` profile. It records the month, warm-up and
+evaluation ranges, builder hash, source hashes, and derived paths in the durable
+study manifest before an executor may launch the run.
+
 The high-resolution test uses Gurobi by default and checks optimal termination,
 physical handoff and transfer reconciliation, operational-template use, thermal
 unit commitment, reserves, RPS compliance, zero PCM load shedding, source-case

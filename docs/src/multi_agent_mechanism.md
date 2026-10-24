@@ -116,6 +116,15 @@ sequentially. Agent labels are provenance labels, not authentication. This is
 the first multi-agent experiment, not a claim that the internal GTEP,
 realization, and PCM stages are already independent restartable services.
 
+For the high-resolution Maryland benchmark, the coordinator instead calls
+`hope_prepare_holistic_validation_study` with profile
+`md-rps20-annual-gtep-monthly-pcm`. This registered preparation step keeps the
+8,760-hour GTEP case, derives a requested calendar month of the 656-bus PCM case,
+and optionally prepends prior chronological hours for unit-commitment and storage
+warm-up. The derived cases live inside the study workspace and are pinned by
+hash; the published ModelCases remain read-only. After preparation, executor,
+status, and auditor behavior is identical to the general protocol above.
+
 ## Durable communication contract
 
 Agents exchange references to artifacts, not unstructured copies of model data.

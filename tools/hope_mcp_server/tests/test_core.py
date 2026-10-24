@@ -18,6 +18,7 @@ from hope_mcp_server.core import (
     _Job,
     _jobs,
     _launch_job,
+    _replace_directory_with_retry,
     _write_yaml_atomic,
     _validate_settings_dict,
     build_debug_solver_environment_command,
@@ -220,6 +221,7 @@ class HopeCoreTests(unittest.TestCase):
         self.assertIn("hope_debug_solver_environment_async", tool_names)
         self.assertIn("hope_holistic_status", tool_names)
         self.assertIn("hope_prepare_holistic_study", tool_names)
+        self.assertIn("hope_prepare_holistic_validation_study", tool_names)
         self.assertIn("hope_launch_holistic_study", tool_names)
         self.assertIn("hope_holistic_study_status", tool_names)
         self.assertIn("hope_audit_holistic_study", tool_names)
@@ -359,6 +361,36 @@ class HopeCoreTests(unittest.TestCase):
             self.assertEqual(attempts, 3)
             self.assertEqual(sleep.call_count, 2)
             self.assertIn("PUBLISHED", path.read_text(encoding="utf-8"))
+
+    def test_directory_publication_retries_transient_windows_file_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "prepared"
+            destination = root / "published"
+            source.mkdir()
+            (source / "validation_slice.yml").write_text(
+                "schema_version: 1\n",
+                encoding="utf-8",
+            )
+            real_replace = os.replace
+            attempts = 0
+
+            def transient_lock(source_path: Path, destination_path: Path) -> None:
+                nonlocal attempts
+                attempts += 1
+                if attempts < 3:
+                    raise PermissionError(13, "directory temporarily locked")
+                real_replace(source_path, destination_path)
+
+            with (
+                mock.patch("hope_mcp_server.core.os.replace", side_effect=transient_lock),
+                mock.patch("hope_mcp_server.core.time.sleep") as sleep,
+            ):
+                _replace_directory_with_retry(source, destination)
+
+            self.assertEqual(attempts, 3)
+            self.assertEqual(sleep.call_count, 2)
+            self.assertTrue((destination / "validation_slice.yml").is_file())
 
     def test_standalone_missing_optional_solver_is_rejected_before_launch(self) -> None:
         completed = subprocess.CompletedProcess(

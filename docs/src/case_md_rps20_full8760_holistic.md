@@ -112,6 +112,15 @@ python ModelCases/tools/md_transmission_case_related/build_md_rps20_full8760_hol
 julia --project=. artifacts/agent_runs/md-rps20-july-validation/run_pair.jl
 ```
 
+For an MCP-managed, role-separated study, call
+`hope_prepare_holistic_validation_study` with profile
+`md-rps20-annual-gtep-monthly-pcm`, `evaluation_month: 7`, and
+`warmup_hours: 48`. HOPE places the derived inputs under
+`artifacts/agent_studies/<study_id>/derived_cases/`, pins them in the study
+manifest, and then uses the standard executor, status, and auditor sequence. The
+commands above remain useful for direct developer validation of the ModelCases
+builder.
+
 The detailed solved-data report is in the PCM case's
 [`references/VALIDATION.md`](https://github.com/HOPE-Model-Project/HOPEModelCases/blob/main/MD_PCM_RPS20_transmission_full8760_public_case/references/VALIDATION.md).
 Its companion `july_linkage_validation_summary.csv` provides a compact
