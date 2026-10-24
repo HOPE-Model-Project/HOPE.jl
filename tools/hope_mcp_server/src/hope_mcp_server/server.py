@@ -8,6 +8,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from .core import (
     hope_aggregation_audit,
+    hope_audit_holistic_study,
     hope_cancel_job,
     hope_case_info,
     hope_close_dashboard,
@@ -16,7 +17,9 @@ from .core import (
     hope_debug_solver_environment_async,
     hope_emission_compliance,
     hope_holistic_status,
+    hope_holistic_study_status,
     hope_job_status,
+    hope_launch_holistic_study,
     hope_nodal_prices,
     hope_open_dashboard,
     hope_output_summary,
@@ -24,6 +27,8 @@ from .core import (
     hope_rep_day_audit,
     hope_run_erec,
     hope_run_holistic,
+    hope_prepare_holistic_study,
+    hope_prepare_holistic_validation_study,
     hope_run_hope,
     hope_update_settings,
     hope_validate_case,
@@ -113,6 +118,11 @@ def create_mcp_server(
         "The legacy alias md_gtep_clean also still works. "
         "Typical workflow: hope_warmup -> hope_job_status (poll) -> hope_run_hope -> "
         "hope_job_status (poll) -> hope_output_summary / hope_read_output. "
+        "For the registered annual-GTEP/monthly-PCM validation profile, start with "
+        "hope_prepare_holistic_validation_study. For other role-separated GTEP-to-PCM "
+        "studies start with hope_prepare_holistic_study. Then use "
+        "hope_launch_holistic_study -> hope_holistic_study_status (poll) -> "
+        "hope_audit_holistic_study. "
         "If a Julia run needs to be stopped early, call hope_cancel_job with its job_id."
     )
     mcp = FastMCP(
@@ -395,6 +405,93 @@ def register_write_tools(mcp: FastMCP) -> None:
     )
     def hope_holistic_status_tool(request_id: str) -> dict[str, Any]:
         return hope_holistic_status(request_id)
+
+    @mcp.tool(
+        name="hope_prepare_holistic_study",
+        description=(
+            "Coordinator step for a role-separated GTEP->PCM study. Validate the two source "
+            "cases, pin immutable input fingerprints and solver selection, and publish a durable "
+            "study manifest without launching a solver. Reusing the same study_id is idempotent."
+        ),
+    )
+    def hope_prepare_holistic_study_tool(
+        gtep_case_id: str,
+        pcm_case_id: str,
+        study_id: str | None = None,
+        solver: str | None = None,
+        agent_label: str | None = None,
+    ) -> dict[str, Any]:
+        return hope_prepare_holistic_study(
+            gtep_case_id=gtep_case_id,
+            pcm_case_id=pcm_case_id,
+            study_id=study_id,
+            solver=solver,
+            agent_label=agent_label,
+        )
+
+    @mcp.tool(
+        name="hope_prepare_holistic_validation_study",
+        description=(
+            "Coordinator step for a registered bounded-memory validation profile. The Maryland "
+            "profile keeps the published 8,760-hour GTEP case, creates an isolated PCM calendar "
+            "month with preceding chronological warm-up hours, verifies temporal metadata and "
+            "source immutability, and publishes a durable study manifest without solving."
+        ),
+    )
+    def hope_prepare_holistic_validation_study_tool(
+        study_id: str | None = None,
+        profile: str = "md-rps20-annual-gtep-monthly-pcm",
+        evaluation_month: int = 7,
+        warmup_hours: int = 48,
+        solver: str | None = "gurobi",
+        agent_label: str | None = None,
+    ) -> dict[str, Any]:
+        return hope_prepare_holistic_validation_study(
+            study_id=study_id,
+            profile=profile,
+            evaluation_month=evaluation_month,
+            warmup_hours=warmup_hours,
+            solver=solver,
+            agent_label=agent_label,
+        )
+
+    @mcp.tool(
+        name="hope_launch_holistic_study",
+        description=(
+            "Executor step for a prepared holistic study. Recheck the pinned source fingerprints "
+            "and launch the existing deterministic, isolated GTEP->PCM workflow. Pass only the "
+            "study_id; model data remain in durable artifacts."
+        ),
+    )
+    def hope_launch_holistic_study_tool(
+        study_id: str,
+        agent_label: str | None = None,
+    ) -> dict[str, Any]:
+        return hope_launch_holistic_study(study_id=study_id, agent_label=agent_label)
+
+    @mcp.tool(
+        name="hope_holistic_study_status",
+        description=(
+            "Return reconnect-safe status, role receipts, and the next allowed action for a "
+            "prepared or running holistic study."
+        ),
+    )
+    def hope_holistic_study_status_tool(study_id: str) -> dict[str, Any]:
+        return hope_holistic_study_status(study_id)
+
+    @mcp.tool(
+        name="hope_audit_holistic_study",
+        description=(
+            "Independent validation step for a completed holistic study. Verify the published run "
+            "manifest, pinned source hashes, scoped artifact paths, handoff and transfer reports, "
+            "and all acceptance checks before issuing an ACCEPTED or REJECTED audit receipt."
+        ),
+    )
+    def hope_audit_holistic_study_tool(
+        study_id: str,
+        agent_label: str | None = None,
+    ) -> dict[str, Any]:
+        return hope_audit_holistic_study(study_id=study_id, agent_label=agent_label)
 
     @mcp.tool(
         name="hope_run_erec",

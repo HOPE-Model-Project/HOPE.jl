@@ -10,6 +10,30 @@ This package provides two MCP server entrypoints for the HOPE Julia repository:
 Both variants resolve cases dynamically from `ModelCases/` by looking for
 `Settings/HOPE_model_settings.yml`.
 
+## Relationship to PowerMCP
+
+This directory is the upstream development copy of the HOPE-specific MCP
+adapter. `Power-Agent/PowerMCP` vendors a downstream copy under `HOPE/` so it
+can distribute HOPE together with its other power-system connectors. The two
+directories are intentionally duplicated; they are not a symlink or Git
+submodule.
+
+HOPE owns the model-aware core and cross-repository integration tests. PowerMCP
+owns the MCP SDK version, transport entrypoints, package metadata, lockfile,
+installation documentation, and its layout-specific unit tests. The exact
+boundary is recorded in `powermcp_sync.yml`. After
+committing an upstream HOPE change, check a local PowerMCP checkout with:
+
+```bash
+python tools/hope_mcp_server/scripts/sync_to_powermcp.py \
+  --powermcp-root /path/to/PowerMCP --check
+```
+
+Apply the managed-file update with `--apply`, then review and test the resulting
+PowerMCP changes before committing them there. The sync records the originating
+HOPE commit in `PowerMCP/HOPE/SYNCED_FROM_HOPE.yml` and refuses to publish
+uncommitted managed source files.
+
 ## Tool split
 
 Claude/local full-access server:
@@ -78,6 +102,32 @@ julia --project=/path/to/HOPE /path/to/HOPE/tools/repo_utils/agent_preflight_che
   ModelCases/MD_GTEP_clean_case --solver gurobi
 ```
 
+Gurobi, CPLEX, and SCIP are optional (weak) dependencies of HOPE. Their Julia
+wrapper packages must be installed in an environment on Julia's load path, using
+the same Julia version and `JULIA_DEPOT_PATH` as the MCP server. On macOS or
+Linux, for example:
+
+```bash
+JULIA_DEPOT_PATH=/path/to/julia_depot julia -e \
+  'import Pkg; Pkg.activate(); Pkg.add("Gurobi")'
+```
+
+The corresponding Windows PowerShell commands are:
+
+```powershell
+$env:JULIA_DEPOT_PATH = "E:\julia_depot"
+& "C:\path\to\julia.exe" -e 'import Pkg; Pkg.activate(); Pkg.add("Gurobi")'
+```
+
+Repeat the installation after upgrading to a new Julia minor version because it
+uses a new version environment, such as `@v1.13`. Before launching a new
+standalone or holistic model job, the MCP performs a lightweight package-discovery
+check. A missing wrapper returns `optional_solver_unavailable`; a probe failure or
+timeout returns `optional_solver_probe_failed`. Neither condition launches the
+model or creates a new holistic workspace. This lightweight check does not test
+the native solver library or license; use the full preflight command above for
+that.
+
 ## Claude Desktop config
 
 Add this server entry to your Claude Desktop MCP config:
@@ -141,6 +191,10 @@ Both servers accept:
 - prefixed paths such as `ModelCases/USA_64zone_GTEP_case`
 - the legacy alias `md_gtep_clean`
 
+Case discovery uses `HOPE_MODELCASES_PATH` when it is set and otherwise falls
+back to `<HOPE_REPO_ROOT>/ModelCases`. This permits generated validation cases
+to remain outside the registered ModelCases checkout.
+
 ## Agent-safe GTEP-to-PCM runs
 
 `hope_run_holistic(gtep_case_id, pcm_case_id, request_id, solver)` validates the
@@ -148,6 +202,11 @@ two model roles, fingerprints their settings and input data, and copies them int
 an isolated per-request workspace before launching Julia. Existing model outputs
 are not copied. The default workspace root is `artifacts/agent_runs/`; set
 `HOPE_AGENT_RUNS_ROOT` to place these run records elsewhere.
+
+This workflow requires a HOPE.jl checkout containing
+`tools/repo_utils/run_holistic_agent_job.jl`, first shipped with revision
+`8126f0f`. The MCP server checks for the runner before copying either case and
+returns `incompatible_hope_checkout` when an older checkout is configured.
 
 Use a stable `request_id` when a caller may retry after a timeout. Repeating the
 same request ID with identical source fingerprints returns the existing run;
@@ -157,6 +216,37 @@ Each workspace contains `run_manifest.yml`, isolated GTEP and PCM cases, realize
 PCM inputs, handoff audits, and model outputs. If the PCM case supplies
 `Settings/HOPE_holistic_acceptance.yml`, the Julia wrapper also requires all
 declared capability checks to pass before publishing the run.
+
+The manifest records both the preparing MCP process and the launched Julia PID.
+After a reconnect, a nonterminal manifest whose owning process is no longer
+alive is converted to a durable failed result instead of remaining `running`
+forever. Public status values are stable across reconnects: successful runs are
+`done`, failed runs return `ok: false` with `status: failed`, and cancellations
+are `cancelled`.
+
+Agent workspaces are retained intentionally as auditable run records. HOPE does
+not delete them automatically; operators should archive or remove completed
+request directories under `HOPE_AGENT_RUNS_ROOT` according to their own data
+retention policy.
+
+### Role-separated multi-agent studies
+
+The full local server also exposes a four-step durable protocol:
+
+- `hope_prepare_holistic_study(...)` for the study coordinator;
+- `hope_prepare_holistic_validation_study(...)` to materialize the registered
+  annual-GTEP/monthly-PCM Maryland profile in an isolated study workspace;
+- `hope_launch_holistic_study(study_id, ...)` for the workflow executor;
+- `hope_holistic_study_status(study_id)` for reconnect-safe monitoring; and
+- `hope_audit_holistic_study(study_id, ...)` for independent acceptance.
+
+Preparation does not launch Julia. It pins the source fingerprints and request
+hash in `artifacts/agent_studies/<study_id>/study_manifest.yml`. Execution
+rechecks those fingerprints before delegating to `hope_run_holistic`. Audit
+reads the durable run evidence and writes `audit_report.yml`, then records an
+`ACCEPTED` or `REJECTED` receipt. Set `HOPE_AGENT_STUDIES_ROOT` to relocate
+study manifests. These are logical roles and can be called by separate agents
+or sequentially by one MCP client.
 
 ## Local run
 
@@ -197,6 +287,36 @@ The integration test requires the restricted Maryland GTEP and PCM cases under
 `ModelCases/`. It asserts optimal termination, handoff and transfer validity,
 capability coverage, source immutability, and status recovery after a simulated
 MCP reconnect.
+
+To exercise the same restricted case through separate coordinator, executor,
+and auditor calls on Windows:
+
+```powershell
+.\scripts\run_holistic_multi_agent_integration.ps1 -Solver gurobi
+```
+
+This opt-in test publishes all three role receipts, removes the in-memory job
+mapping to simulate a reconnect, and accepts the study only after independently
+checking its manifests and scientific evidence.
+
+The opt-in high-resolution test keeps the annual 8760-hour four-zone GTEP stage
+and derives an isolated calendar-month slice of the 656-bus PCM case. On Windows,
+run the July test with:
+
+```powershell
+.\scripts\run_md_july_agent_integration.ps1
+```
+
+The launcher defaults to July and Gurobi. Optional arguments include
+`-Month`, `-Solver`, and `-TimeoutSeconds`. For an interactive multi-agent run,
+the coordinator can call `hope_prepare_holistic_validation_study` with profile
+`md-rps20-annual-gtep-monthly-pcm`, the desired month, and the number of prior
+warm-up hours. HOPE materializes the derived cases under that study's artifact
+directory, validates the temporal manifest, fingerprints the derived inputs,
+and leaves both published ModelCases unchanged. The executor and auditor then
+use the normal `hope_launch_holistic_study` and `hope_audit_holistic_study`
+steps. This is intentionally excluded from the normal test suite because it
+performs a full annual GTEP solve and a detailed monthly nodal PCM solve.
 
 If an agent launches a long-running Julia job and needs to stop it early, call
 `hope_cancel_job(job_id)` with the `job_id` returned by `hope_warmup`,

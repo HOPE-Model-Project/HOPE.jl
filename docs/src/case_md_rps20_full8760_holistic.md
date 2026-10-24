@@ -35,7 +35,7 @@ buses.
 The PCM case owns `operational_resource_templates.csv`. Each candidate selects
 a template by `Operational_Template_ID`; explicit candidate values take
 precedence, and remaining gaps retain the legacy fleet-average/default fallback.
-In the validated result, all three built NGCC resources receive `Flag_UC = 1`,
+In the validated result, all four built NGCC resources receive `Flag_UC = 1`,
 two-hour minimum up/down times, and the documented 15 USD/MW startup-cost
 assumption. `operational_parameters_audit.csv` records every candidate,
 template, and thermal-policy choice.
@@ -43,6 +43,13 @@ template, and thermal-policy choice.
 GTEP has one upward operating-reserve product, while PCM has 1% REG-UP, 3%
 SPIN, and 3% NSPIN. The GTEP proxy is therefore 7% of load so planning does not
 understate the aggregate upward capability required in operations.
+
+Both stages use the same annual zonal solar and wind profiles. The case builder
+writes those profiles into generator-level availability columns for existing
+and candidate VRE in GTEP; PCM applies the same zonal profiles to the realized
+fleet. Dispatchable resources retain static `AF`, with `FOR` applied separately.
+This prevents planning-stage VRE from silently falling back to a 100% capacity
+factor when a generator-specific availability column is absent.
 
 The network is a geographically grounded synthetic reconstruction based on
 OpenStreetMap, not an official PJM model. OSM provides topology and geography;
@@ -55,16 +62,21 @@ records this assumption in `references/physical_deliverability_adjustments.csv`.
 ## Validation result
 
 The full 8760-hour GTEP stage reached `OPTIMAL` with Gurobi 13.0.0, objective
-2,396,599,492.17 USD, zero load shedding, and zero RPS slack. The network audit
-found one connected component containing every Maryland planning zone and the
-external boundary.
+4,112,707,606.34 USD, zero load shedding, and zero RPS slack. All existing and
+candidate VRE used the same hourly zonal profiles later used by PCM. The network
+audit found one connected component containing every Maryland planning zone and
+the external boundary.
 
-The strict handoff and detailed PCM formulation were validated on all 744 hours
-of July while retaining the annual GTEP solve. PCM reached `OPTIMAL`, objective
-201,932,586.63 USD, zero load shedding, zero RPS slack, and passed every
-machine-readable acceptance check. This exercises nodal angle-based DCOPF,
-unit commitment, all four reserve products, storage chronology, the local RPS,
-transferred generation and storage, and source-case immutability.
+The strict handoff and detailed PCM formulation were validated with 48 preceding
+June warm-up hours followed by all 744 evaluation hours of July while retaining
+the annual GTEP solve. PCM reached `OPTIMAL`; its complete 792-hour solve-horizon
+objective was 158,130,773.90 USD. July variable generation cost was
+151,027,749.62 USD and July emissions were 1,515,662.5 tons. Load shedding and
+RPS slack were both zero, and every machine-readable acceptance check passed.
+This exercises nodal angle-based DCOPF, unit commitment, all four reserve
+products, storage chronology, the local RPS, transferred generation and
+storage, and source-case immutability. The warm-up moves the free initial-state
+boundary outside the July evaluation period.
 
 The monolithic 656-bus by 8760-hour PCM construction was also attempted without
 reducing the source inputs. It exhausted memory on the 32 GB validation
@@ -90,13 +102,24 @@ julia --project=. tools/repo_utils/audit_holistic_case_pair.jl ModelCases/MD_GTE
 julia --project=. tools/repo_utils/audit_pcm_network_components.jl ModelCases/MD_PCM_RPS20_transmission_full8760_public_case
 ```
 
-For bounded workstation validation, create an isolated July workspace. This
-does not alter either published source case:
+For bounded workstation validation, create an isolated July workspace. A
+48-hour June warm-up makes commitment and storage state endogenous before the
+July evaluation boundary. The manifest records 48 warm-up hours and 744
+evaluation hours separately. This does not alter either published source case:
 
 ```sh
-python ModelCases/tools/md_transmission_case_related/build_md_rps20_full8760_holistic_pair.py --validation-month 7 --validation-root artifacts/agent_runs/md-rps20-july-validation
+python ModelCases/tools/md_transmission_case_related/build_md_rps20_full8760_holistic_pair.py --validation-month 7 --validation-warmup-hours 48 --validation-root artifacts/agent_runs/md-rps20-july-validation
 julia --project=. artifacts/agent_runs/md-rps20-july-validation/run_pair.jl
 ```
+
+For an MCP-managed, role-separated study, call
+`hope_prepare_holistic_validation_study` with profile
+`md-rps20-annual-gtep-monthly-pcm`, `evaluation_month: 7`, and
+`warmup_hours: 48`. HOPE places the derived inputs under
+`artifacts/agent_studies/<study_id>/derived_cases/`, pins them in the study
+manifest, and then uses the standard executor, status, and auditor sequence. The
+commands above remain useful for direct developer validation of the ModelCases
+builder.
 
 The detailed solved-data report is in the PCM case's
 [`references/VALIDATION.md`](https://github.com/HOPE-Model-Project/HOPEModelCases/blob/main/MD_PCM_RPS20_transmission_full8760_public_case/references/VALIDATION.md).

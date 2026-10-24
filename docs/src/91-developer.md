@@ -129,6 +129,48 @@ The GitHub workflow runs the restricted benchmark for relevant pull requests
 and pushes. The public 20% RPS benchmark runs weekly or through manual workflow
 dispatch so routine contributions do not pay its full runtime cost.
 
+### Agent-safe holistic integration tests
+
+The MCP package has two opt-in real-solver tests. The restricted test is the
+fast lifecycle smoke test. The high-resolution test retains the annual Maryland
+GTEP stage and uses a bounded-memory July slice for the 656-bus PCM stage:
+
+```powershell
+.\scripts\run_md_july_agent_integration.ps1
+```
+
+The public `hope_prepare_holistic_validation_study` tool exposes this preparation
+through the registered `md-rps20-annual-gtep-monthly-pcm` profile. It invokes only
+the registered ModelCases builder, writes derived cases below the durable study
+directory, checks the temporal metadata and source fingerprints, and never uses
+the published ModelCases as output targets. By default it prepends 48
+chronological hours from the prior month as a PCM warm-up period, so commitment
+and storage state at the evaluation-month boundary are endogenous rather than
+free. The study manifest records the profile, builder hash, source hashes,
+warm-up hours, evaluation hours, and derived-case paths. The test requires
+successful scientific acceptance, persistent status recovery after the
+in-memory job mapping is removed, and idempotent reuse of the original study ID.
+Keep this test opt-in because its annual GTEP and monthly nodal PCM solves are too
+expensive for every pull request.
+
+The normal MCP unit suite includes a synchronized fake-process state-machine
+test. It covers process identity, orphan recovery, stable reconnect semantics,
+invalid YAML and manifest handling, checkout compatibility, and equivalent case
+identifier normalization without launching Julia.
+
+The first role-separated multi-agent test uses the restricted Maryland pair and
+the public prepare, launch, status, and audit tools:
+
+```powershell
+.\scripts\run_holistic_multi_agent_integration.ps1 -Solver gurobi
+```
+
+This is intentionally a protocol test around the existing deterministic
+GTEP-to-PCM transaction. It checks coordinator, executor, and auditor receipts,
+source-drift rejection, durable reconnect, artifact scoping, and independent
+acceptance. It does not yet split the three numerical stages into independently
+restartable services or evaluate an LLM's scientific reasoning.
+
 ## Working on a new issue
 
 We try to keep a linear history in this repo, so it is important to keep your branches up-to-date.

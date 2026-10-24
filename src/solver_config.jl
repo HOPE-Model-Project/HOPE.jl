@@ -25,6 +25,13 @@ function _optional_solver_error(solver::AbstractString, err = nothing)
     else
         message *= " Install/activate $(package_name).jl."
     end
+    depot_separator = Sys.iswindows() ? ";" : ":"
+    depot = join(DEPOT_PATH, depot_separator)
+    message *=
+        " From a cloned HOPE repository, add it to Julia's version environment" *
+        " with `import Pkg; Pkg.activate(); Pkg.add(\"$(package_name)\")`, using" *
+        " the same Julia" *
+        " binary and JULIA_DEPOT_PATH=$(depot)."
     if err !== nothing
         message *= " Original error: $(err)"
     end

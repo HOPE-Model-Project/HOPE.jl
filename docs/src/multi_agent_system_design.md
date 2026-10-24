@@ -373,6 +373,15 @@ network from sources such as OpenStreetMap is also separate from the current
 case-defined realization contract. These are later design and evaluation tasks,
 not assumptions hidden inside the completed GTEP-to-PCM transaction.
 
+As a bounded experiment, the MCP layer now implements a durable
+coordinator/executor/auditor protocol. Preparation pins source fingerprints and
+solver choice; execution revalidates them and invokes the existing holistic
+transaction; audit independently checks the published manifests and scientific
+acceptance artifacts. Each role writes a receipt to a study manifest, allowing
+different LLM tasks or clients to exchange only a study ID. This validates
+role separation and reconnect behavior while intentionally keeping GTEP,
+physical realization, and PCM inside the proven deterministic transaction.
+
 The recommended sequence is therefore to strengthen request-based artifact
 inspection and scientific evaluation before splitting the workflow among multiple
 agents. A future agent evaluation should test whether the agent selects compatible
@@ -393,6 +402,14 @@ slice of this protocol without fixing a final multi-agent hierarchy:
 - Julia publishes `PUBLISHED` or `FAILED` even if the MCP client disconnects;
 - `hope_holistic_status` can recover the terminal state after an MCP restart; and
 - cases with a holistic acceptance contract must pass their declared capability checks before publication.
+
+Two opt-in real-solver tests exercise this boundary. The restricted Maryland
+pair provides a fast lifecycle test. The high-resolution test retains the annual
+8760-hour four-zone GTEP stage, derives an isolated July slice of the 656-bus PCM
+case, and verifies scientific acceptance, reconnect recovery, idempotent retry,
+and source immutability through the public MCP functions. The latter is a
+release-level test rather than a routine pull-request check because of its solve
+time and memory requirements.
 
 This is an orchestration and test boundary around the existing mathematical
 models. Standalone `run_hope` and direct Julia GTEP-to-PCM workflows remain
