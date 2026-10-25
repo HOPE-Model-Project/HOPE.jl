@@ -54,12 +54,12 @@ def _traced_holistic_call(
     arguments: dict[str, Any],
     call: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
-    """Record lifecycle calls at the MCP boundary; tracing never changes tool results."""
+    """Record lifecycle calls without hiding the underlying lifecycle result."""
     started_at = time.time()
     result = call()
     study_id = result.get("study_id") or arguments.get("study_id")
     if study_id:
-        record_holistic_agent_tool_event(
+        trace_result = record_holistic_agent_tool_event(
             study_id=str(study_id),
             operation=operation,
             role=role,
@@ -68,6 +68,13 @@ def _traced_holistic_call(
             result=result,
             started_at_unix=started_at,
         )
+        if not trace_result.get("ok"):
+            return {
+                **result,
+                "trace_recorded": False,
+                "trace_warning": trace_result,
+            }
+        result["trace_recorded"] = True
     return result
 
 

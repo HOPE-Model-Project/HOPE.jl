@@ -3659,6 +3659,42 @@ def hope_submit_holistic_agent_report(
     reporter, error = _normalize_agent_label(agent_label, "reporting-agent")
     if error is not None:
         return error
+    status_result = hope_holistic_study_status(study_id)
+    if not status_result.get("ok"):
+        return status_result
+    status = str(status_result.get("manifest_status", "UNKNOWN")).upper()
+    if status not in {"ACCEPTED", "REJECTED", "FAILED"}:
+        result = error_result(
+            "study_not_ready_for_agent_report",
+            "Submit the final agent report only after the study is ACCEPTED, REJECTED, or FAILED.",
+            study_id=study_id,
+            status=status.lower(),
+            allowed_statuses=["accepted", "rejected", "failed"],
+            next_action=status_result.get("next_action"),
+        )
+        trace_result = record_holistic_agent_tool_event(
+            study_id=study_id,
+            operation="hope_submit_holistic_agent_report",
+            role="reporter",
+            agent_label=reporter,
+            arguments={
+                "task_id": task_id,
+                "architecture": architecture,
+                "monitoring_mode": monitoring_mode,
+                "claim_names": sorted(claims),
+                "evidence_count": len(evidence_paths),
+            },
+            result=result,
+            started_at_unix=started_at,
+        )
+        if not trace_result.get("ok"):
+            return {
+                **result,
+                "trace_recorded": False,
+                "trace_warning": trace_result,
+            }
+        result["trace_recorded"] = True
+        return result
     manifest, manifest_path, error = _load_holistic_study(study_id)
     if error is not None:
         return error
@@ -3689,14 +3725,13 @@ def hope_submit_holistic_agent_report(
         result=result,
         started_at_unix=started_at,
     )
-    if result.get("ok") and not trace_result.get("ok"):
-        return error_result(
-            "agent_trace_write_failed",
-            "The report was written, but its server trace event could not be recorded.",
-            study_id=study_id,
-            report_path=result.get("report_path"),
-            trace_error=trace_result,
-        )
+    if not trace_result.get("ok"):
+        return {
+            **result,
+            "trace_recorded": False,
+            "trace_warning": trace_result,
+        }
+    result["trace_recorded"] = True
     return result
 
 
@@ -3705,6 +3740,19 @@ def hope_evaluate_holistic_agent_study(
     task_id: str | None = None,
 ) -> dict[str, Any]:
     """Score agent behavior independently from deterministic model correctness."""
+    status_result = hope_holistic_study_status(study_id)
+    if not status_result.get("ok"):
+        return status_result
+    status = str(status_result.get("manifest_status", "UNKNOWN")).upper()
+    if status not in {"ACCEPTED", "REJECTED", "FAILED"}:
+        return error_result(
+            "study_not_ready_for_agent_evaluation",
+            "Evaluate agent behavior only after the study is ACCEPTED, REJECTED, or FAILED.",
+            study_id=study_id,
+            status=status.lower(),
+            allowed_statuses=["accepted", "rejected", "failed"],
+            next_action=status_result.get("next_action"),
+        )
     manifest, manifest_path, error = _load_holistic_study(study_id)
     if error is not None:
         return error

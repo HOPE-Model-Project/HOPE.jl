@@ -26,6 +26,7 @@ from hope_mcp_server.core import (  # noqa: E402
     hope_evaluate_holistic_agent_study,
     hope_submit_holistic_agent_report,
 )
+from hope_mcp_server.server import _traced_holistic_call  # noqa: E402
 
 
 class AgentEvaluationTests(unittest.TestCase):
@@ -73,7 +74,15 @@ class AgentEvaluationTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def _event(self, operation: str, role: str, label: str, *, ok: bool = True) -> None:
+    def _event(
+        self,
+        operation: str,
+        role: str,
+        label: str,
+        *,
+        ok: bool = True,
+        arguments: dict[str, object] | None = None,
+    ) -> None:
         started = time.time()
         append_tool_event(
             self.study_root,
@@ -81,7 +90,7 @@ class AgentEvaluationTests(unittest.TestCase):
             operation=operation,
             role=role,
             agent_label=label,
-            arguments={"study_id": self.study_id},
+            arguments=arguments or {"study_id": self.study_id},
             result={"ok": ok, "study_id": self.study_id},
             started_at_unix=started,
             completed_at_unix=started + 0.01,
@@ -118,6 +127,14 @@ class AgentEvaluationTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["verified_claims"], 4)
         self.assertEqual(result["metrics"]["false_safe_claims"], 0)
         self.assertTrue(Path(result["evaluation_report_path"]).is_file())
+        evaluation = yaml.safe_load(
+            Path(result["evaluation_report_path"]).read_text(encoding="utf-8")
+        )
+        artifacts = evaluation["authoritative_artifacts"]
+        self.assertEqual(artifacts["study_status"], "ACCEPTED")
+        self.assertEqual(artifacts["run_status"], "PUBLISHED")
+        self.assertIsNotNone(artifacts["run_manifest_sha256"])
+        self.assertIsNotNone(artifacts["audit_report_sha256"])
 
     def test_v2_accepts_traced_wait_and_hope_only_attestation(self) -> None:
         self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
@@ -452,7 +469,7 @@ class AgentEvaluationTests(unittest.TestCase):
         self.assertEqual(_safe_value(Path("evidence.yml")), "evidence.yml")
         self.assertEqual(_safe_value(CustomValue()), "custom")
 
-    def test_evaluation_requires_known_task_and_submitted_report(self) -> None:
+    def test_evaluation_requires_known_task_but_scores_missing_report(self) -> None:
         invalid = evaluate_agent_study(self.study_root, self.study, task_id="unknown")
         self.assertEqual(invalid["error_type"], "invalid_evaluation_task")
         missing = evaluate_agent_study(
@@ -460,7 +477,48 @@ class AgentEvaluationTests(unittest.TestCase):
             self.study,
             task_id="md-rps20-annual-gtep-july-pcm-v1",
         )
-        self.assertEqual(missing["error_type"], "agent_report_not_found")
+        self.assertTrue(missing["ok"], missing)
+        self.assertTrue(missing["model_passed"])
+        self.assertFalse(missing["agent_passed"])
+        self.assertFalse(missing["checks"]["claims_match_authoritative_artifacts"])
+        self.assertFalse(missing["checks"]["minimum_evidence_met"])
+        self.assertTrue(Path(missing["evaluation_report_path"]).is_file())
+
+    def test_rejected_submission_is_independently_scorable(self) -> None:
+        label = "agent-A"
+        self._event("hope_prepare_holistic_validation_study", "coordinator", label)
+        self._event("hope_launch_holistic_study", "executor", label)
+        self._event("hope_wait_holistic_study", "observer", label)
+        self._event("hope_audit_holistic_study", "auditor", label)
+        self._event(
+            "hope_submit_holistic_agent_report",
+            "reporter",
+            label,
+            ok=False,
+            arguments={
+                "study_id": self.study_id,
+                "task_id": "md-rps20-annual-gtep-july-pcm-v3",
+                "architecture": "single_agent",
+                "monitoring_mode": "hope_mcp_only",
+                "claim_names": ["audit_accepted"],
+                "evidence_count": 3,
+            },
+        )
+
+        evaluated = evaluate_agent_study(self.study_root, self.study)
+
+        self.assertTrue(evaluated["ok"], evaluated)
+        self.assertEqual(evaluated["task_id"], "md-rps20-annual-gtep-july-pcm-v3")
+        self.assertTrue(evaluated["model_passed"])
+        self.assertFalse(evaluated["agent_passed"])
+        self.assertFalse(evaluated["checks"]["invalid_call_budget"])
+        self.assertFalse(evaluated["checks"]["claims_match_authoritative_artifacts"])
+        self.assertEqual(evaluated["metrics"]["invalid_tool_calls"], 1)
+        self.assertEqual(evaluated["metrics"]["active_tool_calls"], 4)
+        self.assertEqual(
+            [item["category"] for item in evaluated["failures"]],
+            ["task_verification"],
+        )
 
     def test_core_report_and_evaluation_api_use_durable_study(self) -> None:
         self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
@@ -487,6 +545,108 @@ class AgentEvaluationTests(unittest.TestCase):
         self.assertTrue(evaluated["ok"], evaluated)
         self.assertTrue(evaluated["model_passed"])
         self.assertTrue(evaluated["agent_passed"])
+
+    def test_core_blocks_report_and_evaluation_while_study_is_running(self) -> None:
+        status = {
+            "ok": True,
+            "study_id": self.study_id,
+            "status": "running",
+            "manifest_status": "RUNNING",
+            "next_action": "Keep waiting.",
+        }
+        with mock.patch(
+            "hope_mcp_server.core.hope_holistic_study_status", return_value=status
+        ), mock.patch("hope_mcp_server.core._load_holistic_study") as load, mock.patch(
+            "hope_mcp_server.core.record_holistic_agent_tool_event",
+            return_value={"ok": True},
+        ) as record:
+            submitted = hope_submit_holistic_agent_report(
+                self.study_id,
+                claims={key: False for key in (
+                    "study_accepted",
+                    "run_published",
+                    "audit_accepted",
+                    "all_acceptance_checks_passed",
+                )},
+                evidence_paths=[],
+                architecture="single_agent",
+                agent_label="agent-A",
+            )
+            evaluated = hope_evaluate_holistic_agent_study(
+                self.study_id,
+                task_id="md-rps20-annual-gtep-july-pcm-v3",
+            )
+
+        self.assertEqual(submitted["error_type"], "study_not_ready_for_agent_report")
+        self.assertEqual(evaluated["error_type"], "study_not_ready_for_agent_evaluation")
+        self.assertEqual(submitted["status"], "running")
+        self.assertEqual(evaluated["status"], "running")
+        load.assert_not_called()
+        record.assert_called_once()
+        self.assertTrue(submitted["trace_recorded"])
+        self.assertFalse((self.study_root / "agent_evaluation_report.yml").exists())
+
+    def test_report_trace_failure_preserves_successful_report_result(self) -> None:
+        status = {
+            "ok": True,
+            "study_id": self.study_id,
+            "status": "accepted",
+            "manifest_status": "ACCEPTED",
+        }
+        loaded = (self.study, self.study_root / "study_manifest.yml", None)
+        with mock.patch(
+            "hope_mcp_server.core.hope_holistic_study_status", return_value=status
+        ), mock.patch(
+            "hope_mcp_server.core._load_holistic_study", return_value=loaded
+        ), mock.patch(
+            "hope_mcp_server.core.record_holistic_agent_tool_event",
+            return_value={
+                "ok": False,
+                "error_type": "agent_trace_write_failed",
+                "message": "locked",
+            },
+        ):
+            submitted = hope_submit_holistic_agent_report(
+                self.study_id,
+                claims={key: True for key in (
+                    "study_accepted",
+                    "run_published",
+                    "audit_accepted",
+                    "all_acceptance_checks_passed",
+                )},
+                evidence_paths=[str(path) for path in self.evidence],
+                architecture="single_agent",
+                agent_label="agent-A",
+            )
+
+        self.assertTrue(submitted["ok"], submitted)
+        self.assertFalse(submitted["trace_recorded"])
+        self.assertEqual(
+            submitted["trace_warning"]["error_type"], "agent_trace_write_failed"
+        )
+
+    def test_mcp_trace_failure_does_not_mask_lifecycle_status(self) -> None:
+        lifecycle = {"ok": True, "study_id": self.study_id, "status": "running"}
+        with mock.patch(
+            "hope_mcp_server.server.record_holistic_agent_tool_event",
+            return_value={
+                "ok": False,
+                "error_type": "agent_trace_write_failed",
+                "message": "locked",
+            },
+        ):
+            result = _traced_holistic_call(
+                operation="hope_wait_holistic_study",
+                role="observer",
+                agent_label=None,
+                arguments={"study_id": self.study_id},
+                call=lambda: dict(lifecycle),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "running")
+        self.assertFalse(result["trace_recorded"])
+        self.assertEqual(result["trace_warning"]["error_type"], "agent_trace_write_failed")
 
 if __name__ == "__main__":
     unittest.main()

@@ -211,6 +211,36 @@ budget only to active tool decisions. Evaluations report total, active, passive,
 and budgeted calls separately. V1 and v2 remain unchanged so their completed
 trials can still be reproduced exactly.
 
+The first end-to-end v3 centralized-role pilot passed both model and agent
+evaluation. It used 29 total calls, of which 23 were passive waits and only six
+were active decisions. That pilot validates the runtime-neutral accounting, but
+one successful run is not evidence that the role-separated architecture is
+better. The controlled protocol in
+`tools/hope_mcp_server/experiments/md_rps20_v3_matched_trials.yml` therefore
+specifies five fresh single-agent and five fresh centralized-role repetitions.
+The `hope-agent-experiment-summary` command checks their request, source-case,
+and solver hashes before comparing pass rates, tool behavior, elapsed time,
+false-safe claims, and classified failures.
+
+The lifecycle is now enforced at the server boundary rather than left to prompt
+obedience. HOPE rejects final-report submission and agent evaluation until the
+study is `ACCEPTED`, `REJECTED`, or `FAILED`. A trace-write problem is returned
+as a warning alongside the underlying lifecycle result, so an agent cannot
+mistake a locked trace file for a failed model. Evaluation reports pin the
+authoritative run and audit hashes, and the experiment summarizer excludes
+scores that have become stale because those artifacts changed afterward.
+
+A prompt-design pilot that used descriptive output fields instead of the four
+required claim keys was rejected before evaluation. The current protocol names
+those keys explicitly. The evaluator can now score a rejected or missing final
+report as agent failure while still recognizing a successful model run, and the
+experiment summary blocks comparison when any formal study lacks an evaluation
+artifact. This prevents failed trials from being lost through survivorship bias.
+The first formal-prefix single-agent attempt on 2026-10-25 is also explicitly
+excluded: it submitted and evaluated while the run was still active, although
+the run later published successfully. It is retained as system-design evidence,
+not counted as a scientific architecture replicate.
+
 Only after this comparison should HOPE decide whether GTEP, physical realization,
 and PCM benefit from separate persistent agents. Meanwhile, physical-realization
 and operational-feedback development can continue as deterministic model work.

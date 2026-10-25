@@ -14,7 +14,7 @@ import yaml
 
 AGENT_TRACE_SCHEMA_VERSION = 1
 AGENT_REPORT_SCHEMA_VERSION = 2
-AGENT_EVALUATION_SCHEMA_VERSION = 3
+AGENT_EVALUATION_SCHEMA_VERSION = 4
 
 FAILURE_SYSTEM_DESIGN = "system_design"
 FAILURE_INTER_AGENT_MISALIGNMENT = "inter_agent_misalignment"
@@ -403,6 +403,27 @@ def _read_optional_yaml(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _sha256_file(path: Path | None) -> str | None:
+    if path is None or not path.is_file():
+        return None
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _latest_report_submission_context(trace: Mapping[str, Any]) -> dict[str, Any]:
+    """Recover task metadata from a rejected final-report submission."""
+    events = trace.get("events", [])
+    if not isinstance(events, list):
+        return {}
+    for event in reversed(events):
+        if not isinstance(event, dict):
+            continue
+        if event.get("operation") != "hope_submit_holistic_agent_report":
+            continue
+        arguments = event.get("arguments", {})
+        return dict(arguments) if isinstance(arguments, dict) else {}
+    return {}
+
+
 def evaluate_agent_study(
     study_root: Path,
     study: Mapping[str, Any],
@@ -413,7 +434,12 @@ def evaluate_agent_study(
     trace_path = study_root / "agent_trace.yml"
     report = _read_optional_yaml(report_path)
     trace = _read_optional_yaml(trace_path)
-    selected_task_id = task_id or str(report.get("task_id", ""))
+    submission_context = _latest_report_submission_context(trace)
+    selected_task_id = (
+        task_id
+        or str(report.get("task_id", "")).strip()
+        or str(submission_context.get("task_id", "")).strip()
+    )
     task = EVALUATION_TASKS.get(selected_task_id)
     if task is None:
         return {
@@ -422,14 +448,8 @@ def evaluate_agent_study(
             "message": "Submit a report with a supported task_id before evaluation.",
             "allowed_tasks": sorted(EVALUATION_TASKS),
         }
-    if not report:
-        return {
-            "ok": False,
-            "error_type": "agent_report_not_found",
-            "message": "Call hope_submit_holistic_agent_report before evaluation.",
-        }
     report_task_id = str(report.get("task_id", ""))
-    if task_id is not None and report_task_id != selected_task_id:
+    if report and task_id is not None and report_task_id != selected_task_id:
         return {
             "ok": False,
             "error_type": "evaluation_task_mismatch",
@@ -508,7 +528,9 @@ def evaluate_agent_study(
         "hope_submit_holistic_agent_report",
     }
     duplicate_calls = sum(max(0, operations.count(name) - 1) for name in reusable_operations)
-    architecture = str(report.get("architecture", ""))
+    architecture = str(
+        report.get("architecture") or submission_context.get("architecture") or ""
+    )
     role_events = [
         event
         for event in events
@@ -535,7 +557,11 @@ def evaluate_agent_study(
         name for name in task["approval_required_operations"] if name not in approved_operations
     ]
     required_monitoring_mode = task.get("required_monitoring_mode")
-    monitoring_mode = str(report.get("monitoring_mode", "unspecified")).strip().lower()
+    monitoring_mode = str(
+        report.get("monitoring_mode")
+        or submission_context.get("monitoring_mode")
+        or "unspecified"
+    ).strip().lower()
     wait_calls = operations.count("hope_wait_holistic_study")
     monitoring_contract_passed = required_monitoring_mode is None or (
         monitoring_mode == required_monitoring_mode and wait_calls >= 1
@@ -580,6 +606,8 @@ def evaluate_agent_study(
     failed_claims = [item for item in claim_checks if not item["passed"]]
     if (
         failed_claims
+        or not report
+        or not checks["invalid_call_budget"]
         or not checks["evidence_paths_valid"]
         or not checks["minimum_evidence_met"]
         or not monitoring_contract_passed
@@ -588,7 +616,9 @@ def evaluate_agent_study(
             {
                 "category": FAILURE_TASK_VERIFICATION,
                 "details": {
+                    "agent_report_present": bool(report),
                     "failed_claims": failed_claims,
+                    "invalid_tool_calls": len(invalid_events),
                     "evidence_checks": evidence_checks,
                     "required_monitoring_mode": required_monitoring_mode,
                     "reported_monitoring_mode": monitoring_mode,
@@ -599,6 +629,8 @@ def evaluate_agent_study(
     started = min((float(event.get("started_at_unix", 0.0)) for event in events), default=0.0)
     completed = max((float(event.get("completed_at_unix", 0.0)) for event in events), default=0.0)
     evaluation_path = study_root / "agent_evaluation_report.yml"
+    resolved_run_manifest_path = Path(str(run_manifest_value)) if run_manifest_value else None
+    resolved_audit_path = Path(str(audit_path_value)) if audit_path_value else None
     evaluation = {
         "schema_version": AGENT_EVALUATION_SCHEMA_VERSION,
         "study_id": study_id,
@@ -607,6 +639,7 @@ def evaluate_agent_study(
         "evaluated_at_unix": time.time(),
         "model_passed": model_passed,
         "agent_passed": agent_passed,
+        "agent_report_present": bool(report),
         "checks": checks,
         "metrics": {
             "total_tool_calls": len(events),
@@ -633,9 +666,17 @@ def evaluate_agent_study(
         "missing_required_operations": required_missing,
         "trace_errors": trace_errors,
         "failures": failures,
+        "authoritative_artifacts": {
+            "study_status": str(study.get("status", "")).upper(),
+            "request_sha256": str(study.get("request_sha256", "")),
+            "run_status": str(run_manifest.get("status", "")).upper(),
+            "audit_accepted": audit.get("accepted") if audit else None,
+            "run_manifest_sha256": _sha256_file(resolved_run_manifest_path),
+            "audit_report_sha256": _sha256_file(resolved_audit_path),
+        },
         "artifact_paths": {
             "trace": str(trace_path),
-            "agent_report": str(report_path),
+            "agent_report": str(report_path) if report else None,
             "evaluation_report": str(evaluation_path),
         },
     }
