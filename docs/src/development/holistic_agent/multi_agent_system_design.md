@@ -22,7 +22,7 @@ The design preserves several important properties:
   architecture is better established.
 
 Cross-model assumptions and incremental design decisions are maintained in the
-[Holistic Linkage Assumption and Decision Log](holistic_assumption_log.md). The
+[Holistic Linkage Assumption and Decision Log](../../holistic_assumption_log.md). The
 log is the human governance record; versioned contracts and run manifests remain
 the machine-readable source of truth for agents.
 

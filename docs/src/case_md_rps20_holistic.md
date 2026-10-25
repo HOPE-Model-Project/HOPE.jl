@@ -10,7 +10,7 @@ The paired ModelCases are:
 
 This is the compact 168-hour integration benchmark. For the canonical 8760-hour
 inputs and their detailed validation record, see the
-[Maryland Full-Year 20% RPS Physical Benchmark](case_md_rps20_full8760_holistic.md).
+[internal Maryland full-year validation case](development/holistic_agent/md_rps20_validation_case.md).
 
 The physical network is a documented OpenStreetMap-derived reconstruction,
 not an official PJM model. GTEP candidate resources carry predefined physical

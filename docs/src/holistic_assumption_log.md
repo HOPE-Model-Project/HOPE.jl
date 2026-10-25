@@ -146,9 +146,14 @@ At minimum, a new entry records:
   rejection are implemented.
 - **Transmission:** `Corridor_ID` is preferred, followed by explicit PCM
   endpoints. Directional capacity conservation is audited.
-- **Validation boundary:** the annual Maryland result selected neither retirement
-  nor transmission expansion. The restricted linkage benchmark exercises those
-  paths; the annual case should not claim that it does.
+- **Validation boundary:** the canonical annual Maryland result selected neither
+  retirement nor transmission expansion. The compact restricted benchmark and
+  the separate high-resolution annual-GTEP/July-PCM transfer-coverage benchmark
+  exercise those paths; the canonical result should not claim that it does.
+- **High-resolution coverage evidence:** the derived benchmark retires the 2 MW
+  `G1149` asset and adds 1,000 MW in each direction to `OSM_L62255589`. PCM uses
+  436.409 MW of flow above the derived pre-upgrade rating. The forcing values are
+  explicitly test-only and are not Maryland planning assumptions.
 
 ### HLA-011 — reserve translation
 
@@ -213,10 +218,11 @@ At minimum, a new entry records:
 | Production-grade unitization | HLA-005, HLA-008 | Assign unit sizes and commitment parameters by technology |
 | Exact annual or rolling PCM | HLA-012, HLA-019 | Add state carry and annual-policy accounting or provision a high-memory worker |
 | Replace inferred physical data | HLA-016, HLA-017 | Incorporate authoritative ratings/topology when licensing and access permit |
-| Broaden transfer coverage | HLA-009, HLA-010 | Add realistic annual scenarios that exercise retirement and line expansion without distorting the benchmark |
+| Production-economics retirement and transmission scenarios | HLA-009, HLA-010 | Replace test-only forcing assumptions with reviewed planning economics when suitable data become available |
 
 ## Change history
 
 | Date | Change |
 | --- | --- |
+| 2026-10-24 | Added the separate high-resolution transfer-coverage benchmark, including pinned retirement, transmission, physical-flow, and source-immutability evidence. |
 | 2026-10-20 | Created the consolidated log from the implemented handoff contract, Maryland case manifests/provenance, solved annual-GTEP/July-PCM validation, and current design discussion. |

@@ -1,0 +1,82 @@
+schema_version: 1
+benchmark_id: md-rps20-transfer-coverage
+description: >-
+  Reference values for the internal Maryland transfer-coverage benchmark. It
+  solves the 8760-hour four-zone GTEP case and a 48-hour warm-up plus 744-hour
+  July PCM case on the 656-bus network. Test-only assumptions deliberately
+  exercise retirement and transmission realization and are not planning
+  recommendations.
+expected_metrics:
+  gtep_source_sha256:
+    value: 1c6328e2bd05f95d813582f8aaa51297dd8372fd8774a838a06744ae98c81734
+  pcm_source_sha256:
+    value: 308c5b1bbcde18b97cd32f3157e15e2694609115565389697bbdb0a7a0016094
+  gtep_hours:
+    value: 8760
+    atol: 0
+  pcm_solve_hours:
+    value: 792
+    atol: 0
+  pcm_warmup_hours:
+    value: 48
+    atol: 0
+  pcm_evaluation_hours:
+    value: 744
+    atol: 0
+  physical_nodes:
+    value: 656
+    atol: 0
+  physical_branches:
+    value: 838
+    atol: 0
+  new_generation_mw:
+    value: 26396.311324853967
+    atol: 0.001
+  new_storage_power_mw:
+    value: 6011.077705139884
+    atol: 0.001
+  new_storage_energy_mwh:
+    value: 24044.310820559534
+    atol: 0.001
+  retired_generation_mw:
+    value: 2.0
+    atol: 0.001
+  line_forward_added_mw:
+    value: 1000.0
+    atol: 0.001
+  line_reverse_added_mw:
+    value: 1000.0
+    atol: 0.001
+  pcm_upgraded_line_max_abs_flow_mw:
+    value: 936.4094332111792
+    atol: 0.001
+  pcm_upgraded_line_flow_above_source_mw:
+    value: 436.40943321117925
+    atol: 0.001
+  gtep_objective_usd:
+    value: 4112895850.6212974
+    rtol: 1.0e-6
+  pcm_objective_usd:
+    value: 157893971.62337473
+    rtol: 1.0e-6
+  evaluation_variable_generation_cost_usd:
+    value: 150944949.29946598
+    rtol: 1.0e-6
+  evaluation_new_generation_dispatch_mwh:
+    value: 5942530.401581277
+    rtol: 1.0e-6
+  evaluation_storage_charge_mwh:
+    value: 501906.2546955767
+    rtol: 1.0e-6
+  evaluation_storage_discharge_mwh:
+    value: 426341.4201181187
+    rtol: 1.0e-6
+  evaluation_emissions_tons:
+    value: 1514642.5332274672
+    rtol: 1.0e-6
+  evaluation_load_shedding_mwh:
+    value: 0.0
+    atol: 1.0e-6
+  pcm_rps_slack_mwh:
+    value: 0.0
+    atol: 1.0e-6
