@@ -177,7 +177,8 @@ integration tests.
 The literature-informed next step is evaluation, not further agent splitting.
 HOPE preserves the first versioned evaluation task,
 `md-rps20-annual-gtep-july-pcm-v1`, and provides
-`md-rps20-annual-gtep-july-pcm-v2` for the current baseline. V2 requires the
+`md-rps20-annual-gtep-july-pcm-v2` for reproducing the first traced-wait
+baseline. V2 requires the
 traced `hope_wait_holistic_study` operation and a `hope_mcp_only` monitoring
 attestation, together with server-observed traces, scoped
 evidence submission, and an independent artifact-based scorer. These pieces
@@ -203,6 +204,12 @@ The HOPE trace observes only calls crossing the HOPE MCP boundary. It cannot
 independently detect a local watcher, shell command, or another connector. The
 monitoring attestation makes the intended boundary explicit; independent proof
 of exclusive HOPE-tool use requires host-level telemetry.
+
+The recommended v3 task removes solver-runtime bias from the efficiency gate.
+It keeps passive wait calls in the trace and metrics but applies its 10-call
+budget only to active tool decisions. Evaluations report total, active, passive,
+and budgeted calls separately. V1 and v2 remain unchanged so their completed
+trials can still be reproduced exactly.
 
 Only after this comparison should HOPE decide whether GTEP, physical realization,
 and PCM benefit from separate persistent agents. Meanwhile, physical-realization

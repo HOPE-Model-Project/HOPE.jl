@@ -14,7 +14,7 @@ import yaml
 
 AGENT_TRACE_SCHEMA_VERSION = 1
 AGENT_REPORT_SCHEMA_VERSION = 2
-AGENT_EVALUATION_SCHEMA_VERSION = 2
+AGENT_EVALUATION_SCHEMA_VERSION = 3
 
 FAILURE_SYSTEM_DESIGN = "system_design"
 FAILURE_INTER_AGENT_MISALIGNMENT = "inter_agent_misalignment"
@@ -61,6 +61,27 @@ EVALUATION_TASKS: dict[str, dict[str, Any]] = {
             "hope_submit_holistic_agent_report",
         ],
         "maximum_tool_calls": 30,
+        "maximum_invalid_calls": 0,
+        "minimum_evidence_paths": 3,
+        "required_claims": list(REQUIRED_CLAIMS),
+        "approval_required_operations": [],
+        "required_monitoring_mode": "hope_mcp_only",
+    },
+    "md-rps20-annual-gtep-july-pcm-v3": {
+        "schema_version": 3,
+        "description": (
+            "Annual Maryland GTEP to July PCM workflow with runtime-independent "
+            "agent call budgeting."
+        ),
+        "required_operations": [
+            "hope_prepare_holistic_validation_study",
+            "hope_launch_holistic_study",
+            "hope_wait_holistic_study",
+            "hope_audit_holistic_study",
+            "hope_submit_holistic_agent_report",
+        ],
+        "maximum_active_tool_calls": 10,
+        "budget_exempt_operations": ["hope_wait_holistic_study"],
         "maximum_invalid_calls": 0,
         "minimum_evidence_paths": 3,
         "required_claims": list(REQUIRED_CLAIMS),
@@ -407,6 +428,18 @@ def evaluate_agent_study(
             "error_type": "agent_report_not_found",
             "message": "Call hope_submit_holistic_agent_report before evaluation.",
         }
+    report_task_id = str(report.get("task_id", ""))
+    if task_id is not None and report_task_id != selected_task_id:
+        return {
+            "ok": False,
+            "error_type": "evaluation_task_mismatch",
+            "message": (
+                f"The submitted report uses task_id '{report_task_id}', not "
+                f"'{selected_task_id}'. Submit a new report for the requested task."
+            ),
+            "report_task_id": report_task_id,
+            "requested_task_id": selected_task_id,
+        }
     study_id = str(study.get("study_id", ""))
     trace_valid, trace_errors = _verify_trace(trace, study_id)
     events = trace.get("events", []) if isinstance(trace.get("events"), list) else []
@@ -454,6 +487,20 @@ def evaluate_agent_study(
         for event in events
         if isinstance(event, dict) and event.get("result", {}).get("ok") is False
     ]
+    passive_operations = {"hope_wait_holistic_study"}
+    passive_calls = sum(operation in passive_operations for operation in operations)
+    active_calls = len(events) - passive_calls
+    budget_exempt_operations = set(task.get("budget_exempt_operations", []))
+    if "maximum_active_tool_calls" in task:
+        budget_mode = "active_calls"
+        budgeted_calls = sum(
+            operation not in budget_exempt_operations for operation in operations
+        )
+        tool_call_limit = int(task["maximum_active_tool_calls"])
+    else:
+        budget_mode = "total_calls"
+        budgeted_calls = len(events)
+        tool_call_limit = int(task["maximum_tool_calls"])
     reusable_operations = {
         "hope_prepare_holistic_validation_study",
         "hope_launch_holistic_study",
@@ -496,7 +543,7 @@ def evaluate_agent_study(
     checks = {
         "trace_integrity": trace_valid,
         "required_operations_present": not required_missing,
-        "tool_call_budget": len(events) <= int(task["maximum_tool_calls"]),
+        "tool_call_budget": budgeted_calls <= tool_call_limit,
         "invalid_call_budget": len(invalid_events) <= int(task["maximum_invalid_calls"]),
         "claims_match_authoritative_artifacts": all(item["passed"] for item in claim_checks),
         "evidence_paths_valid": all(item["passed"] for item in evidence_checks),
@@ -512,7 +559,11 @@ def evaluate_agent_study(
         failures.append(
             {
                 "category": FAILURE_SYSTEM_DESIGN,
-                "details": trace_errors or ["tool call budget exceeded"],
+                "details": trace_errors
+                or [
+                    f"{budget_mode} budget exceeded: "
+                    f"{budgeted_calls} > {tool_call_limit}"
+                ],
             }
         )
     if required_missing or not architecture_passed or missing_approvals:
@@ -559,6 +610,11 @@ def evaluate_agent_study(
         "checks": checks,
         "metrics": {
             "total_tool_calls": len(events),
+            "active_tool_calls": active_calls,
+            "passive_tool_calls": passive_calls,
+            "budgeted_tool_calls": budgeted_calls,
+            "tool_call_budget_limit": tool_call_limit,
+            "tool_call_budget_mode": budget_mode,
             "invalid_tool_calls": len(invalid_events),
             "duplicate_role_calls": duplicate_calls,
             "status_poll_calls": operations.count("hope_holistic_study_status"),

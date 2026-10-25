@@ -689,7 +689,7 @@ The RTS24 DART work establishes much of this baseline.
 
 The initial implemented task,
 `md-rps20-annual-gtep-july-pcm-v1`, is preserved as a reproducible baseline.
-The current `md-rps20-annual-gtep-july-pcm-v2` task adds a bounded,
+The `md-rps20-annual-gtep-july-pcm-v2` task adds a bounded,
 server-side `hope_wait_holistic_study` operation and requires a
 `hope_mcp_only` monitoring attestation. MCP lifecycle calls are observed at the
 server boundary and written to a hash-chained `agent_trace.yml`; the agent then
@@ -707,6 +707,15 @@ server but cannot prove that an agent did not also use a shell, local script, or
 another connector. The v2 monitoring field is therefore a declared contract.
 Experiments requiring independent confirmation of exclusive tool use need
 host-level telemetry in addition to the HOPE trace.
+
+The matched v2 trials also exposed a measurement confound: a longer solver run
+requires more bounded wait calls and can exhaust a total-call budget even when
+the agent makes no extra decisions. The recommended
+`md-rps20-annual-gtep-july-pcm-v3` contract therefore budgets active calls only.
+`hope_wait_holistic_study` remains traced and reported as a passive call, but it
+is exempt from the 10-active-call limit. Total calls, passive waits, and active
+calls remain separate metrics, preserving efficiency evidence without turning
+solver duration into an agent-compliance failure.
 
 ### Phase 6 - multi-agent experiments
 

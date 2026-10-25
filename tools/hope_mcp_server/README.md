@@ -93,8 +93,11 @@ task-verification failures. Task
 `md-rps20-annual-gtep-july-pcm-v1` preserves the first benchmark contract.
 Task `md-rps20-annual-gtep-july-pcm-v2` requires the traced
 `hope_wait_holistic_study` long-poll operation and a `hope_mcp_only` monitoring
-attestation. Its thresholds are intentionally fixed so future benchmark changes
-require a new task version.
+attestation. Task `md-rps20-annual-gtep-july-pcm-v3` is the current recommended
+contract. It preserves those requirements but counts only active decision calls
+against its 10-call efficiency budget; passive long-poll calls remain measured
+without allowing solver runtime to determine whether the agent passes. Earlier
+task thresholds remain fixed for reproducibility.
 
 The monitoring attestation declares that the agent used only HOPE MCP lifecycle
 tools while waiting. The server can verify its own traced calls, but it cannot

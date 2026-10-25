@@ -146,6 +146,100 @@ class AgentEvaluationTests(unittest.TestCase):
         self.assertTrue(evaluated["checks"]["monitoring_contract_compliance"])
         self.assertEqual(evaluated["metrics"]["wait_calls"], 1)
         self.assertEqual(evaluated["metrics"]["monitoring_mode"], "hope_mcp_only")
+        self.assertEqual(evaluated["metrics"]["tool_call_budget_mode"], "total_calls")
+        self.assertEqual(evaluated["metrics"]["budgeted_tool_calls"], 5)
+
+    def test_v3_exempts_passive_waits_from_active_call_budget(self) -> None:
+        self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
+        self._event("hope_launch_holistic_study", "executor", "agent-A")
+        for _ in range(40):
+            self._event("hope_wait_holistic_study", "observer", "agent-A")
+        self._event("hope_audit_holistic_study", "auditor", "agent-A")
+        result = submit_agent_report(
+            self.study_root,
+            self.study,
+            task_id="md-rps20-annual-gtep-july-pcm-v3",
+            architecture="single_agent",
+            agent_label="agent-A",
+            claims={key: True for key in (
+                "study_accepted",
+                "run_published",
+                "audit_accepted",
+                "all_acceptance_checks_passed",
+            )},
+            evidence_paths=[str(path) for path in self.evidence],
+            monitoring_mode="hope_mcp_only",
+        )
+        self.assertTrue(result["ok"], result)
+        self._event("hope_submit_holistic_agent_report", "reporter", "agent-A")
+        evaluated = evaluate_agent_study(self.study_root, self.study)
+        self.assertTrue(evaluated["agent_passed"], evaluated)
+        metrics = evaluated["metrics"]
+        self.assertEqual(metrics["total_tool_calls"], 44)
+        self.assertEqual(metrics["passive_tool_calls"], 40)
+        self.assertEqual(metrics["active_tool_calls"], 4)
+        self.assertEqual(metrics["budgeted_tool_calls"], 4)
+        self.assertEqual(metrics["tool_call_budget_limit"], 10)
+        self.assertEqual(metrics["tool_call_budget_mode"], "active_calls")
+
+    def test_v3_still_rejects_excess_active_calls(self) -> None:
+        self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
+        self._event("hope_launch_holistic_study", "executor", "agent-A")
+        self._event("hope_wait_holistic_study", "observer", "agent-A")
+        for _ in range(7):
+            self._event("hope_holistic_study_status", "observer", "agent-A")
+        self._event("hope_audit_holistic_study", "auditor", "agent-A")
+        result = submit_agent_report(
+            self.study_root,
+            self.study,
+            task_id="md-rps20-annual-gtep-july-pcm-v3",
+            architecture="single_agent",
+            agent_label="agent-A",
+            claims={key: True for key in (
+                "study_accepted",
+                "run_published",
+                "audit_accepted",
+                "all_acceptance_checks_passed",
+            )},
+            evidence_paths=[str(path) for path in self.evidence],
+            monitoring_mode="hope_mcp_only",
+        )
+        self.assertTrue(result["ok"], result)
+        self._event("hope_submit_holistic_agent_report", "reporter", "agent-A")
+        evaluated = evaluate_agent_study(self.study_root, self.study)
+        self.assertFalse(evaluated["agent_passed"])
+        self.assertFalse(evaluated["checks"]["tool_call_budget"])
+        self.assertEqual(evaluated["metrics"]["budgeted_tool_calls"], 11)
+        self.assertIn("11 > 10", evaluated["failures"][0]["details"][0])
+
+    def test_explicit_evaluation_task_must_match_submitted_report(self) -> None:
+        self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
+        self._event("hope_launch_holistic_study", "executor", "agent-A")
+        self._event("hope_wait_holistic_study", "observer", "agent-A")
+        self._event("hope_audit_holistic_study", "auditor", "agent-A")
+        result = submit_agent_report(
+            self.study_root,
+            self.study,
+            task_id="md-rps20-annual-gtep-july-pcm-v2",
+            architecture="single_agent",
+            agent_label="agent-A",
+            claims={key: True for key in (
+                "study_accepted",
+                "run_published",
+                "audit_accepted",
+                "all_acceptance_checks_passed",
+            )},
+            evidence_paths=[str(path) for path in self.evidence],
+            monitoring_mode="hope_mcp_only",
+        )
+        self.assertTrue(result["ok"], result)
+        mismatch = evaluate_agent_study(
+            self.study_root,
+            self.study,
+            task_id="md-rps20-annual-gtep-july-pcm-v3",
+        )
+        self.assertFalse(mismatch["ok"])
+        self.assertEqual(mismatch["error_type"], "evaluation_task_mismatch")
 
     def test_v2_rejects_external_monitoring_attestation(self) -> None:
         self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
