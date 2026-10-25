@@ -171,9 +171,28 @@ The repository currently demonstrates the GTEP-to-PCM portion of this mechanism,
 including stable request and study IDs, coordinator/executor/auditor receipts,
 asynchronous status, reconnect-safe polling, immutable source cases, handoff
 validation, operational templates, and restricted and high-resolution
-integration tests. The next architectural work should evaluate this protocol
-with independent LLM tasks and deepen physical realization and operational
-feedback between GTEP and PCM before adding DART to the connected workflow.
+integration tests.
+
+The literature-informed next step is evaluation, not further agent splitting.
+HOPE should use the completed annual-GTEP/July-PCM benchmark to compare:
+
+1. the deterministic Julia workflow;
+2. one LLM agent using the supported MCP tools; and
+3. the current coordinator/executor/auditor protocol.
+
+All three conditions should use the same cases, acceptance contract, tool surface,
+and approximate computation budget. An independent evaluator should recompute
+acceptance from artifacts and separately score task compliance, evidence-backed
+reporting, invalid or duplicate calls, reconnect behavior, unsafe conclusions,
+approval compliance, latency, and cost. Agent traces should be classified for
+system-design, inter-agent, and verification failures.
+
+Only after this comparison should HOPE decide whether GTEP, physical realization,
+and PCM benefit from separate persistent agents. Meanwhile, physical-realization
+and operational-feedback development can continue as deterministic model work.
+DART should be added to the connected workflow after the GTEP-to-PCM evaluation
+protocol is stable, so added model scope is not confused with added agent
+complexity.
 
 See [Multi-Model and Multi-Agent System Design](multi_agent_system_design.md) for
 the broader design rationale and development roadmap.

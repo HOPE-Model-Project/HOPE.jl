@@ -415,6 +415,45 @@ This is an orchestration and test boundary around the existing mathematical
 models. Standalone `run_hope` and direct Julia GTEP-to-PCM workflows remain
 available and unchanged.
 
+## Literature-informed design decisions
+
+Recent work on power-system agents, scientific multi-agent systems, and agent
+evaluation supports HOPE's deterministic-first boundary, but it also cautions
+against treating additional agents as an automatic improvement. The following
+decisions therefore refine the development plan without finalizing the agent
+topology.
+
+| Evidence from the literature | Implication for HOPE | Design decision |
+| --- | --- | --- |
+| Power-system agent frameworks obtain numerical results through structured calls to engineering solvers rather than LLM arithmetic. | The language model should interpret and coordinate, while HOPE remains the numerical authority. | Keep all solves, transformations, and acceptance decisions in deterministic Julia or validated service code. |
+| Multi-agent performance depends strongly on task structure; tool-heavy and sequential tasks can incur a coordination penalty. | Separate model agents may add latency, context loss, and failure modes without improving a mostly sequential GTEP-to-PCM transaction. | Maintain one agent with tools as the reference baseline and split roles only after a controlled evaluation demonstrates value. |
+| Centralized verification reduces error propagation, while common failures include role disobedience, repeated steps, context loss, ignored messages, premature termination, and incomplete verification. | Conversational agreement among agents is not sufficient evidence of correctness. | Retain an independent audit gate backed by manifests and deterministic checks, and record failures using a stable taxonomy. |
+| Agent benchmarks distinguish workflow quality from final numerical success through evidence, risk, tool-use, and recovery metrics. | A published optimal solution does not prove that the agent selected the right case, respected authority, or reported the evidence correctly. | Score agent behavior separately from model correctness and require both to pass. |
+| Automatically generated MCP tools become more reliable when their inputs, outputs, examples, and tests are derived from executable workflows. | HOPE model and linkage capabilities should be exposed as narrow, tested tools rather than repository-wide code access. | Maintain curated MCP contracts and regression tests for each supported workflow; do not generate cross-model assumptions from prose alone. |
+| Scientific-agent systems benefit from critique, retrieval, and iterative hypothesis refinement, but retain human direction and experimental validation. | Debate and evolutionary search may help scenario design, but should not control routine model execution. | Reserve proposal, critic, and hypothesis agents for later research-question and scenario exploration, with human approval before execution. |
+
+These decisions draw especially on the feedback-driven power-system simulation
+framework ([arXiv:2411.16707](https://arxiv.org/abs/2411.16707)), GridMind
+([arXiv:2509.02494](https://arxiv.org/abs/2509.02494)), X-GridAgent
+([arXiv:2512.20789](https://arxiv.org/abs/2512.20789)), the MAST failure taxonomy
+([arXiv:2503.13657](https://arxiv.org/abs/2503.13657)), agent-system scaling
+experiments ([arXiv:2512.08296](https://arxiv.org/abs/2512.08296)), and the
+PowerAgentBench steady-state and dynamic protocols
+([arXiv:2606.18789](https://arxiv.org/abs/2606.18789) and
+[arXiv:2606.20401](https://arxiv.org/abs/2606.20401)). The scientific-workflow
+direction is also informed by Co-Scientist
+([arXiv:2502.18864](https://arxiv.org/abs/2502.18864)), the Virtual Lab
+([doi:10.1038/s41586-025-09442-9](https://doi.org/10.1038/s41586-025-09442-9)),
+Robin ([doi:10.1038/s41586-026-10652-y](https://doi.org/10.1038/s41586-026-10652-y)),
+Paper2Agent ([doi:10.1038/s41586-026-11044-y](https://doi.org/10.1038/s41586-026-11044-y)),
+and AgenticSciML
+([doi:10.1038/s44387-026-00102-5](https://doi.org/10.1038/s44387-026-00102-5)).
+
+The cited results are design evidence, not a claim that their reported accuracy
+transfers directly to HOPE. Several are preprints, use different domains, or
+evaluate substantially smaller workflows. HOPE must test the conclusions on its
+own power-system tasks.
+
 ## Provisional agent roles
 
 The following roles are useful for capability planning, but they are deliberately
@@ -436,6 +475,11 @@ not a finalized deployment topology:
 These may eventually be separate agents, tools used by one agent, or services
 behind a coordinator. That implementation choice should follow workload,
 security, reliability, and evaluation evidence rather than being fixed now.
+
+A logical role should become a separate agent only when the role has at least one
+clear systems benefit, such as parallelizable work, a distinct context or tool
+set, an independent verification duty, or a long-running handoff that must
+survive process separation. A different model name alone is not sufficient.
 
 ## Supported workflow patterns
 
@@ -513,6 +557,45 @@ This distinction prevents an agent or adapter from interpreting a GTEP setting
 as a PCM result, while still requiring the two cases to declare compatible
 assumptions where scientific consistency depends on them.
 
+### Agent-behavior evaluation
+
+The deterministic coverage report evaluates the models and their handoff. A
+separate agent evaluation must assess how the study was conducted. At minimum it
+should score:
+
+- **task and role compliance:** whether the agent followed the requested scope,
+  used the correct model role, and respected approval requirements;
+- **evidence integrity:** whether every reported numerical claim points to a
+  valid artifact and whether the agent avoided unsupported safe or successful
+  conclusions;
+- **workflow quality:** tool calls, duplicate work, invalid calls, retries,
+  validation-budget use, elapsed time, and cost;
+- **state safety:** request-ID reuse, source immutability, reconnect recovery,
+  termination recognition, and absence of cross-scenario contamination;
+- **scientific judgment:** compatibility checks, material assumption detection,
+  uncertainty disclosure, and the quality of proposed follow-up studies; and
+- **human authority:** whether the agent paused for approval before changing the
+  scientific meaning of a study.
+
+The benchmark should include risk-sensitive measures analogous to
+evidence-backed recall, false-safe penalties, severity regret, residual
+violations, and action cost. It should also label trace-level failures using the
+three broad MAST families: system-design problems, inter-agent misalignment, and
+task-verification failures.
+
+Agent architectures must be compared under matched conditions: the same source
+cases, task statement, tool surface, validation budget, acceptance contract,
+base-model family where possible, and approximate compute budget. Each stochastic
+configuration should be repeated. Required baselines are:
+
+1. deterministic script or direct Julia workflow;
+2. one LLM agent using the supported HOPE tools;
+3. the centralized coordinator/executor/auditor protocol; and
+4. any proposed model-specialist or decentralized architecture.
+
+The hidden or independent evaluator must recompute acceptance from run artifacts;
+it must not grade the agent only from its final prose response.
+
 ## Decisions already reflected in the current DART work
 
 - DART uses the common `Settings/HOPE_model_settings.yml` workflow with
@@ -533,6 +616,21 @@ See [DART Input Data](@ref dart-inputs), [RTS24 DART Case](@ref), and
 interfaces.
 
 ## Phased implementation roadmap
+
+### Current position - October 2026
+
+- Phase 0 is substantially implemented for GTEP, PCM, and standalone DART cases.
+- Phase 1 is partially implemented through stable IDs, manifests, fingerprints,
+  handoff contracts, coverage reports, and simulation-state artifacts.
+- Phase 2 has a case-defined Maryland realization contract and an auditable
+  high-resolution benchmark, but not yet a general zonal-to-nodal siting method.
+- Phase 3 has a tested GTEP-to-PCM path. GTEP-to-DART and optional
+  PCM-state-to-DART remain future work.
+- Phase 4 has a minimal durable MCP study lifecycle with preparation, execution,
+  status recovery, and independent audit; it is not yet a general queue or
+  resumable workflow engine.
+- The immediate next milestone is Phase 5: an agent-evaluation benchmark using
+  the completed annual-GTEP/July-PCM transaction.
 
 ### Phase 0 - standalone consistency
 
@@ -574,15 +672,43 @@ The RTS24 DART work establishes much of this baseline.
 
 - Give agents least-privilege access to deterministic tools.
 - Add idempotency, retries, timeouts, approvals, and audit views.
-- Evaluate failure recovery, scenario isolation, numerical reproducibility, and
-  incorrect-assumption detection.
+- Define a versioned agent-trace schema covering requests, tool calls, artifacts,
+  messages, approvals, errors, retries, and terminal decisions.
+- Build a task suite for case selection, readiness diagnosis, execution,
+  reconnect recovery, evidence interpretation, and assumption-conflict detection.
+- Add an independent evaluator that recomputes model acceptance and scores
+  evidence integrity, false-safe claims, workflow efficiency, and authority
+  compliance.
+- Classify failures using the MAST categories and record whether the cause is the
+  base model, prompt, tool contract, workflow design, or external environment.
+- Establish deterministic and one-agent-with-tools baselines before evaluating
+  multi-agent variants.
 
 ### Phase 6 - multi-agent experiments
 
-- Compare one coordinator with tools against specialized cooperating agents.
-- Introduce agents only where they improve study quality, interpretability, or
-  workload.
+- Compare one coordinator with tools against centralized, decentralized,
+  independent, and hybrid role-separated variants under matched budgets.
+- Repeat stochastic trials and measure accuracy, evidence quality, recovery,
+  latency, token/tool cost, and coordination overhead.
+- Require centralized deterministic audit even when planning or analysis work is
+  decentralized.
+- Introduce separate agents only where they improve study quality,
+  interpretability, failure isolation, or parallel workload enough to justify
+  the coordination cost.
 - Preserve non-agent workflows as the reproducible reference implementation.
+
+### Phase 7 - scientific study assistance
+
+- Add provenance-aware retrieval over HOPE documentation, case manifests,
+  assumptions, model formulations, and selected external literature.
+- Evaluate proposal, critic, and comparison roles for research-question
+  decomposition, scenario design, and follow-up-study generation.
+- Keep proposed assumptions separate from accepted case inputs and require human
+  approval before material changes are executed.
+- Test whether iterative critique or tournament-style selection improves study
+  design relative to a single-agent proposal under the same compute budget.
+- Treat validated model outputs and human-reviewed evidence as the feedback loop;
+  never allow agent consensus to substitute for physical or numerical checks.
 
 ## Acceptance criteria
 
@@ -595,7 +721,10 @@ The architecture is successful when:
 - units, time resolution, IDs, and network references are validated before solve;
 - a user can trace any output to exact code, settings, inputs, transformations,
   and upstream results; and
-- agent-generated analyses can be reproduced through deterministic commands.
+- agent-generated analyses can be reproduced through deterministic commands;
+- the agent's reported claims are supported by the cited run artifacts; and
+- a multi-agent deployment demonstrates a measured benefit over the one-agent
+  baseline for its intended task or remains an optional experiment.
 
 ## Open design questions
 
@@ -609,6 +738,10 @@ and representative studies are more complete:
 - Which operational feedback metrics should generate new GTEP scenarios?
 - What belongs in one HOPE service versus separate model-specific services?
 - When do specialized agents outperform one agent using well-designed tools?
+- Which task characteristics justify parallel, centralized, or hybrid
+  coordination, and what coordination budget is acceptable?
+- Which agent trace fields and failure labels should be stable public contracts?
+- Which risk-sensitive scores should block publication rather than merely warn?
 - Which approvals are required before agents modify cases, launch expensive runs,
   or publish results?
 
