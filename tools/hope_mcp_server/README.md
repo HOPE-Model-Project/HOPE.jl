@@ -54,11 +54,52 @@ Claude/local full-access server:
 - `hope_compare_cases`
 - `hope_run_holistic`
 - `hope_holistic_status`
+- `hope_prepare_holistic_study`
+- `hope_prepare_holistic_validation_study`
+- `hope_launch_holistic_study`
+- `hope_holistic_study_status`
+- `hope_wait_holistic_study`
+- `hope_audit_holistic_study`
+- `hope_submit_holistic_agent_report`
+- `hope_evaluate_holistic_agent_study`
 - `hope_run_erec`
 - `hope_rep_day_audit`
 - `hope_aggregation_audit`
 - `hope_open_dashboard`
 - `hope_close_dashboard`
+
+## Agent evaluation
+
+The deterministic holistic audit and the agent evaluation answer different
+questions. `hope_audit_holistic_study` verifies the model run and its transfer
+artifacts. The agent evaluation verifies whether an LLM used the workflow
+correctly and reported the result faithfully.
+
+Lifecycle calls made through the MCP server are recorded in a hash-chained
+`agent_trace.yml` under the durable study directory. After the model audit, the
+agent calls `hope_submit_holistic_agent_report` with four claims and at least
+three evidence files scoped to the study or run workspace:
+
+- `study_accepted`
+- `run_published`
+- `audit_accepted`
+- `all_acceptance_checks_passed`
+
+Then an independent evaluator calls `hope_evaluate_holistic_agent_study`. Its
+report keeps `model_passed` separate from `agent_passed`, measures tool use and
+retries, verifies evidence and claims against authoritative artifacts, and
+classifies failures as system-design, inter-agent-misalignment, or
+task-verification failures. Task
+`md-rps20-annual-gtep-july-pcm-v1` preserves the first benchmark contract.
+Task `md-rps20-annual-gtep-july-pcm-v2` requires the traced
+`hope_wait_holistic_study` long-poll operation and a `hope_mcp_only` monitoring
+attestation. Its thresholds are intentionally fixed so future benchmark changes
+require a new task version.
+
+The monitoring attestation declares that the agent used only HOPE MCP lifecycle
+tools while waiting. The server can verify its own traced calls, but it cannot
+independently observe local scripts, shell commands, or other client tools.
+Independent verification of that stronger claim requires host-level telemetry.
 
 ChatGPT remote read-only server:
 
@@ -238,6 +279,7 @@ The full local server also exposes a four-step durable protocol:
   annual-GTEP/monthly-PCM Maryland profile in an isolated study workspace;
 - `hope_launch_holistic_study(study_id, ...)` for the workflow executor;
 - `hope_holistic_study_status(study_id)` for reconnect-safe monitoring; and
+- `hope_wait_holistic_study(study_id, ...)` for bounded server-side long-polling;
 - `hope_audit_holistic_study(study_id, ...)` for independent acceptance.
 
 Preparation does not launch Julia. It pins the source fingerprints and request
@@ -247,6 +289,11 @@ reads the durable run evidence and writes `audit_report.yml`, then records an
 `ACCEPTED` or `REJECTED` receipt. Set `HOPE_AGENT_STUDIES_ROOT` to relocate
 study manifests. These are logical roles and can be called by separate agents
 or sequentially by one MCP client.
+
+Executor receipts distinguish lifecycle progress from outcome: `run_status`
+reports `running`, `done`, `failed`, or `cancelled`; `run_ok` is `null` while a
+run is active, `true` after successful completion, and `false` after terminal
+failure or cancellation.
 
 ## Local run
 

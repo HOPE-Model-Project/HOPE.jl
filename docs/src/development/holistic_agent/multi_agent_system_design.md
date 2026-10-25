@@ -629,8 +629,11 @@ interfaces.
 - Phase 4 has a minimal durable MCP study lifecycle with preparation, execution,
   status recovery, and independent audit; it is not yet a general queue or
   resumable workflow engine.
-- The immediate next milestone is Phase 5: an agent-evaluation benchmark using
-  the completed annual-GTEP/July-PCM transaction.
+- Phase 5 now has its first implementation slice: server-observed hash-chained
+  traces, scoped evidence submission, versioned task rules, and an independent
+  evaluator that reports model and agent success separately. The immediate next
+  milestone is to execute repeated single-agent and role-separated trials on the
+  completed annual-GTEP/July-PCM transaction.
 
 ### Phase 0 - standalone consistency
 
@@ -683,6 +686,27 @@ The RTS24 DART work establishes much of this baseline.
   base model, prompt, tool contract, workflow design, or external environment.
 - Establish deterministic and one-agent-with-tools baselines before evaluating
   multi-agent variants.
+
+The initial implemented task,
+`md-rps20-annual-gtep-july-pcm-v1`, is preserved as a reproducible baseline.
+The current `md-rps20-annual-gtep-july-pcm-v2` task adds a bounded,
+server-side `hope_wait_holistic_study` operation and requires a
+`hope_mcp_only` monitoring attestation. MCP lifecycle calls are observed at the
+server boundary and written to a hash-chained `agent_trace.yml`; the agent then
+submits explicit Boolean claims plus evidence paths restricted to its study and
+run workspaces. The independent evaluator reopens the model manifest and audit
+rather than trusting those claims. Its `agent_evaluation_report.yml` exposes
+`model_passed` and `agent_passed` independently, along with invalid and duplicate
+calls, polling count, elapsed time, evidence coverage, false-safe claims, and
+the three failure families above. This is evaluation infrastructure, not a
+claim that the multi-agent architecture has outperformed the single-agent
+baseline; repeated matched trials remain required.
+
+This trace boundary is explicit. HOPE can verify the calls received by its MCP
+server but cannot prove that an agent did not also use a shell, local script, or
+another connector. The v2 monitoring field is therefore a declared contract.
+Experiments requiring independent confirmation of exclusive tool use need
+host-level telemetry in addition to the HOPE trace.
 
 ### Phase 6 - multi-agent experiments
 

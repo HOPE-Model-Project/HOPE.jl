@@ -98,9 +98,10 @@ agents without changing the GTEP, physical-realization, or PCM mathematics:
 2. An executor calls `hope_launch_holistic_study` using only the study ID. HOPE
    rejects changed source inputs, then delegates the numerical work to the
    existing isolated and idempotent `hope_run_holistic` transaction.
-3. Any client can call `hope_holistic_study_status` after a disconnect. The
-   durable study record reconciles its state with the durable run manifest and
-   reports the next allowed action.
+3. Any client can call `hope_holistic_study_status` after a disconnect, or use
+   `hope_wait_holistic_study` for a bounded server-side long poll. The durable
+   study record reconciles its state with the durable run manifest and reports
+   the next allowed action.
 4. A validation agent calls `hope_audit_holistic_study`. It independently reads
    the published run and verifies source hashes, request identity, artifact
    scope, handoff and transfer validity, coverage, and every acceptance check.
@@ -174,7 +175,13 @@ validation, operational templates, and restricted and high-resolution
 integration tests.
 
 The literature-informed next step is evaluation, not further agent splitting.
-HOPE should use the completed annual-GTEP/July-PCM benchmark to compare:
+HOPE preserves the first versioned evaluation task,
+`md-rps20-annual-gtep-july-pcm-v1`, and provides
+`md-rps20-annual-gtep-july-pcm-v2` for the current baseline. V2 requires the
+traced `hope_wait_holistic_study` operation and a `hope_mcp_only` monitoring
+attestation, together with server-observed traces, scoped
+evidence submission, and an independent artifact-based scorer. These pieces
+should be used with the completed annual-GTEP/July-PCM benchmark to compare:
 
 1. the deterministic Julia workflow;
 2. one LLM agent using the supported MCP tools; and
@@ -184,8 +191,18 @@ All three conditions should use the same cases, acceptance contract, tool surfac
 and approximate computation budget. An independent evaluator should recompute
 acceptance from artifacts and separately score task compliance, evidence-backed
 reporting, invalid or duplicate calls, reconnect behavior, unsafe conclusions,
-approval compliance, latency, and cost. Agent traces should be classified for
-system-design, inter-agent, and verification failures.
+approval compliance, latency, and cost. Agent traces are hash-chained and the
+evaluator classifies failures as system-design, inter-agent-misalignment, or
+task-verification failures. It keeps the deterministic `model_passed` result
+separate from `agent_passed`, so a good solve cannot conceal poor tool use or
+unsupported reporting. The remaining work is to run repeated matched trials and
+compare their distributions rather than judge the architectures from one
+successful demonstration.
+
+The HOPE trace observes only calls crossing the HOPE MCP boundary. It cannot
+independently detect a local watcher, shell command, or another connector. The
+monitoring attestation makes the intended boundary explicit; independent proof
+of exclusive HOPE-tool use requires host-level telemetry.
 
 Only after this comparison should HOPE decide whether GTEP, physical realization,
 and PCM benefit from separate persistent agents. Meanwhile, physical-realization

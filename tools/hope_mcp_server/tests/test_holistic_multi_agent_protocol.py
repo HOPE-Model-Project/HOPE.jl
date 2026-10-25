@@ -85,6 +85,11 @@ class HolisticMultiAgentProtocolTests(unittest.TestCase):
             launched = hope_launch_holistic_study(study_id, agent_label="executor-B")
         self.assertTrue(launched["ok"], launched)
         self.assertEqual(launched["status"], "running")
+        executor = launched["receipts"]["executor"]
+        self.assertEqual(executor["run_status"], "running")
+        self.assertIsNone(executor["run_ok"])
+        self.assertNotIn("completed_at_unix", executor)
+        self.assertIn("launch_completed_at_unix", executor)
         return prepared
 
     def _materialize_fake_validation_pair(
@@ -332,8 +337,50 @@ class HolisticMultiAgentProtocolTests(unittest.TestCase):
         self.assertEqual(recovered["status"], "ready_for_audit")
         receipt = recovered["receipts"]["executor"]
         self.assertTrue(receipt["run_ok"])
+        self.assertEqual(receipt["run_status"], "done")
         self.assertIn("completed_at_unix", receipt)
         self.assertTrue(receipt["run_manifest_path"].endswith("run_manifest.yml"))
+
+    def test_executor_receipt_distinguishes_running_from_failed(self) -> None:
+        self._prepare_and_launch("multi-agent-receipt-state")
+        running = {
+            "ok": True,
+            "request_id": "multi-agent-receipt-state",
+            "job_id": "job-test",
+            "status": "running",
+            "manifest_path": str(
+                self.runs / "multi-agent-receipt-state" / "run_manifest.yml"
+            ),
+        }
+        with mock.patch(
+            "hope_mcp_server.core.hope_holistic_status", return_value=running
+        ):
+            active = hope_holistic_study_status("multi-agent-receipt-state")
+        receipt = active["receipts"]["executor"]
+        self.assertEqual(receipt["run_status"], "running")
+        self.assertIsNone(receipt["run_ok"])
+        self.assertNotIn("completed_at_unix", receipt)
+
+        failed = {
+            "ok": False,
+            "error_type": "job_failed",
+            "message": "worker failed",
+            "request_id": "multi-agent-receipt-state",
+            "job_id": "job-test",
+            "status": "failed",
+            "manifest_path": str(
+                self.runs / "multi-agent-receipt-state" / "run_manifest.yml"
+            ),
+        }
+        with mock.patch(
+            "hope_mcp_server.core.hope_holistic_status", return_value=failed
+        ):
+            terminal = hope_holistic_study_status("multi-agent-receipt-state")
+        receipt = terminal["receipts"]["executor"]
+        self.assertEqual(terminal["status"], "failed")
+        self.assertEqual(receipt["run_status"], "failed")
+        self.assertFalse(receipt["run_ok"])
+        self.assertIn("completed_at_unix", receipt)
 
     def test_separate_roles_publish_an_accepted_audit_receipt(self) -> None:
         self._prepare_and_launch("multi-agent-accepted")

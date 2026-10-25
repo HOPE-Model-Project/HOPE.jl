@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import time
+from collections.abc import Callable
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -16,8 +18,10 @@ from .core import (
     hope_debug_solver_environment,
     hope_debug_solver_environment_async,
     hope_emission_compliance,
+    hope_evaluate_holistic_agent_study,
     hope_holistic_status,
     hope_holistic_study_status,
+    hope_wait_holistic_study,
     hope_job_status,
     hope_launch_holistic_study,
     hope_nodal_prices,
@@ -30,14 +34,41 @@ from .core import (
     hope_prepare_holistic_study,
     hope_prepare_holistic_validation_study,
     hope_run_hope,
+    hope_submit_holistic_agent_report,
     hope_update_settings,
     hope_validate_case,
     hope_warmup,
+    record_holistic_agent_tool_event,
 )
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_STDIO_PORT = 8000
 DEFAULT_CHATGPT_PORT = 8001
+
+
+def _traced_holistic_call(
+    *,
+    operation: str,
+    role: str,
+    agent_label: str | None,
+    arguments: dict[str, Any],
+    call: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    """Record lifecycle calls at the MCP boundary; tracing never changes tool results."""
+    started_at = time.time()
+    result = call()
+    study_id = result.get("study_id") or arguments.get("study_id")
+    if study_id:
+        record_holistic_agent_tool_event(
+            study_id=str(study_id),
+            operation=operation,
+            role=role,
+            agent_label=agent_label,
+            arguments=arguments,
+            result=result,
+            started_at_unix=started_at,
+        )
+    return result
 
 
 def configured_host(default: str = DEFAULT_HOST) -> str:
@@ -121,7 +152,7 @@ def create_mcp_server(
         "For the registered annual-GTEP/monthly-PCM validation profile, start with "
         "hope_prepare_holistic_validation_study. For other role-separated GTEP-to-PCM "
         "studies start with hope_prepare_holistic_study. Then use "
-        "hope_launch_holistic_study -> hope_holistic_study_status (poll) -> "
+        "hope_launch_holistic_study -> hope_wait_holistic_study (repeat if timed out) -> "
         "hope_audit_holistic_study. "
         "If a Julia run needs to be stopped early, call hope_cancel_job with its job_id."
     )
@@ -421,12 +452,23 @@ def register_write_tools(mcp: FastMCP) -> None:
         solver: str | None = None,
         agent_label: str | None = None,
     ) -> dict[str, Any]:
-        return hope_prepare_holistic_study(
-            gtep_case_id=gtep_case_id,
-            pcm_case_id=pcm_case_id,
-            study_id=study_id,
-            solver=solver,
+        return _traced_holistic_call(
+            operation="hope_prepare_holistic_study",
+            role="coordinator",
             agent_label=agent_label,
+            arguments={
+                "gtep_case_id": gtep_case_id,
+                "pcm_case_id": pcm_case_id,
+                "study_id": study_id,
+                "solver": solver,
+            },
+            call=lambda: hope_prepare_holistic_study(
+                gtep_case_id=gtep_case_id,
+                pcm_case_id=pcm_case_id,
+                study_id=study_id,
+                solver=solver,
+                agent_label=agent_label,
+            ),
         )
 
     @mcp.tool(
@@ -446,13 +488,25 @@ def register_write_tools(mcp: FastMCP) -> None:
         solver: str | None = "gurobi",
         agent_label: str | None = None,
     ) -> dict[str, Any]:
-        return hope_prepare_holistic_validation_study(
-            study_id=study_id,
-            profile=profile,
-            evaluation_month=evaluation_month,
-            warmup_hours=warmup_hours,
-            solver=solver,
+        return _traced_holistic_call(
+            operation="hope_prepare_holistic_validation_study",
+            role="coordinator",
             agent_label=agent_label,
+            arguments={
+                "study_id": study_id,
+                "profile": profile,
+                "evaluation_month": evaluation_month,
+                "warmup_hours": warmup_hours,
+                "solver": solver,
+            },
+            call=lambda: hope_prepare_holistic_validation_study(
+                study_id=study_id,
+                profile=profile,
+                evaluation_month=evaluation_month,
+                warmup_hours=warmup_hours,
+                solver=solver,
+                agent_label=agent_label,
+            ),
         )
 
     @mcp.tool(
@@ -467,7 +521,16 @@ def register_write_tools(mcp: FastMCP) -> None:
         study_id: str,
         agent_label: str | None = None,
     ) -> dict[str, Any]:
-        return hope_launch_holistic_study(study_id=study_id, agent_label=agent_label)
+        return _traced_holistic_call(
+            operation="hope_launch_holistic_study",
+            role="executor",
+            agent_label=agent_label,
+            arguments={"study_id": study_id},
+            call=lambda: hope_launch_holistic_study(
+                study_id=study_id,
+                agent_label=agent_label,
+            ),
+        )
 
     @mcp.tool(
         name="hope_holistic_study_status",
@@ -477,7 +540,42 @@ def register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     def hope_holistic_study_status_tool(study_id: str) -> dict[str, Any]:
-        return hope_holistic_study_status(study_id)
+        return _traced_holistic_call(
+            operation="hope_holistic_study_status",
+            role="observer",
+            agent_label=None,
+            arguments={"study_id": study_id},
+            call=lambda: hope_holistic_study_status(study_id),
+        )
+
+    @mcp.tool(
+        name="hope_wait_holistic_study",
+        description=(
+            "Wait for up to 55 seconds for a holistic study to reach READY_FOR_AUDIT or "
+            "another terminal state. If the bounded wait times out, call this tool again; "
+            "it does not modify model inputs or launch another run."
+        ),
+    )
+    def hope_wait_holistic_study_tool(
+        study_id: str,
+        timeout_seconds: float = 45.0,
+        poll_interval_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        return _traced_holistic_call(
+            operation="hope_wait_holistic_study",
+            role="observer",
+            agent_label=None,
+            arguments={
+                "study_id": study_id,
+                "timeout_seconds": timeout_seconds,
+                "poll_interval_seconds": poll_interval_seconds,
+            },
+            call=lambda: hope_wait_holistic_study(
+                study_id,
+                timeout_seconds=timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
+            ),
+        )
 
     @mcp.tool(
         name="hope_audit_holistic_study",
@@ -491,7 +589,59 @@ def register_write_tools(mcp: FastMCP) -> None:
         study_id: str,
         agent_label: str | None = None,
     ) -> dict[str, Any]:
-        return hope_audit_holistic_study(study_id=study_id, agent_label=agent_label)
+        return _traced_holistic_call(
+            operation="hope_audit_holistic_study",
+            role="auditor",
+            agent_label=agent_label,
+            arguments={"study_id": study_id},
+            call=lambda: hope_audit_holistic_study(
+                study_id=study_id,
+                agent_label=agent_label,
+            ),
+        )
+
+    @mcp.tool(
+        name="hope_submit_holistic_agent_report",
+        description=(
+            "Submit the agent's final claims and evidence for a completed holistic study. "
+            "Evidence files must exist inside the durable study or run workspace. The report "
+            "is not authoritative; hope_evaluate_holistic_agent_study checks it independently."
+        ),
+    )
+    def hope_submit_holistic_agent_report_tool(
+        study_id: str,
+        claims: dict[str, bool],
+        evidence_paths: list[str],
+        task_id: str = "md-rps20-annual-gtep-july-pcm-v1",
+        architecture: str = "centralized_roles",
+        agent_label: str | None = None,
+        approvals: list[dict[str, Any]] | None = None,
+        monitoring_mode: str | None = None,
+    ) -> dict[str, Any]:
+        return hope_submit_holistic_agent_report(
+            study_id=study_id,
+            task_id=task_id,
+            architecture=architecture,
+            monitoring_mode=monitoring_mode,
+            agent_label=agent_label,
+            claims=claims,
+            evidence_paths=evidence_paths,
+            approvals=approvals,
+        )
+
+    @mcp.tool(
+        name="hope_evaluate_holistic_agent_study",
+        description=(
+            "Independently score a holistic agent run from the server trace, final report, "
+            "published model artifacts, and deterministic audit. Reports model correctness and "
+            "agent-behavior correctness separately."
+        ),
+    )
+    def hope_evaluate_holistic_agent_study_tool(
+        study_id: str,
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        return hope_evaluate_holistic_agent_study(study_id=study_id, task_id=task_id)
 
     @mcp.tool(
         name="hope_run_erec",

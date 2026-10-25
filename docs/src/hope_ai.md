@@ -25,6 +25,19 @@ Once configured, Claude Desktop has access to HOPE tools organized into six grou
 | `hope_run_erec` | Launches EREC (Equivalent Reliability Enhancement Capability) postprocessing on a completed run to quantify each resource's reliability contribution. Returns a `job_id` immediately. |
 | `hope_job_status` | Polls any background job for progress. Returns elapsed time, stdout tail, and the full output summary when the job completes. |
 
+### Durable Agent Studies
+
+| Tool | Description |
+| ------ | ------------- |
+| `hope_prepare_holistic_study` | Pins GTEP and PCM cases, source fingerprints, solver, and coordinator receipt without solving. |
+| `hope_prepare_holistic_validation_study` | Builds and pins a registered bounded-memory validation profile such as annual Maryland GTEP with July PCM. |
+| `hope_launch_holistic_study` | Revalidates the pinned study and launches it as the executor. |
+| `hope_holistic_study_status` | Returns reconnect-safe study status, receipts, and the next allowed action. |
+| `hope_wait_holistic_study` | Waits up to 55 seconds for a terminal study state; repeat it after a bounded timeout. |
+| `hope_audit_holistic_study` | Independently validates the published run and issues an accepted or rejected audit receipt. |
+| `hope_submit_holistic_agent_report` | Records the agent's explicit final claims and scoped evidence paths. |
+| `hope_evaluate_holistic_agent_study` | Recomputes authoritative claims and separately scores model success and agent behavior. |
+
 ### Settings Management
 
 | Tool | Description |
@@ -369,11 +382,33 @@ same derivation available through the registered
 evaluation ranges, builder hash, source hashes, and derived paths in the durable
 study manifest before an executor may launch the run.
 
+During execution, the executor receipt uses `run_status` for lifecycle state.
+Its `run_ok` value is `null` while work is still running, `true` after successful
+completion, and `false` only after terminal failure or cancellation.
+
 The high-resolution test uses Gurobi by default and checks optimal termination,
 physical handoff and transfer reconciliation, operational-template use, thermal
 unit commitment, reserves, RPS compliance, zero PCM load shedding, source-case
 immutability, reconnect recovery, and idempotent retry behavior. Generated cases
 and run artifacts are temporary; the registered source cases are not changed.
+
+For controlled LLM evaluation, lifecycle calls made through the full-access MCP
+server are also recorded in a hash-chained `agent_trace.yml`. After the
+deterministic audit, the agent submits its four success claims and scoped
+artifact evidence with `hope_submit_holistic_agent_report`. A separate evaluator
+then calls `hope_evaluate_holistic_agent_study`, which independently reopens the
+run and audit artifacts. Its report distinguishes `model_passed` from
+`agent_passed` and measures invalid or duplicate calls, polling, evidence
+coverage, unsupported success claims, and role compliance. The initial fixed
+task definition, `md-rps20-annual-gtep-july-pcm-v1`, remains available for
+reproduction. The v2 task, `md-rps20-annual-gtep-july-pcm-v2`, replaces repeated
+client polling with traced calls to `hope_wait_holistic_study` and requires the
+final report to declare `monitoring_mode: hope_mcp_only`.
+
+That declaration is an agent attestation, not proof that no other client tool
+was used. HOPE can independently verify calls crossing its MCP boundary; only
+host-level telemetry can independently observe local scripts, shell commands,
+or tools served by another connector.
 
 ---
 
@@ -411,6 +446,11 @@ checks to pass.
 
 > "What is the status of holistic request `md-reference-2035-v1`?"
 > "After reconnecting, locate the realized PCM inputs and handoff report for request `md-reference-2035-v1`."
+
+**Agent evaluation — Verify the process as well as the solve**
+
+> "Run the registered Maryland annual-GTEP/July-PCM validation study as one agent for task `md-rps20-annual-gtep-july-pcm-v2`. After launch, monitor only with repeated `hope_wait_holistic_study` calls. Audit it, submit the required evidence-backed claims with `monitoring_mode: hope_mcp_only`, and then evaluate the agent study."
+> "Coordinate, execute, and independently audit the Maryland validation study with distinct agent labels. Submit the final report, then tell me both `model_passed` and `agent_passed` from the evaluator artifact."
 
 **`hope_run_erec` — EREC reliability postprocessing**
 
