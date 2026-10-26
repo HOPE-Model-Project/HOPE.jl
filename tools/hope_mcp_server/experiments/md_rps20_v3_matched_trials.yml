@@ -34,6 +34,7 @@ matched_conditions:
   warmup_hours: 48
   monitoring_mode: hope_mcp_only
   maximum_active_tool_calls: 10
+  elapsed_time_basis: executor_launch_completed_to_completed
   source_cases_must_match_by_hash: true
   prompt_templates_must_remain_fixed: true
 execution_rules:
@@ -134,7 +135,8 @@ outcomes:
   secondary:
     - active_calls_mean
     - passive_calls_mean
-    - elapsed_seconds_mean
+    - run_elapsed_seconds_mean
+    - workflow_elapsed_seconds_mean
     - invalid_tool_calls_total
     - duplicate_role_calls_total
     - failure_counts

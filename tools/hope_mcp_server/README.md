@@ -146,6 +146,11 @@ Markdown report. It also reads each study manifest and reports whether task ID,
 request hash, GTEP and PCM source hashes, and solver are identical. Do not
 interpret architecture comparisons when `matched_conditions` is false. The
 study-ID prefix prevents earlier pilots from entering the formal experiment.
+Elapsed-time comparisons use the executor receipt's interval from launch
+completion to run completion, which excludes uncontrolled pauses between
+separate role threads. The full HOPE trace span is retained separately as
+`workflow_elapsed_seconds` for diagnostics and is not an
+architecture-performance measure.
 The summary also reports `ready_for_comparison: false` whenever a prefixed study
 lacks an evaluation report or the five-per-architecture target is incomplete,
 so failed or abandoned trials cannot silently disappear from the comparison.

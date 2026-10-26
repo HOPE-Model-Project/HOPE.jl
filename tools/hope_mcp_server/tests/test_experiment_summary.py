@@ -86,6 +86,7 @@ class ExperimentSummaryTests(unittest.TestCase):
         agent_passed: bool = True,
         request_sha256: str = "request-hash",
         malformed: bool = False,
+        run_elapsed: float | None = None,
     ) -> None:
         study_dir = self.study_root / study_id
         study_dir.mkdir()
@@ -101,6 +102,13 @@ class ExperimentSummaryTests(unittest.TestCase):
             "gtep_source_sha256": "gtep-hash",
             "pcm_source_sha256": "pcm-hash",
         }
+        if run_elapsed is not None:
+            manifest["receipts"] = {
+                "executor": {
+                    "launch_completed_at_unix": 100.0,
+                    "completed_at_unix": 100.0 + run_elapsed,
+                }
+            }
         report = {
             "schema_version": 3,
             "study_id": study_id,
@@ -173,6 +181,27 @@ class ExperimentSummaryTests(unittest.TestCase):
         self.assertFalse(matched["matched"])
         self.assertIn("request_sha256", matched["mismatched_fields"])
         self.assertEqual(len(matched["condition_signatures"]), 2)
+
+    def test_summary_prefers_executor_run_time_over_handoff_trace_span(self) -> None:
+        self._write_trial(
+            "multi-01",
+            "centralized_roles",
+            elapsed=4457.0,
+            active_calls=6,
+            run_elapsed=987.0,
+        )
+
+        rows, skipped, incomplete = discover_experiment_runs(self.study_root)
+
+        self.assertEqual(skipped, [])
+        self.assertEqual(incomplete, [])
+        self.assertEqual(rows[0]["elapsed_seconds"], 987.0)
+        self.assertEqual(rows[0]["run_elapsed_seconds"], 987.0)
+        self.assertEqual(rows[0]["workflow_elapsed_seconds"], 4457.0)
+        group = summarize_groups(rows)[0]
+        self.assertEqual(group["elapsed_seconds_mean"], 987.0)
+        self.assertEqual(group["run_elapsed_seconds_mean"], 987.0)
+        self.assertEqual(group["workflow_elapsed_seconds_mean"], 4457.0)
 
     def test_filters_architecture(self) -> None:
         self._write_trial("single-01", "single_agent", elapsed=900.0, active_calls=5)

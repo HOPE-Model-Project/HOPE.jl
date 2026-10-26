@@ -224,6 +224,13 @@ The `hope-agent-experiment-summary` command checks their request, source-case,
 and solver hashes before comparing pass rates, tool behavior, elapsed time,
 false-safe claims, and classified failures.
 
+For architecture comparisons, elapsed time is the executor receipt's interval
+from launch completion to run completion. This covers the launched model job
+but excludes uncontrolled pauses while a human opens the next role thread. The
+evaluator also retains the complete trace span as `workflow_elapsed_seconds`;
+that value is useful for diagnosing handoff delays but is not a model-runtime
+metric.
+
 The lifecycle is now enforced at the server boundary rather than left to prompt
 obedience. HOPE rejects final-report submission and agent evaluation until the
 study is `ACCEPTED`, `REJECTED`, or `FAILED`. A trace-write problem is returned

@@ -14,7 +14,7 @@ import yaml
 
 AGENT_TRACE_SCHEMA_VERSION = 1
 AGENT_REPORT_SCHEMA_VERSION = 2
-AGENT_EVALUATION_SCHEMA_VERSION = 4
+AGENT_EVALUATION_SCHEMA_VERSION = 5
 
 FAILURE_SYSTEM_DESIGN = "system_design"
 FAILURE_INTER_AGENT_MISALIGNMENT = "inter_agent_misalignment"
@@ -104,6 +104,21 @@ def _read_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Expected a YAML mapping in {path}.")
     return data
+
+
+def _executor_elapsed_seconds(study: Mapping[str, Any]) -> float | None:
+    receipts = study.get("receipts", {})
+    executor = receipts.get("executor", {}) if isinstance(receipts, dict) else {}
+    if not isinstance(executor, dict):
+        return None
+    try:
+        started = float(executor["launch_completed_at_unix"])
+        completed = float(executor["completed_at_unix"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if started <= 0.0 or completed < started:
+        return None
+    return completed - started
 
 
 def _write_yaml_atomic(path: Path, data: Mapping[str, Any]) -> None:
@@ -642,6 +657,13 @@ def evaluate_agent_study(
         )
     started = min((float(event.get("started_at_unix", 0.0)) for event in events), default=0.0)
     completed = max((float(event.get("completed_at_unix", 0.0)) for event in events), default=0.0)
+    workflow_elapsed_seconds = max(0.0, completed - started)
+    run_elapsed_seconds = _executor_elapsed_seconds(study)
+    comparison_elapsed_seconds = (
+        run_elapsed_seconds
+        if run_elapsed_seconds is not None
+        else workflow_elapsed_seconds
+    )
     evaluation_path = study_root / "agent_evaluation_report.yml"
     resolved_run_manifest_path = Path(str(run_manifest_value)) if run_manifest_value else None
     resolved_audit_path = Path(str(audit_path_value)) if audit_path_value else None
@@ -668,7 +690,9 @@ def evaluate_agent_study(
             "status_poll_calls": operations.count("hope_holistic_study_status"),
             "wait_calls": wait_calls,
             "monitoring_mode": monitoring_mode,
-            "elapsed_seconds": max(0.0, completed - started),
+            "elapsed_seconds": comparison_elapsed_seconds,
+            "run_elapsed_seconds": run_elapsed_seconds,
+            "workflow_elapsed_seconds": workflow_elapsed_seconds,
             "evidence_path_count": len(evidence),
             "verified_claims": sum(1 for item in claim_checks if item["passed"]),
             "total_claims": len(claim_checks),

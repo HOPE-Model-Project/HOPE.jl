@@ -12,7 +12,7 @@ from typing import Any, Iterable, Mapping, Sequence
 import yaml
 
 
-SUMMARY_SCHEMA_VERSION = 2
+SUMMARY_SCHEMA_VERSION = 3
 
 RUN_FIELDS = (
     "study_id",
@@ -29,6 +29,8 @@ RUN_FIELDS = (
     "status_poll_calls",
     "wait_calls",
     "elapsed_seconds",
+    "run_elapsed_seconds",
+    "workflow_elapsed_seconds",
     "verified_claims",
     "total_claims",
     "false_safe_claims",
@@ -89,6 +91,21 @@ def _file_sha256(path: Path | None) -> str | None:
     if path is None or not path.is_file():
         return None
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _executor_elapsed_seconds(manifest: Mapping[str, Any]) -> float | None:
+    receipts = manifest.get("receipts", {})
+    executor = receipts.get("executor", {}) if isinstance(receipts, dict) else {}
+    if not isinstance(executor, dict):
+        return None
+    try:
+        started = float(executor["launch_completed_at_unix"])
+        completed = float(executor["completed_at_unix"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if started <= 0.0 or completed < started:
+        return None
+    return completed - started
 
 
 def _evaluation_staleness(
@@ -184,6 +201,22 @@ def load_experiment_run(report_path: Path, study_root: Path) -> dict[str, Any]:
         if name in row or name in {"condition_signature", "evaluation_report_path"}:
             continue
         row[name] = metrics.get(name)
+    workflow_elapsed = metrics.get("workflow_elapsed_seconds")
+    if not isinstance(workflow_elapsed, (int, float)) or isinstance(
+        workflow_elapsed, bool
+    ):
+        workflow_elapsed = metrics.get("elapsed_seconds")
+    run_elapsed = metrics.get("run_elapsed_seconds")
+    executor_elapsed = _executor_elapsed_seconds(manifest)
+    if executor_elapsed is not None:
+        run_elapsed = executor_elapsed
+    if not isinstance(run_elapsed, (int, float)) or isinstance(run_elapsed, bool):
+        run_elapsed = None
+    row["run_elapsed_seconds"] = run_elapsed
+    row["workflow_elapsed_seconds"] = workflow_elapsed
+    row["elapsed_seconds"] = (
+        run_elapsed if run_elapsed is not None else metrics.get("elapsed_seconds")
+    )
     row["condition_signature"] = _condition_signature(row)
     return row
 
@@ -366,6 +399,10 @@ def summarize_groups(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                 "elapsed_seconds_population_sd": _population_sd(
                     members, "elapsed_seconds"
                 ),
+                "run_elapsed_seconds_mean": _mean(members, "run_elapsed_seconds"),
+                "workflow_elapsed_seconds_mean": _mean(
+                    members, "workflow_elapsed_seconds"
+                ),
                 "invalid_tool_calls_total": int(
                     sum(_numeric_values(members, "invalid_tool_calls"))
                 ),
@@ -489,7 +526,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
             "## Architecture summary",
             "",
             "| Architecture | Trials | Model pass | Agent pass | Active calls (mean) | "
-            "Passive calls (mean) | Elapsed seconds (mean) | False-safe claims |",
+            "Passive calls (mean) | Run seconds (mean) | False-safe claims |",
             "|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
@@ -512,7 +549,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
             "",
             "## Individual trials",
             "",
-            "| Study | Architecture | Model | Agent | Active | Passive | Elapsed (s) | Failures |",
+            "| Study | Architecture | Model | Agent | Active | Passive | Run (s) | Failures |",
             "|---|---|---:|---:|---:|---:|---:|---|",
         ]
     )
@@ -575,6 +612,8 @@ def write_experiment_summary(summary: Mapping[str, Any], output_dir: Path) -> di
         "elapsed_seconds_mean",
         "elapsed_seconds_median",
         "elapsed_seconds_population_sd",
+        "run_elapsed_seconds_mean",
+        "workflow_elapsed_seconds_mean",
         "invalid_tool_calls_total",
         "duplicate_role_calls_total",
         "false_safe_claims_total",

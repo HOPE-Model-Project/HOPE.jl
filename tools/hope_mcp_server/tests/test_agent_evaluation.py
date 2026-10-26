@@ -40,7 +40,12 @@ class AgentEvaluationTests(unittest.TestCase):
         self.run_manifest = self.run_root / "run_manifest.yml"
         self.audit_report = self.study_root / "audit_report.yml"
         self.run_manifest.write_text(
-            yaml.safe_dump({"schema_version": 1, "status": "PUBLISHED"}),
+            yaml.safe_dump(
+                {
+                    "schema_version": 1,
+                    "status": "PUBLISHED",
+                }
+            ),
             encoding="utf-8",
         )
         self.audit_report.write_text(
@@ -61,6 +66,12 @@ class AgentEvaluationTests(unittest.TestCase):
             "status": "ACCEPTED",
             "run_manifest_path": str(self.run_manifest),
             "audit": {"audit_report_path": str(self.audit_report)},
+            "receipts": {
+                "executor": {
+                    "launch_completed_at_unix": 100.0,
+                    "completed_at_unix": 700.0,
+                }
+            },
         }
         (self.study_root / "study_manifest.yml").write_text(
             yaml.safe_dump(self.study), encoding="utf-8"
@@ -198,6 +209,9 @@ class AgentEvaluationTests(unittest.TestCase):
         self.assertEqual(metrics["budgeted_tool_calls"], 4)
         self.assertEqual(metrics["tool_call_budget_limit"], 10)
         self.assertEqual(metrics["tool_call_budget_mode"], "active_calls")
+        self.assertEqual(metrics["elapsed_seconds"], 600.0)
+        self.assertEqual(metrics["run_elapsed_seconds"], 600.0)
+        self.assertGreater(metrics["workflow_elapsed_seconds"], 0.0)
 
     def test_v3_still_rejects_excess_active_calls(self) -> None:
         self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
