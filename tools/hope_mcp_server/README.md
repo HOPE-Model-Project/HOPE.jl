@@ -105,8 +105,10 @@ Task `md-rps20-annual-gtep-july-pcm-v2` requires the traced
 attestation. Task `md-rps20-annual-gtep-july-pcm-v3` is the current recommended
 contract. It preserves those requirements but counts only active decision calls
 against its 10-call efficiency budget; passive long-poll calls remain measured
-without allowing solver runtime to determine whether the agent passes. Earlier
-task thresholds remain fixed for reproducibility.
+without allowing solver runtime to determine whether the agent passes. It also
+requires zero duplicate role-bearing calls: prepare, launch, audit, and report
+submission must each occur at most once. Earlier task thresholds remain fixed
+for reproducibility.
 
 The monitoring attestation declares that the agent used only HOPE MCP lifecycle
 tools while waiting. The server can verify its own traced calls, but it cannot
@@ -120,8 +122,8 @@ The versioned protocol in
 centralized-role trials under the same task, source cases, solver, client model,
 exact prompt templates, and active-call budget. The single-agent and
 role-separated variants perform the same lifecycle operations; only role
-assignment differs. Pilot studies are explicitly excluded from the formal
-repetitions.
+assignment differs. Pilot and confounded studies are explicitly excluded from
+the formal repetitions.
 
 After one or more trials have produced `agent_evaluation_report.yml`, aggregate
 the authoritative reports with:
@@ -132,6 +134,7 @@ uv --directory tools/hope_mcp_server run hope-agent-experiment-summary \
   --task-id md-rps20-annual-gtep-july-pcm-v3 \
   --study-id-prefix claude-md-v3formal- \
   --exclude-study-id claude-md-v3formal-single-20261025-r01 \
+  --exclude-study-id claude-md-v3formal-single-20261025-r05 \
   --architecture single_agent \
   --architecture centralized_roles \
   --expected-trials-per-architecture 5 \

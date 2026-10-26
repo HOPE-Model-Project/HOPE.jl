@@ -229,6 +229,42 @@ class AgentEvaluationTests(unittest.TestCase):
         self.assertEqual(evaluated["metrics"]["budgeted_tool_calls"], 11)
         self.assertIn("11 > 10", evaluated["failures"][0]["details"][0])
 
+    def test_v3_rejects_duplicate_role_calls_even_within_active_budget(self) -> None:
+        self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
+        self._event("hope_launch_holistic_study", "executor", "agent-A")
+        self._event("hope_wait_holistic_study", "observer", "agent-A")
+        self._event("hope_audit_holistic_study", "auditor", "agent-A")
+        result = submit_agent_report(
+            self.study_root,
+            self.study,
+            task_id="md-rps20-annual-gtep-july-pcm-v3",
+            architecture="single_agent",
+            agent_label="agent-A",
+            claims={key: True for key in (
+                "study_accepted",
+                "run_published",
+                "audit_accepted",
+                "all_acceptance_checks_passed",
+            )},
+            evidence_paths=[str(path) for path in self.evidence],
+            monitoring_mode="hope_mcp_only",
+        )
+        self.assertTrue(result["ok"], result)
+        self._event("hope_submit_holistic_agent_report", "reporter", "agent-A")
+        self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
+
+        evaluated = evaluate_agent_study(self.study_root, self.study)
+
+        self.assertTrue(evaluated["model_passed"])
+        self.assertFalse(evaluated["agent_passed"])
+        self.assertFalse(evaluated["checks"]["duplicate_role_call_budget"])
+        self.assertEqual(evaluated["metrics"]["duplicate_role_calls"], 1)
+        self.assertEqual(evaluated["metrics"]["duplicate_role_call_limit"], 0)
+        self.assertEqual(
+            [item["category"] for item in evaluated["failures"]],
+            ["inter_agent_misalignment"],
+        )
+
     def test_explicit_evaluation_task_must_match_submitted_report(self) -> None:
         self._event("hope_prepare_holistic_validation_study", "coordinator", "agent-A")
         self._event("hope_launch_holistic_study", "executor", "agent-A")

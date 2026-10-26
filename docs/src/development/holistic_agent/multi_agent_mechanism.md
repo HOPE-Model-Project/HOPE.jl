@@ -208,8 +208,10 @@ of exclusive HOPE-tool use requires host-level telemetry.
 The recommended v3 task removes solver-runtime bias from the efficiency gate.
 It keeps passive wait calls in the trace and metrics but applies its 10-call
 budget only to active tool decisions. Evaluations report total, active, passive,
-and budgeted calls separately. V1 and v2 remain unchanged so their completed
-trials can still be reproduced exactly.
+and budgeted calls separately. It also requires zero duplicate role-bearing
+calls: repeating prepare, launch, audit, or report submission fails the v3 agent
+evaluation even if the lifecycle operation is idempotent. V1 and v2 remain
+unchanged so their completed trials can still be reproduced exactly.
 
 The first end-to-end v3 centralized-role pilot passed both model and agent
 evaluation. It used 29 total calls, of which 23 were passive waits and only six
@@ -239,7 +241,10 @@ artifact. This prevents failed trials from being lost through survivorship bias.
 The first formal-prefix single-agent attempt on 2026-10-25 is also explicitly
 excluded: it submitted and evaluated while the run was still active, although
 the run later published successfully. It is retained as system-design evidence,
-not counted as a scientific architecture replicate.
+not counted as a scientific architecture replicate. Single-agent replicate 05
+is likewise retained but excluded because the accepted study was later reused,
+adding a second prepare and report submission to its trace. Replicate 07 replaces
+it in the five-run formal matrix.
 
 Only after this comparison should HOPE decide whether GTEP, physical realization,
 and PCM benefit from separate persistent agents. Meanwhile, physical-realization

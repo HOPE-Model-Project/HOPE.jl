@@ -83,6 +83,7 @@ EVALUATION_TASKS: dict[str, dict[str, Any]] = {
         "maximum_active_tool_calls": 10,
         "budget_exempt_operations": ["hope_wait_holistic_study"],
         "maximum_invalid_calls": 0,
+        "maximum_duplicate_role_calls": 0,
         "minimum_evidence_paths": 3,
         "required_claims": list(REQUIRED_CLAIMS),
         "approval_required_operations": [],
@@ -578,6 +579,11 @@ def evaluate_agent_study(
         "required_approvals_present": not missing_approvals,
         "monitoring_contract_compliance": monitoring_contract_passed,
     }
+    duplicate_role_call_limit = task.get("maximum_duplicate_role_calls")
+    if duplicate_role_call_limit is not None:
+        checks["duplicate_role_call_budget"] = (
+            duplicate_calls <= int(duplicate_role_call_limit)
+        )
     model_passed = all(actual_claims.values())
     agent_passed = all(checks.values())
     failures: list[dict[str, Any]] = []
@@ -592,7 +598,13 @@ def evaluate_agent_study(
                 ],
             }
         )
-    if required_missing or not architecture_passed or missing_approvals:
+    duplicate_role_calls_passed = checks.get("duplicate_role_call_budget", True)
+    if (
+        required_missing
+        or not architecture_passed
+        or missing_approvals
+        or not duplicate_role_calls_passed
+    ):
         failures.append(
             {
                 "category": FAILURE_INTER_AGENT_MISALIGNMENT,
@@ -600,6 +612,8 @@ def evaluate_agent_study(
                     "missing_operations": required_missing,
                     "architecture_roles_match": architecture_passed,
                     "missing_approvals": missing_approvals,
+                    "duplicate_role_calls": duplicate_calls,
+                    "duplicate_role_call_limit": duplicate_role_call_limit,
                 },
             }
         )
@@ -650,6 +664,7 @@ def evaluate_agent_study(
             "tool_call_budget_mode": budget_mode,
             "invalid_tool_calls": len(invalid_events),
             "duplicate_role_calls": duplicate_calls,
+            "duplicate_role_call_limit": duplicate_role_call_limit,
             "status_poll_calls": operations.count("hope_holistic_study_status"),
             "wait_calls": wait_calls,
             "monitoring_mode": monitoring_mode,

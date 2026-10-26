@@ -57,7 +57,7 @@ class ExperimentSummaryTests(unittest.TestCase):
         }
         self.assertEqual(
             architectures["single_agent"]["formal_replicates"],
-            ["02", "03", "04", "05", "06"],
+            ["02", "03", "04", "06", "07"],
         )
         self.assertEqual(
             architectures["centralized_roles"]["formal_replicates"],
@@ -69,6 +69,10 @@ class ExperimentSummaryTests(unittest.TestCase):
         )
         self.assertIn(
             "claude-md-v3formal-single-20261025-r01",
+            protocol["pilot_studies_excluded_from_formal_repetitions"],
+        )
+        self.assertIn(
+            "claude-md-v3formal-single-20261025-r05",
             protocol["pilot_studies_excluded_from_formal_repetitions"],
         )
 

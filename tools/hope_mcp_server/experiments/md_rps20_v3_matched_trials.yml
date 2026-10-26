@@ -14,7 +14,7 @@ required_claims:
 architectures:
   - architecture: single_agent
     study_id_template: claude-md-v3formal-single-{date}-r{replicate}
-    formal_replicates: ["02", "03", "04", "05", "06"]
+    formal_replicates: ["02", "03", "04", "06", "07"]
     agent_labels:
       - claude-singleagent-v3-r{replicate}
   - architecture: centralized_roles
@@ -39,6 +39,9 @@ matched_conditions:
 execution_rules:
   - Use a new study ID for every replicate.
   - Prepare and launch each study exactly once.
+  - Call each role-bearing lifecycle operation (prepare, launch, audit, and
+    submit) exactly once; a duplicate attempt invalidates the agent trial even
+    when the server safely reuses an existing study or report.
   - Monitor only with hope_wait_holistic_study after launch.
   - Do not change the solver, case, month, warm-up period, or task ID.
   - Audit exactly once after the study reaches ready_for_audit.
@@ -141,12 +144,14 @@ pilot_studies_excluded_from_formal_repetitions:
   - claude-md-multiagent-v3-20261025-01
   - claude-md-v3exp-single-20261025-r01
   - claude-md-v3formal-single-20261025-r01
+  - claude-md-v3formal-single-20261025-r05
 summary_command: >-
   uv --directory tools/hope_mcp_server run hope-agent-experiment-summary
   --study-root artifacts/agent_studies
   --task-id md-rps20-annual-gtep-july-pcm-v3
   --study-id-prefix claude-md-v3formal-
   --exclude-study-id claude-md-v3formal-single-20261025-r01
+  --exclude-study-id claude-md-v3formal-single-20261025-r05
   --architecture single_agent
   --architecture centralized_roles
   --expected-trials-per-architecture 5
