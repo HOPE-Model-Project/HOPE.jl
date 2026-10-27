@@ -198,6 +198,12 @@ GTEP scenario, but they should not automatically modify a planning case. A
 feedback workflow must state the rule that converts an operational metric into a
 planning constraint, cost, candidate, or scenario assumption.
 
+The proposed artifact-governed feedback loop, general nodal-realization method,
+agent authority boundaries, convergence rules, and human approvals are specified
+in [Adaptive GTEP, Realization, and PCM Agents](@ref adaptive-gtep-pcm-agents).
+The key rule is that a downstream agent publishes a structured finding and
+revision request; it never silently edits an accepted upstream artifact.
+
 ## Physical realization and external data
 
 A future physical-connection module should map planning abstractions to a
@@ -637,7 +643,9 @@ interfaces.
   transaction, this closes the governance benchmark but not the design of
   cooperating model-specialist agents. The next milestone is a product contract
   for stage-level GTEP, physical-realization, and PCM agent authority, artifacts,
-  revision requests, convergence, and human approval.
+  revision requests, convergence, and human approval. The first version of that
+  proposed contract is recorded in
+  [Adaptive GTEP, Realization, and PCM Agents](@ref adaptive-gtep-pcm-agents).
 
 ### Phase 0 - standalone consistency
 
