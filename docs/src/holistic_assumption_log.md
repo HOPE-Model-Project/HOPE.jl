@@ -66,8 +66,8 @@ At minimum, a new entry records:
 | HLA-020 | Repository boundary | Case builders and diagnostics are retained; run workspaces remain ignored generated artifacts | Active |
 | HLA-021 | Realization multiplicity | A zonal plan may have several defensible nodal realizations; ambiguity must be published rather than hidden | Proposed |
 | HLA-022 | Computed siting | General downscaling uses a versioned candidate-site catalog and deterministic constrained allocation policy | Proposed |
-| HLA-023 | Operational feedback | PCM or reliability findings create structured revision requests and never directly mutate GTEP inputs | Proposed |
-| HLA-024 | Study acceptance | Feasibility, operational adequacy, and reliability are separate gates pinned before execution | Proposed |
+| HLA-023 | Holistic feedback | Infeasibility or any selected assessment finding creates a structured revision request and never directly mutates upstream inputs | Proposed |
+| HLA-024 | Study acceptance | Input validity, execution, mathematical feasibility, and assessment-specific criteria are separate gates pinned before execution | Proposed |
 | HLA-025 | Iteration lineage | Every approved revision creates immutable child artifacts with a machine-readable delta | Proposed |
 | HLA-026 | Change authority | Agents may make only allowlisted changes; material scientific assumptions require recorded human approval | Proposed |
 
@@ -234,17 +234,26 @@ At minimum, a new entry records:
 
 ### HLA-023 through HLA-026 — adaptive scientific workflow
 
-- A PCM failure is first recorded as evidence and classified. It may be caused
-  by data, numerical behavior, physical realization, operational assumptions,
-  or a structural planning deficiency; infeasibility alone does not identify
-  which layer should change.
+- A downstream failure is first recorded as evidence and classified. It may be
+  caused by data, numerical behavior, physical realization, model-specific
+  assumptions, or a structural upstream deficiency; infeasibility alone does
+  not identify which layer should change.
+- Holistic assessment is broader than reliability. Operational feasibility,
+  reliability, economics, deliverability, policy, emissions, markets, and
+  resilience may be separate typed assessment modules that share the same
+  artifact and feedback protocol.
+- Invalid input, execution or numerical failure, mathematical infeasibility,
+  feasible-but-failed assessment, and accepted assessment are distinct outcomes.
+  Conflict or minimum-slack diagnostics may explain infeasibility, but a relaxed
+  diagnostic solution is not the original model result.
 - A downstream agent may publish a `RevisionRequest` with parent hashes,
   findings, observed metrics, inferred cause, proposed delta, alternatives, and
   required approval. It may not directly edit an upstream accepted artifact.
 - The study pins separate gates for artifact integrity, realization fidelity,
-  solver feasibility, operational adequacy, reliability, and scientific
-  governance. A feasible PCM run is not automatically a reliability result, and
-  an agent may not weaken a failed threshold to declare success.
+  solver feasibility, every selected assessment module, and scientific
+  governance. A feasible PCM run is not automatically a successful holistic or
+  reliability result, and an agent may not weaken a failed threshold to declare
+  success.
 - Every iteration is an immutable child scenario. Convergence requires all hard
   gates to pass; iteration and compute budgets, cycles, unauthorized changes,
   and human stops are explicit terminal conditions.
@@ -253,7 +262,7 @@ At minimum, a new entry records:
   recorded human approval unless a reviewed study contract explicitly delegates
   a bounded parameter range.
 - The detailed proposed contracts and role boundaries are maintained in
-  [Adaptive GTEP, Realization, and PCM Agents](@ref adaptive-gtep-pcm-agents).
+  [Adaptive Holistic Assessment Agents](@ref adaptive-gtep-pcm-agents).
 
 ## Open decisions
 
@@ -265,12 +274,13 @@ At minimum, a new entry records:
 | Exact annual or rolling PCM | HLA-012, HLA-019 | Add state carry and annual-policy accounting or provision a high-memory worker |
 | Replace inferred physical data | HLA-016, HLA-017 | Incorporate authoritative ratings/topology when licensing and access permit |
 | Production-economics retirement and transmission scenarios | HLA-009, HLA-010 | Replace test-only forcing assumptions with reviewed planning economics when suitable data become available |
-| Adaptive planning feedback | HLA-023, HLA-024, HLA-025, HLA-026 | Implement findings, revision requests, pinned acceptance gates, approval records, immutable child scenarios, and bounded stopping rules |
+| Adaptive holistic feedback | HLA-023, HLA-024, HLA-025, HLA-026 | Implement typed assessment modules, infeasibility diagnostics, findings, revision requests, pinned gates, approval records, immutable child scenarios, and bounded stopping rules |
 
 ## Change history
 
 | Date | Change |
 | --- | --- |
+| 2026-10-26 | Generalized the adaptive design from a reliability-oriented GTEP-PCM example to a holistic-assessment framework with distinct invalid-input, execution-failure, infeasible, feasible-but-failed, and accepted outcomes. |
 | 2026-10-26 | Added proposed general nodal-realization, operational-feedback, acceptance, iteration-lineage, and agent-authority decisions for the adaptive GTEP-realization-PCM workflow. |
 | 2026-10-24 | Added the separate high-resolution transfer-coverage benchmark, including pinned retirement, transmission, physical-flow, and source-immutability evidence. |
 | 2026-10-20 | Created the consolidated log from the implemented handoff contract, Maryland case manifests/provenance, solved annual-GTEP/July-PCM validation, and current design discussion. |

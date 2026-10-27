@@ -61,7 +61,7 @@ pages = OrderedDict(
     "HOPE-AI" => [
         "HOPE-AI (LLM Agent)" => "hope_ai.md",
         "Multi-Model and Multi-Agent Design" => "development/holistic_agent/multi_agent_system_design.md",
-        "Adaptive GTEP-Realization-PCM Agents" => "development/holistic_agent/adaptive_gtep_pcm_agents.md",
+        "Adaptive Holistic Assessment Agents" => "development/holistic_agent/adaptive_gtep_pcm_agents.md",
         "Multi-Agent Mechanism" => "development/holistic_agent/multi_agent_mechanism.md",
         "Workflow-Governance Benchmark" => "development/holistic_agent/workflow_governance_benchmark.md",
     ],

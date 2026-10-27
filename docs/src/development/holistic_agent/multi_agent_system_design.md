@@ -199,8 +199,9 @@ feedback workflow must state the rule that converts an operational metric into a
 planning constraint, cost, candidate, or scenario assumption.
 
 The proposed artifact-governed feedback loop, general nodal-realization method,
-agent authority boundaries, convergence rules, and human approvals are specified
-in [Adaptive GTEP, Realization, and PCM Agents](@ref adaptive-gtep-pcm-agents).
+typed holistic-assessment modules, agent authority boundaries, convergence
+rules, and human approvals are specified in
+[Adaptive Holistic Assessment Agents](@ref adaptive-gtep-pcm-agents).
 The key rule is that a downstream agent publishes a structured finding and
 revision request; it never silently edits an accepted upstream artifact.
 
@@ -645,7 +646,7 @@ interfaces.
   for stage-level GTEP, physical-realization, and PCM agent authority, artifacts,
   revision requests, convergence, and human approval. The first version of that
   proposed contract is recorded in
-  [Adaptive GTEP, Realization, and PCM Agents](@ref adaptive-gtep-pcm-agents).
+  [Adaptive Holistic Assessment Agents](@ref adaptive-gtep-pcm-agents).
 
 ### Phase 0 - standalone consistency
 

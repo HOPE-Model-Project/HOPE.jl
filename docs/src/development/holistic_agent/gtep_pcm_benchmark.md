@@ -95,7 +95,7 @@ studies whose candidate locations are known in advance.
 
 The proposed computed-siting inputs, multiple-realization representation,
 feedback routing, agent authority, and human-approval rules are specified in
-[Adaptive GTEP, Realization, and PCM Agents](@ref adaptive-gtep-pcm-agents).
+[Adaptive Holistic Assessment Agents](@ref adaptive-gtep-pcm-agents).
 
 For every built candidate, `physical_realization.csv` records the complete
 trace:
