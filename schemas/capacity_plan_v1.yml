@@ -1,0 +1,43 @@
+schema_name: HOPE capacity plan for physical realization
+schema_version: 1
+artifact_type: HOPE.capacity_plan
+status: proposed
+format: CSV
+description: >-
+  Compact, immutable handoff of positive GTEP build decisions to the computed
+  physical-realization service. It contains planning decisions, not nodal sites
+  or PCM dispatch.
+
+required_columns:
+  Plan_Item_ID:
+    type: string
+    constraints: [nonblank, unique]
+  Resource_Kind:
+    type: string
+    allowed: [generation, storage]
+  Zone:
+    type: string
+    constraints: [nonblank]
+  Type:
+    type: string
+    constraints: [nonblank]
+  Build_MW:
+    type: number
+    exclusive_minimum: 0
+
+conditional_columns:
+  Build_MWh:
+    type: number
+    exclusive_minimum: 0
+    required_when: Resource_Kind == storage
+
+identity_and_lineage:
+  preferred_source_id: Candidate_ID
+  mapping: >-
+    A GTEP adapter should preserve Candidate_ID as Plan_Item_ID and record the
+    parent GTEP run and input hashes in the study manifest.
+
+semantics:
+  - Generation Build_MW and storage Build_MW/Build_MWh are hard conservation totals.
+  - Aggregate GTEP dispatch or generation belongs in a separate reconciliation
+    artifact and is not a hard PCM dispatch constraint by default.

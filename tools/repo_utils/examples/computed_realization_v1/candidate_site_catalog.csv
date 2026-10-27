@@ -1,0 +1,8 @@
+Candidate_Site_ID,Site_ID,Bus_id,Resource_Kind,Zone,Type,Candidate_Max_MW,Candidate_Max_MWh,Site_Max_MW,Existing_Site,Site_Cost,Network_Stress_Score,Resource_Quality_Score,Evidence_Confidence,Eligible,Network_Screen_Passed,Exclusion_Reason,Evidence_Source
+SOL_EXIST,SOLAR_OLD,BUS_101,generation,Z1,Solar,100,,150,true,1,0.5,0.5,0.9,true,true,,reviewed_example
+SOL_RESOURCE,SOLAR_NEW,BUS_102,generation,Z1,Solar,100,,120,false,4,0.1,0.9,0.8,true,true,,reviewed_example
+NG_EXIST,GAS_OLD,BUS_103,generation,Z1,NGCC,50,,100,true,1,0.4,0.5,0.9,true,true,,reviewed_example
+NG_GREEN,GAS_NEW,BUS_104,generation,Z1,NGCC,80,,100,false,3,0.1,0.7,0.8,true,true,,reviewed_example
+BAT_EXIST,BAT_OLD,BUS_105,storage,Z1,Battery,40,160,60,true,1,0.4,0.5,0.9,true,true,,reviewed_example
+BAT_GREEN,BAT_NEW,BUS_106,storage,Z1,Battery,40,160,60,false,2,0.1,0.8,0.8,true,true,,reviewed_example
+SOL_EXCLUDED,SOLAR_EXCLUDED,BUS_107,generation,Z1,Solar,500,,500,false,0,0,1,0.5,false,true,protected_land,illustrative_exclusion

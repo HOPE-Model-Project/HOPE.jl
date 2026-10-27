@@ -1,0 +1,4 @@
+Plan_Item_ID,Resource_Kind,Zone,Type,Build_MW,Build_MWh
+GEN_SOLAR_Z1,generation,Z1,Solar,100,0
+GEN_NGCC_Z1,generation,Z1,NGCC,80,0
+STOR_BATTERY_Z1,storage,Z1,Battery,40,160

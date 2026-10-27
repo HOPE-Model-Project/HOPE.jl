@@ -64,13 +64,13 @@ At minimum, a new entry records:
 | HLA-018 | Source immutability | Realized PCM inputs are written to outputs; source GTEP and PCM cases must remain unchanged | Validated |
 | HLA-019 | Annual PCM computing policy | The full 656-bus, 8760-hour PCM requires a higher-memory worker; July is the workstation agent test | Active |
 | HLA-020 | Repository boundary | Case builders and diagnostics are retained; run workspaces remain ignored generated artifacts | Active |
-| HLA-021 | Realization multiplicity | A zonal plan may have several defensible nodal realizations; ambiguity must be published rather than hidden | Proposed |
-| HLA-022 | Computed siting | General downscaling uses a versioned candidate-site catalog and deterministic constrained allocation policy | Proposed |
+| HLA-021 | Realization multiplicity | A zonal plan may have several defensible nodal realizations; ambiguity must be published rather than hidden | Active |
+| HLA-022 | Computed siting | General downscaling uses a versioned candidate-site catalog and deterministic constrained allocation policy | Active |
 | HLA-023 | Holistic feedback | Infeasibility or any selected assessment finding creates a structured revision request and never directly mutates upstream inputs | Proposed |
 | HLA-024 | Study acceptance | Input validity, execution, mathematical feasibility, and assessment-specific criteria are separate gates pinned before execution | Proposed |
 | HLA-025 | Iteration lineage | Every approved revision creates immutable child artifacts with a machine-readable delta | Proposed |
 | HLA-026 | Change authority | Agents may make only allowlisted changes; material scientific assumptions require recorded human approval | Proposed |
-| HLA-027 | Downscaling v1 | Computed siting uses hard candidate screening followed by deterministic constrained allocation and network screening | Proposed |
+| HLA-027 | Downscaling v1 | Computed siting uses hard candidate screening followed by deterministic constrained allocation and network screening | Active |
 | HLA-028 | Energy reconciliation | Capacity is conserved exactly; PCM dispatch is endogenous and compared with GTEP energy unless a study explicitly requires hard matching | Proposed |
 
 ## Detailed entries
@@ -304,7 +304,7 @@ At minimum, a new entry records:
 
 | Decision | Related IDs | Required work |
 | --- | --- | --- |
-| Computed downscaling v1 | HLA-003, HLA-004, HLA-021, HLA-022, HLA-027, HLA-028 | Define the candidate catalog and policy schemas, implement screening and constrained allocation, publish three policy-labelled realizations when feasible, and automate conservation, deterministic-repeatability, profile, and network-screen checks |
+| Computed downscaling v1 integration | HLA-003, HLA-004, HLA-021, HLA-022, HLA-027, HLA-028 | Derive a `CapacityPlan` from solved GTEP artifacts, build a reviewed Maryland candidate catalog, connect allocated sites to the existing PCM resource builder, and add live network/profile screens; the standalone allocator, schemas, three variants, conservation checks, deterministic tests, and artifact package are implemented |
 | Operational template registry | HLA-005, HLA-007, HLA-008 | Define schema and precedence; update realization and audits |
 | Production-grade unitization | HLA-005, HLA-008 | Assign unit sizes and commitment parameters by technology |
 | Exact annual or rolling PCM | HLA-012, HLA-019 | Add state carry and annual-policy accounting or provision a high-memory worker |
@@ -316,6 +316,7 @@ At minimum, a new entry records:
 
 | Date | Change |
 | --- | --- |
+| 2026-10-27 | Implemented the standalone `constrained_site_allocate_v1` service, typed input schemas, three policy-labelled alternatives, hard candidate and capacity constraints, deterministic tests, CLI, example, and hashed realization-set artifacts. |
 | 2026-10-27 | Specified `constrained_site_allocate_v1`, including hard screening before ranking, three policy-labelled alternatives, exact capacity conservation, endogenous PCM dispatch, aggregate-energy reconciliation, weather-profile validation, and the decision to defer learned downscaling. |
 | 2026-10-26 | Generalized the adaptive design from a reliability-oriented GTEP-PCM example to a holistic-assessment framework with distinct invalid-input, execution-failure, infeasible, feasible-but-failed, and accepted outcomes. |
 | 2026-10-26 | Added proposed general nodal-realization, operational-feedback, acceptance, iteration-lineage, and agent-authority decisions for the adaptive GTEP-realization-PCM workflow. |

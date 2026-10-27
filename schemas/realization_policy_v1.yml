@@ -1,0 +1,46 @@
+schema_name: HOPE computed realization policy
+schema_version: 1
+artifact_type: HOPE.realization_policy
+status: proposed
+format: YAML
+description: >-
+  Versioned scientific policy for deterministic constrained allocation of a
+  zonal CapacityPlan to candidate nodal sites.
+
+required_top_level:
+  schema_version: { type: integer, value: 1 }
+  artifact_type: { type: string, value: HOPE.realization_policy }
+  method: { type: string, value: constrained_site_allocate_v1 }
+
+optional_top_level:
+  solver: { type: string, default: highs, allowed: [highs] }
+  tolerance_mw: { type: number, default: 1.0e-6, exclusive_minimum: 0 }
+  minimum_allocation_mw: { type: number, default: 0, minimum: 0 }
+  max_sites_per_plan_item: { type: integer, minimum: 1 }
+  tie_break_epsilon: { type: number, default: 1.0e-9, minimum: 0 }
+  variant_order: { type: list }
+  weights:
+    type: mapping
+    allowed_fields:
+      - site_cost
+      - network_stress
+      - resource_quality
+      - brownfield
+      - evidence_quality
+      - fragmentation
+  variants:
+    type: mapping
+    description: >-
+      Policy-labelled alternatives. Each variant may override weights,
+      max_sites_per_plan_item, or exclude explicitly named candidate IDs.
+
+default_variants:
+  balanced_baseline: central reviewed weights
+  existing_site_priority: stronger brownfield preference
+  resource_network_priority: stronger resource and network preferences
+
+determinism:
+  solver_threads: 1
+  tie_break: Candidate_Site_ID lexical order after objective terms
+  note: >-
+    Identical inputs and policy yield identical allocations within tolerance.

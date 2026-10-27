@@ -54,6 +54,7 @@ include("run.jl")                  #run module
 include("erec.jl")                 #EREC postprocessing module
 include("debug.jl")                #debug function
 include("holistic_linkage.jl")     #auditable multi-resolution GTEP-PCM linkage
+include("computed_realization.jl") #deterministic zonal-to-nodal site allocation
 include("holistic_coverage.jl")    #machine-readable holistic coverage and acceptance
 include("holistic_contract.jl")    #versioned handoff and physical-realization contracts
 include("run_holistic.jl")         #Holistic assessment: GTEP-PCM two stage
@@ -123,6 +124,14 @@ export holistic_coverage_metrics
 export holistic_model_activity_metrics
 export holistic_case_fingerprint
 export load_holistic_physical_realization
+export compute_nodal_realizations
+export load_capacity_plan
+export load_candidate_site_catalog
+export load_realization_policy
+export validate_candidate_site_catalog
+export validate_capacity_plan
+export validate_realization_policy
+export write_computed_realization_set
 export load_operational_resource_templates
 export validate_operational_resource_templates
 export validate_holistic_handoff_contract

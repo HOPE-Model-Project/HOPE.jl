@@ -11,6 +11,7 @@ This folder contains general repository utilities that are not specific to a sin
 - `build_md_transfer_coverage_benchmark.py`: derive an isolated 8760-hour Maryland GTEP/July 656-bus PCM stress workspace from the canonical cases, with documented test-only assumptions that exercise retirement and transmission realization.
 - `build_pjm_holistic_canonical_pair.jl`: build the canonical PJM holistic benchmark pair.
 - `build_pjm_holistic_mixed_pair.jl`: build the mixed PJM holistic benchmark pair used for chronology and workflow experiments.
+- `compute_nodal_realizations.jl`: allocate a zonal `CapacityPlan` among reviewed candidate PCM sites with hard screening, exact MW/MWh conservation, policy-labelled alternatives, and a hashed audit package.
 - `run_holistic_agent_job.jl`: thin command-line adapter used by MCP/agent jobs to run the core `HOPE.run_hope_holistic` workflow and update a persistent run manifest.
 
 The transfer implementation itself is package code, not a utility script:
@@ -28,6 +29,26 @@ Supporting notes and case-specific helpers for those benchmarks are organized un
 - `md_holistic_full_pair/`
 - `pjm_holistic_canonical_pair/`
 - `pjm_holistic_mixed_pair/`
+
+## Computed Nodal Realization
+
+Run the version-1 constrained site-and-allocate tool with:
+
+```powershell
+julia --project=. tools/repo_utils/compute_nodal_realizations.jl `
+  <capacity-plan.csv> <candidate-site-catalog.csv> `
+  <realization-policy.yml> <output-directory>
+```
+
+The input contracts are described by `schemas/capacity_plan_v1.yml`,
+`schemas/candidate_site_catalog_v1.yml`, and
+`schemas/realization_policy_v1.yml`. A runnable synthetic example is under
+`tools/repo_utils/examples/computed_realization_v1/`.
+
+The tool is deliberately upstream of `src/holistic_linkage.jl`: it computes and
+audits candidate-to-bus allocations, while the existing linkage continues to
+construct PCM resources and apply operational templates. This separation keeps
+the validated `explicit_bus` path unchanged.
 
 ## General Repository Utilities
 

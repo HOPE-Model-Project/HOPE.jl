@@ -5,7 +5,10 @@
 This document proposes an adaptive holistic-assessment framework for HOPE-AI
 after the validated deterministic GTEP-to-PCM composite tool. GTEP,
 realization, and PCM form the first concrete workflow, not the limit of the
-framework. This is a design specification, not an implemented agent system.
+framework. This remains a design specification for the agent system. The
+version-1 computed-realization engine described below is now implemented as a
+standalone deterministic service, but it is not yet wired into an adaptive
+multi-agent loop.
 
 The motivating study pattern is iterative:
 
@@ -134,6 +137,17 @@ realization engine, inspect its evidence, and explain or revise the policy.
 | `HolisticAssessmentContract` | Selected assessment modules, model-feasibility and assessment gates, evaluation horizons, allowed revisions, approvals, iteration limit, and compute budget |
 
 ### Computed downscaling method v1: constrained site-and-allocate
+
+**Implementation status:** `src/computed_realization.jl` implements the
+screening, constrained allocation, policy variants, exact capacity checks, and
+hashed realization-set package. The command-line entry point is
+`tools/repo_utils/compute_nodal_realizations.jl`; its three input contracts are
+documented in `schemas/capacity_plan_v1.yml`,
+`schemas/candidate_site_catalog_v1.yml`, and
+`schemas/realization_policy_v1.yml`. A synthetic executable example is under
+`tools/repo_utils/examples/computed_realization_v1/`. Integration with solved
+GTEP outputs, reviewed Maryland candidates, the existing PCM resource builder,
+and a live network screen remains subsequent work.
 
 The first general realization method should be useful before it is elaborate.
 It should adapt the fundamentals-based logic of Site-and-Grow to HOPE without

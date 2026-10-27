@@ -15,6 +15,7 @@ using Test
     include("test-erec-snapshot.jl")
     include("test-holistic.jl")
     include("test-holistic-linkage.jl")
+    include("test-computed-realization.jl")
     include("test-holistic-contract.jl")
     include("test-holistic-benchmark.jl")
     include("test-lmp-sign-regression.jl")

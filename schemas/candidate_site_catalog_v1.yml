@@ -1,0 +1,80 @@
+schema_name: HOPE candidate site catalog
+schema_version: 1
+artifact_type: HOPE.candidate_site_catalog
+status: proposed
+format: CSV
+description: >-
+  Candidate bus and site evidence used by constrained_site_allocate_v1. Each
+  row is one technology-specific candidate. Site_ID may be shared across rows
+  to enforce a common physical-site capacity limit.
+
+required_columns:
+  Candidate_Site_ID:
+    type: string
+    constraints: [nonblank, unique]
+  Bus_id:
+    type: string
+    constraints: [nonblank, resolves_in_reference_network]
+  Resource_Kind:
+    type: string
+    allowed: [generation, storage]
+  Zone:
+    type: string
+    description: Planning zone that this candidate may realize.
+  Type:
+    type: string
+    description: Must exactly match the CapacityPlan technology label.
+  Candidate_Max_MW:
+    type: number
+    exclusive_minimum: 0
+
+optional_columns:
+  Site_ID:
+    type: string
+    default: Candidate_Site_ID
+    description: Shared physical-site identity for cross-technology site caps.
+  Site_Max_MW:
+    type: number
+    exclusive_minimum: 0
+    description: Must be identical on all rows sharing Site_ID.
+  Candidate_Max_MWh:
+    type: number
+    exclusive_minimum: 0
+    description: Storage energy limit; required by policy when energy is bounded.
+  Eligible:
+    type: boolean
+    default: true
+  Network_Screen_Passed:
+    type: boolean
+    default: true
+  Exclusion_Reason:
+    type: string
+    default: ""
+  Existing_Site:
+    type: boolean
+    default: false
+  Site_Cost:
+    type: number
+    default: 0
+    preference: lower_is_better
+  Network_Stress_Score:
+    type: number
+    default: 0
+    preference: lower_is_better
+  Resource_Quality_Score:
+    type: number
+    default: 0
+    preference: higher_is_better
+  Evidence_Confidence:
+    type: number
+    default: 1
+    preference: higher_is_better
+  Latitude: { type: number }
+  Longitude: { type: number }
+  Evidence_Source: { type: string }
+
+screening_semantics:
+  - Hard exclusions are applied before any objective score is evaluated.
+  - A high preference score cannot compensate for an ineligible candidate.
+  - Network_Screen_Passed is evidence from a separate deterministic screen; the
+    allocation optimizer does not invent a power-flow result.
