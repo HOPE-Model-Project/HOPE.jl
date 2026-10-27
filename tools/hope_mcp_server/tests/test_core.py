@@ -31,6 +31,7 @@ from hope_mcp_server.core import (
     hope_debug_solver_environment,
     hope_debug_solver_environment_async,
     hope_holistic_status,
+    hope_wait_holistic_study,
     hope_job_status,
     hope_open_dashboard,
     hope_output_summary,
@@ -224,7 +225,128 @@ class HopeCoreTests(unittest.TestCase):
         self.assertIn("hope_prepare_holistic_validation_study", tool_names)
         self.assertIn("hope_launch_holistic_study", tool_names)
         self.assertIn("hope_holistic_study_status", tool_names)
+        self.assertIn("hope_wait_holistic_study", tool_names)
         self.assertIn("hope_audit_holistic_study", tool_names)
+        self.assertIn("hope_submit_holistic_agent_report", tool_names)
+        self.assertIn("hope_evaluate_holistic_agent_study", tool_names)
+
+    def test_holistic_agent_tools_record_server_observed_calls(self) -> None:
+        mcp = create_mcp_server(read_only=False, host="127.0.0.1", port=8768)
+        study_id = "trace-test"
+        response = {"ok": True, "study_id": study_id, "status": "prepared"}
+        with mock.patch(
+            "hope_mcp_server.server.record_holistic_agent_tool_event",
+            return_value={"ok": True},
+        ) as recorder:
+            lifecycle_calls = (
+                (
+                    "hope_prepare_holistic_study",
+                    "hope_mcp_server.server.hope_prepare_holistic_study",
+                    ("gtep", "pcm", study_id, "highs", "agent-A"),
+                ),
+                (
+                    "hope_prepare_holistic_validation_study",
+                    "hope_mcp_server.server.hope_prepare_holistic_validation_study",
+                    (
+                        study_id,
+                        "md-rps20-annual-gtep-monthly-pcm",
+                        7,
+                        48,
+                        "gurobi",
+                        "agent-A",
+                    ),
+                ),
+                (
+                    "hope_launch_holistic_study",
+                    "hope_mcp_server.server.hope_launch_holistic_study",
+                    (study_id, "agent-B"),
+                ),
+                (
+                    "hope_holistic_study_status",
+                    "hope_mcp_server.server.hope_holistic_study_status",
+                    (study_id,),
+                ),
+                (
+                    "hope_wait_holistic_study",
+                    "hope_mcp_server.server.hope_wait_holistic_study",
+                    (study_id, 45.0, 5.0),
+                ),
+                (
+                    "hope_audit_holistic_study",
+                    "hope_mcp_server.server.hope_audit_holistic_study",
+                    (study_id, "agent-C"),
+                ),
+            )
+            for tool_name, target, arguments in lifecycle_calls:
+                with mock.patch(target, return_value=response):
+                    result = mcp._tool_manager.get_tool(tool_name).fn(*arguments)
+                self.assertTrue(result["ok"])
+        self.assertEqual(recorder.call_count, len(lifecycle_calls))
+        self.assertEqual(
+            [call.kwargs["operation"] for call in recorder.call_args_list],
+            [item[0] for item in lifecycle_calls],
+        )
+
+        with mock.patch(
+            "hope_mcp_server.server.hope_submit_holistic_agent_report",
+            return_value=response,
+        ) as submit:
+            result = mcp._tool_manager.get_tool("hope_submit_holistic_agent_report").fn(
+                study_id,
+                {
+                    "study_accepted": True,
+                    "run_published": True,
+                    "audit_accepted": True,
+                    "all_acceptance_checks_passed": True,
+                },
+                ["study_manifest.yml", "run_manifest.yml", "audit_report.yml"],
+                "md-rps20-annual-gtep-july-pcm-v1",
+                "centralized_roles",
+                "agent-C",
+                None,
+            )
+        self.assertTrue(result["ok"])
+        submit.assert_called_once()
+        with mock.patch(
+            "hope_mcp_server.server.hope_evaluate_holistic_agent_study",
+            return_value={"ok": True, "agent_passed": True},
+        ) as evaluate:
+            result = mcp._tool_manager.get_tool("hope_evaluate_holistic_agent_study").fn(
+                study_id, None
+            )
+        self.assertTrue(result["agent_passed"])
+        evaluate.assert_called_once_with(study_id=study_id, task_id=None)
+
+    def test_wait_holistic_study_returns_immediately_for_terminal_status(self) -> None:
+        response = {"ok": True, "study_id": "wait-test", "status": "ready_for_audit"}
+        with mock.patch(
+            "hope_mcp_server.core.hope_holistic_study_status", return_value=response
+        ) as status, mock.patch("hope_mcp_server.core.time.sleep") as sleep:
+            result = hope_wait_holistic_study("wait-test", 10, 1)
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["wait_timed_out"])
+        self.assertEqual(result["wait_poll_count"], 1)
+        status.assert_called_once_with("wait-test")
+        sleep.assert_not_called()
+
+    def test_wait_holistic_study_returns_current_status_after_timeout(self) -> None:
+        response = {"ok": True, "study_id": "wait-test", "status": "running"}
+        with mock.patch(
+            "hope_mcp_server.core.hope_holistic_study_status", return_value=response
+        ), mock.patch(
+            "hope_mcp_server.core.time.monotonic", side_effect=[100.0, 102.0]
+        ), mock.patch("hope_mcp_server.core.time.sleep") as sleep:
+            result = hope_wait_holistic_study("wait-test", 1, 0.25)
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["wait_timed_out"])
+        self.assertEqual(result["wait_poll_count"], 1)
+        sleep.assert_not_called()
+
+    def test_wait_holistic_study_validates_bounds(self) -> None:
+        invalid_timeout = hope_wait_holistic_study("wait-test", True, 1)
+        invalid_interval = hope_wait_holistic_study("wait-test", 5, 6)
+        self.assertEqual(invalid_timeout["error_type"], "invalid_wait_timeout")
+        self.assertEqual(invalid_interval["error_type"], "invalid_wait_interval")
 
     def test_read_only_server_accepts_configured_public_hostname(self) -> None:
         with mock.patch.dict(

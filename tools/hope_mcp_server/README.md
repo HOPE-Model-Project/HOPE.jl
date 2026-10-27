@@ -54,11 +54,116 @@ Claude/local full-access server:
 - `hope_compare_cases`
 - `hope_run_holistic`
 - `hope_holistic_status`
+- `hope_prepare_holistic_study`
+- `hope_prepare_holistic_validation_study`
+- `hope_launch_holistic_study`
+- `hope_holistic_study_status`
+- `hope_wait_holistic_study`
+- `hope_audit_holistic_study`
+- `hope_submit_holistic_agent_report`
+- `hope_evaluate_holistic_agent_study`
 - `hope_run_erec`
 - `hope_rep_day_audit`
 - `hope_aggregation_audit`
 - `hope_open_dashboard`
 - `hope_close_dashboard`
+
+## Agent evaluation
+
+The deterministic holistic audit and the agent evaluation answer different
+questions. `hope_audit_holistic_study` verifies the model run and its transfer
+artifacts. The agent evaluation verifies whether an LLM used the workflow
+correctly and reported the result faithfully.
+
+Lifecycle calls made through the MCP server are recorded in a hash-chained
+`agent_trace.yml` under the durable study directory. After the model audit, the
+agent calls `hope_submit_holistic_agent_report` with four claims and at least
+three evidence files scoped to the study or run workspace:
+
+- `study_accepted`
+- `run_published`
+- `audit_accepted`
+- `all_acceptance_checks_passed`
+
+The server enforces this ordering. A final report or evaluation is rejected
+while the study is `PREPARED`, `RUNNING`, or `READY_FOR_AUDIT`; reporting and
+scoring are allowed only after `ACCEPTED`, `REJECTED`, or `FAILED`. If durable
+trace recording is temporarily blocked (for example by a synchronizer file
+lock), the lifecycle result remains authoritative and is returned with
+`trace_recorded: false` plus `trace_warning`. The agent must continue according
+to the returned lifecycle status. The missing trace event can still make the
+later agent evaluation fail, but it cannot masquerade as a model failure.
+
+Then an independent evaluator calls `hope_evaluate_holistic_agent_study`. Its
+report keeps `model_passed` separate from `agent_passed`, measures tool use and
+retries, verifies evidence and claims against authoritative artifacts, and
+classifies failures as system-design, inter-agent-misalignment, or
+task-verification failures. Task
+`md-rps20-annual-gtep-july-pcm-v1` preserves the first benchmark contract.
+Task `md-rps20-annual-gtep-july-pcm-v2` requires the traced
+`hope_wait_holistic_study` long-poll operation and a `hope_mcp_only` monitoring
+attestation. Task `md-rps20-annual-gtep-july-pcm-v3` is the current recommended
+contract. It preserves those requirements but counts only active decision calls
+against its 10-call efficiency budget; passive long-poll calls remain measured
+without allowing solver runtime to determine whether the agent passes. It also
+requires zero duplicate role-bearing calls: prepare, launch, audit, and report
+submission must each occur at most once. Earlier task thresholds remain fixed
+for reproducibility.
+
+The monitoring attestation declares that the agent used only HOPE MCP lifecycle
+tools while waiting. The server can verify its own traced calls, but it cannot
+independently observe local scripts, shell commands, or other client tools.
+Independent verification of that stronger claim requires host-level telemetry.
+
+### Matched experiment summaries
+
+The versioned protocol in
+`experiments/md_rps20_v3_matched_trials.yml` defines five single-agent and five
+centralized-role trials under the same task, source cases, solver, client model,
+exact prompt templates, and active-call budget. The single-agent and
+role-separated variants perform the same lifecycle operations; only role
+assignment differs. Pilot and confounded studies are explicitly excluded from
+the formal repetitions.
+
+This is a workflow-governance benchmark around one composite deterministic
+GTEP-to-PCM transaction. It does not test separate GTEP, physical-realization,
+and PCM agents or cross-model scientific feedback. The completed 5-versus-5
+study found 100% model and agent pass rates for both architectures, with zero
+invalid calls, duplicate role calls, false-safe claims, or classified failures.
+
+After one or more trials have produced `agent_evaluation_report.yml`, aggregate
+the authoritative reports with:
+
+```bash
+uv --directory tools/hope_mcp_server run hope-agent-experiment-summary \
+  --study-root artifacts/agent_studies \
+  --task-id md-rps20-annual-gtep-july-pcm-v3 \
+  --study-id-prefix claude-md-v3formal- \
+  --exclude-study-id claude-md-v3formal-single-20261025-r01 \
+  --exclude-study-id claude-md-v3formal-single-20261025-r05 \
+  --architecture single_agent \
+  --architecture centralized_roles \
+  --expected-trials-per-architecture 5 \
+  --output-dir artifacts/agent_experiments/md-rps20-v3-matched
+```
+
+The command writes a YAML summary, a per-run CSV, a per-architecture CSV, and a
+Markdown report. It also reads each study manifest and reports whether task ID,
+request hash, GTEP and PCM source hashes, and solver are identical. Do not
+interpret architecture comparisons when `matched_conditions` is false. The
+study-ID prefix prevents earlier pilots from entering the formal experiment.
+Elapsed-time comparisons use the executor receipt's interval from launch
+completion to run completion, which excludes uncontrolled pauses between
+separate role threads. The full HOPE trace span is retained separately as
+`workflow_elapsed_seconds` for diagnostics and is not an
+architecture-performance measure.
+The summary also reports `ready_for_comparison: false` whenever a prefixed study
+lacks an evaluation report or the five-per-architecture target is incomplete,
+so failed or abandoned trials cannot silently disappear from the comparison.
+It also excludes explicitly listed confounded trials and treats an evaluation
+as incomplete when its recorded run or audit hashes no longer match the
+authoritative artifacts. This prevents a score produced before model completion
+from entering the matched comparison.
 
 ChatGPT remote read-only server:
 
@@ -238,6 +343,7 @@ The full local server also exposes a four-step durable protocol:
   annual-GTEP/monthly-PCM Maryland profile in an isolated study workspace;
 - `hope_launch_holistic_study(study_id, ...)` for the workflow executor;
 - `hope_holistic_study_status(study_id)` for reconnect-safe monitoring; and
+- `hope_wait_holistic_study(study_id, ...)` for bounded server-side long-polling;
 - `hope_audit_holistic_study(study_id, ...)` for independent acceptance.
 
 Preparation does not launch Julia. It pins the source fingerprints and request
@@ -247,6 +353,11 @@ reads the durable run evidence and writes `audit_report.yml`, then records an
 `ACCEPTED` or `REJECTED` receipt. Set `HOPE_AGENT_STUDIES_ROOT` to relocate
 study manifests. These are logical roles and can be called by separate agents
 or sequentially by one MCP client.
+
+Executor receipts distinguish lifecycle progress from outcome: `run_status`
+reports `running`, `done`, `failed`, or `cancelled`; `run_ok` is `null` while a
+run is active, `true` after successful completion, and `false` after terminal
+failure or cancellation.
 
 ## Local run
 

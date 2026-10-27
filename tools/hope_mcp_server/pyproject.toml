@@ -16,6 +16,7 @@ dependencies = [
 [project.scripts]
 hope-mcp-server = "hope_mcp_server.server:main"
 hope-mcp-server-chatgpt = "hope_mcp_server.chatgpt:main"
+hope-agent-experiment-summary = "hope_mcp_server.experiment_summary:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hope_mcp_server"]

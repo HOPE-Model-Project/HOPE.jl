@@ -1,7 +1,7 @@
 # Holistic Linkage Assumption and Decision Log
 
 **Status:** Living document
-**Last updated:** 2026-10-20
+**Last updated:** 2026-10-26
 
 ## Purpose
 
@@ -64,6 +64,12 @@ At minimum, a new entry records:
 | HLA-018 | Source immutability | Realized PCM inputs are written to outputs; source GTEP and PCM cases must remain unchanged | Validated |
 | HLA-019 | Annual PCM computing policy | The full 656-bus, 8760-hour PCM requires a higher-memory worker; July is the workstation agent test | Active |
 | HLA-020 | Repository boundary | Case builders and diagnostics are retained; run workspaces remain ignored generated artifacts | Active |
+| HLA-021 | Realization multiplicity | A zonal plan may have several defensible nodal realizations; ambiguity must be published rather than hidden | Proposed |
+| HLA-022 | Computed siting | General downscaling uses a versioned candidate-site catalog and deterministic constrained allocation policy | Proposed |
+| HLA-023 | Holistic feedback | Infeasibility or any selected assessment finding creates a structured revision request and never directly mutates upstream inputs | Proposed |
+| HLA-024 | Study acceptance | Input validity, execution, mathematical feasibility, and assessment-specific criteria are separate gates pinned before execution | Proposed |
+| HLA-025 | Iteration lineage | Every approved revision creates immutable child artifacts with a machine-readable delta | Proposed |
+| HLA-026 | Change authority | Agents may make only allowlisted changes; material scientific assumptions require recorded human approval | Proposed |
 
 ## Detailed entries
 
@@ -146,9 +152,14 @@ At minimum, a new entry records:
   rejection are implemented.
 - **Transmission:** `Corridor_ID` is preferred, followed by explicit PCM
   endpoints. Directional capacity conservation is audited.
-- **Validation boundary:** the annual Maryland result selected neither retirement
-  nor transmission expansion. The restricted linkage benchmark exercises those
-  paths; the annual case should not claim that it does.
+- **Validation boundary:** the canonical annual Maryland result selected neither
+  retirement nor transmission expansion. The compact restricted benchmark and
+  the separate high-resolution annual-GTEP/July-PCM transfer-coverage benchmark
+  exercise those paths; the canonical result should not claim that it does.
+- **High-resolution coverage evidence:** the derived benchmark retires the 2 MW
+  `G1149` asset and adds 1,000 MW in each direction to `OSM_L62255589`. PCM uses
+  436.409 MW of flow above the derived pre-upgrade rating. The forcing values are
+  explicitly test-only and are not Maryland planning assumptions.
 
 ### HLA-011 — reserve translation
 
@@ -204,19 +215,72 @@ At minimum, a new entry records:
   `ModelCases/tools/`. Generated run workspaces belong under ignored
   `artifacts/agent_runs/`.
 
+### HLA-021 and HLA-022 — general nodal realization
+
+- A zonal build decision does not generally identify one uniquely correct nodal
+  system. When candidate locations are not declared, HOPE should represent the
+  ambiguity explicitly as a set of diverse, defensible physical realizations.
+- Computed realization should consume a reviewed candidate-site catalog,
+  reference network, operational templates, and versioned policy. It should
+  conserve zonal MW and MWh while enforcing technology, zone, site,
+  interconnection, unitization, and network-reference constraints.
+- The allocation objective, weights, solver, tolerances, diversity settings,
+  and tie-breaker are scientific assumptions and must be present in the
+  artifact. Given identical pinned inputs and policy, generation of the
+  realization set should be reproducible within declared tolerances.
+- The validated `explicit_bus` rule remains a supported declared-realization
+  strategy and the regression baseline. General siting is a new layer rather
+  than a replacement hidden inside the existing linkage.
+
+### HLA-023 through HLA-026 — adaptive scientific workflow
+
+- A downstream failure is first recorded as evidence and classified. It may be
+  caused by data, numerical behavior, physical realization, model-specific
+  assumptions, or a structural upstream deficiency; infeasibility alone does
+  not identify which layer should change.
+- Holistic assessment is broader than reliability. Operational feasibility,
+  reliability, economics, deliverability, policy, emissions, markets, and
+  resilience may be separate typed assessment modules that share the same
+  artifact and feedback protocol.
+- Invalid input, execution or numerical failure, mathematical infeasibility,
+  feasible-but-failed assessment, and accepted assessment are distinct outcomes.
+  Conflict or minimum-slack diagnostics may explain infeasibility, but a relaxed
+  diagnostic solution is not the original model result.
+- A downstream agent may publish a `RevisionRequest` with parent hashes,
+  findings, observed metrics, inferred cause, proposed delta, alternatives, and
+  required approval. It may not directly edit an upstream accepted artifact.
+- The study pins separate gates for artifact integrity, realization fidelity,
+  solver feasibility, every selected assessment module, and scientific
+  governance. A feasible PCM run is not automatically a successful holistic or
+  reliability result, and an agent may not weaken a failed threshold to declare
+  success.
+- Every iteration is an immutable child scenario. Convergence requires all hard
+  gates to pass; iteration and compute budgets, cycles, unauthorized changes,
+  and human stops are explicit terminal conditions.
+- Changes to policy, reliability criteria, demand, costs, planning methodology,
+  candidate sites, topology, external data, formulation, or publication require
+  recorded human approval unless a reviewed study contract explicitly delegates
+  a bounded parameter range.
+- The detailed proposed contracts and role boundaries are maintained in
+  [Adaptive Holistic Assessment Agents](@ref adaptive-gtep-pcm-agents).
+
 ## Open decisions
 
 | Decision | Related IDs | Required work |
 | --- | --- | --- |
-| Nodal siting from zonal-only GTEP | HLA-003, HLA-004 | Define candidate-bus schema, allocation objective, feasibility rules, and feedback to GTEP |
+| Nodal siting from zonal-only GTEP | HLA-003, HLA-004, HLA-021, HLA-022 | Implement the proposed candidate-site schema, deterministic allocation objective, diverse realization set, and screening sequence |
 | Operational template registry | HLA-005, HLA-007, HLA-008 | Define schema and precedence; update realization and audits |
 | Production-grade unitization | HLA-005, HLA-008 | Assign unit sizes and commitment parameters by technology |
 | Exact annual or rolling PCM | HLA-012, HLA-019 | Add state carry and annual-policy accounting or provision a high-memory worker |
 | Replace inferred physical data | HLA-016, HLA-017 | Incorporate authoritative ratings/topology when licensing and access permit |
-| Broaden transfer coverage | HLA-009, HLA-010 | Add realistic annual scenarios that exercise retirement and line expansion without distorting the benchmark |
+| Production-economics retirement and transmission scenarios | HLA-009, HLA-010 | Replace test-only forcing assumptions with reviewed planning economics when suitable data become available |
+| Adaptive holistic feedback | HLA-023, HLA-024, HLA-025, HLA-026 | Implement typed assessment modules, infeasibility diagnostics, findings, revision requests, pinned gates, approval records, immutable child scenarios, and bounded stopping rules |
 
 ## Change history
 
 | Date | Change |
 | --- | --- |
+| 2026-10-26 | Generalized the adaptive design from a reliability-oriented GTEP-PCM example to a holistic-assessment framework with distinct invalid-input, execution-failure, infeasible, feasible-but-failed, and accepted outcomes. |
+| 2026-10-26 | Added proposed general nodal-realization, operational-feedback, acceptance, iteration-lineage, and agent-authority decisions for the adaptive GTEP-realization-PCM workflow. |
+| 2026-10-24 | Added the separate high-resolution transfer-coverage benchmark, including pinned retirement, transmission, physical-flow, and source-immutability evidence. |
 | 2026-10-20 | Created the consolidated log from the implemented handoff contract, Maryland case manifests/provenance, solved annual-GTEP/July-PCM validation, and current design discussion. |

@@ -57,6 +57,7 @@ include("holistic_linkage.jl")     #auditable multi-resolution GTEP-PCM linkage
 include("holistic_coverage.jl")    #machine-readable holistic coverage and acceptance
 include("holistic_contract.jl")    #versioned handoff and physical-realization contracts
 include("run_holistic.jl")         #Holistic assessment: GTEP-PCM two stage
+include("holistic_benchmark.jl")   #Deterministic solved-value and handoff evidence
 
 #export HOPE functions
 export aggregate_gendata_gtep
@@ -129,6 +130,7 @@ export validate_holistic_transfer_reconciliation
 export validate_holistic_source_immutability!
 export write_holistic_handoff_contract_report
 export write_holistic_coverage_report
+export write_holistic_benchmark_report
 export write_operational_state_artifact
 export write_pcm_operational_state_artifact
 export solve_model

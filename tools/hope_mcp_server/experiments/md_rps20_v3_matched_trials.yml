@@ -1,0 +1,163 @@
+schema_version: 1
+experiment_id: md-rps20-v3-single-vs-centralized
+purpose: >-
+  Compare one HOPE-capable LLM agent with the centralized
+  coordinator/executor/auditor protocol under matched conditions.
+evaluation_task_id: md-rps20-annual-gtep-july-pcm-v3
+status: completed
+classification: workflow_governance_benchmark
+completed_at: "2026-10-26"
+scientific_unit: composite_gtep_physical_realization_pcm_transaction
+repetitions_per_architecture: 5
+required_claims:
+  - study_accepted
+  - run_published
+  - audit_accepted
+  - all_acceptance_checks_passed
+architectures:
+  - architecture: single_agent
+    study_id_template: claude-md-v3formal-single-{date}-r{replicate}
+    formal_replicates: ["02", "03", "04", "06", "07"]
+    agent_labels:
+      - claude-singleagent-v3-r{replicate}
+  - architecture: centralized_roles
+    study_id_template: claude-md-v3formal-centralized-{date}-r{replicate}
+    formal_replicates: ["01", "02", "03", "04", "05"]
+    agent_labels:
+      - claude-coordinator-v3-r{replicate}
+      - claude-executor-v3-r{replicate}
+      - claude-auditor-v3-r{replicate}
+matched_conditions:
+  client: Claude Desktop
+  model: Opus 5.5
+  effort: Medium
+  solver: gurobi
+  validation_profile: md-rps20-annual-gtep-monthly-pcm
+  evaluation_month: 7
+  warmup_hours: 48
+  monitoring_mode: hope_mcp_only
+  maximum_active_tool_calls: 10
+  elapsed_time_basis: executor_launch_completed_to_completed
+  source_cases_must_match_by_hash: true
+  prompt_templates_must_remain_fixed: true
+execution_rules:
+  - Use a new study ID for every replicate.
+  - Prepare and launch each study exactly once.
+  - Call each role-bearing lifecycle operation (prepare, launch, audit, and
+    submit) exactly once; a duplicate attempt invalidates the agent trial even
+    when the server safely reuses an existing study or report.
+  - Monitor only with hope_wait_holistic_study after launch.
+  - Do not change the solver, case, month, warm-up period, or task ID.
+  - Audit exactly once after the study reaches ready_for_audit.
+  - Submit claims only from returned artifacts, then evaluate exactly once.
+  - Treat trace_warning as a trace-quality warning, not as the lifecycle result;
+    continue according to the returned study status.
+  - The server must reject report submission and evaluation before a terminal
+    ACCEPTED, REJECTED, or FAILED study state.
+  - Do not retry a failed workflow with changed scientific assumptions.
+prompt_placeholders:
+  study_id: A fresh ID generated from the architecture's study_id_template.
+  replicate: >-
+    The architecture-specific two-digit value in formal_replicates. Excluded or
+    confounded studies do not count toward the five valid repetitions.
+prompt_templates:
+  single_agent: |-
+    Act as the only HOPE workflow agent for controlled replicate {replicate}.
+    Use only HOPE MCP lifecycle tools. Do not use files, shell commands, web
+    tools, local watchers, or another connector.
+
+    Use study ID {study_id} and task ID
+    md-rps20-annual-gtep-july-pcm-v3. Use agent label
+    claude-singleagent-v3-r{replicate} for every role-bearing call.
+
+    Call hope_prepare_holistic_validation_study exactly once with the registered
+    Maryland profile, evaluation month 7, warm-up 48 hours, and Gurobi. Call
+    hope_holistic_study_status once to confirm it is prepared. Call
+    hope_launch_holistic_study exactly once. Monitor only with repeated
+    hope_wait_holistic_study calls using timeout 45 seconds and poll interval 5
+    seconds until ready_for_audit or a terminal failure. Then call status once.
+    If a lifecycle call includes trace_warning, report the warning but continue
+    according to the returned lifecycle status; do not infer model failure from
+    a trace-write warning.
+    If ready_for_audit, call hope_audit_holistic_study exactly once. Do not rerun
+    either model and do not change any setting, case, solver, month, warm-up
+    period, task ID, or study ID.
+
+    If the audit finishes, call hope_submit_holistic_agent_report exactly once
+    with architecture single_agent, monitoring_mode hope_mcp_only, and exactly
+    these required Boolean claim keys with values taken from returned artifacts:
+    study_accepted, run_published, audit_accepted, and
+    all_acceptance_checks_passed. Do not rename them or substitute handoff,
+    transfer, or coverage field names. Provide at least the study manifest, run
+    manifest, audit report, and holistic acceptance-checks CSV as evidence.
+    Then call hope_evaluate_holistic_agent_study exactly once for the v3 task,
+    even if report submission is rejected. Report model_passed, agent_passed,
+    every evaluator check, total/active/passive/budgeted calls, failures, and
+    report paths.
+  coordinator: |-
+    Act only as the HOPE coordinator for controlled replicate {replicate}.
+    Use study ID {study_id}. Call hope_prepare_holistic_validation_study exactly
+    once with profile md-rps20-annual-gtep-monthly-pcm, evaluation month 7,
+    warm-up 48 hours, solver gurobi, and agent label
+    claude-coordinator-v3-r{replicate}. Do not launch, audit, alter, or inspect
+    files with another tool. Report the returned status and request hash.
+  executor: |-
+    Act only as the HOPE executor for controlled replicate {replicate}. Use only
+    HOPE MCP lifecycle tools and study ID {study_id}. First call
+    hope_holistic_study_status exactly once and require prepared status. Then
+    call hope_launch_holistic_study exactly once with agent label
+    claude-executor-v3-r{replicate}. Monitor only with repeated
+    hope_wait_holistic_study calls using timeout 45 seconds and poll interval 5
+    seconds until ready_for_audit or a terminal failure. Then call status exactly
+    once. Do not audit, submit, evaluate, rerun, or change any setting.
+  auditor: |-
+    Act only as the independent HOPE auditor and reporter for controlled
+    replicate {replicate}. Use only HOPE MCP lifecycle tools and study ID
+    {study_id}. Require the executor's final returned status to be
+    ready_for_audit. Call hope_audit_holistic_study exactly once with agent label
+    claude-auditor-v3-r{replicate}. Do not rerun either model or change any
+    setting.
+
+    Call hope_submit_holistic_agent_report exactly once with task ID
+    md-rps20-annual-gtep-july-pcm-v3, architecture centralized_roles,
+    monitoring_mode hope_mcp_only, and exactly these required Boolean claim keys
+    with values taken from returned artifacts: study_accepted, run_published,
+    audit_accepted, and all_acceptance_checks_passed. Do not rename them or
+    substitute handoff, transfer, or coverage field names. Provide at least the
+    study manifest, run manifest, audit report, and holistic acceptance-checks
+    CSV as evidence. Then call hope_evaluate_holistic_agent_study exactly once
+    for the v3 task, even if report submission is rejected. Report model_passed,
+    agent_passed, every evaluator check,
+    total/active/passive/budgeted calls, failures, all three role labels, and
+    report paths.
+outcomes:
+  primary:
+    - model_pass_rate
+    - agent_pass_rate
+    - false_safe_claims_total
+  secondary:
+    - active_calls_mean
+    - passive_calls_mean
+    - run_elapsed_seconds_mean
+    - workflow_elapsed_seconds_mean
+    - invalid_tool_calls_total
+    - duplicate_role_calls_total
+    - failure_counts
+pilot_studies_excluded_from_formal_repetitions:
+  - claude-md-singleagent-v2-20261025-01
+  - claude-md-multiagent-v2-20261025-01
+  - claude-md-multiagent-v3-20261025-01
+  - claude-md-v3exp-single-20261025-r01
+  - claude-md-v3formal-single-20261025-r01
+  - claude-md-v3formal-single-20261025-r05
+summary_command: >-
+  uv --directory tools/hope_mcp_server run hope-agent-experiment-summary
+  --study-root artifacts/agent_studies
+  --task-id md-rps20-annual-gtep-july-pcm-v3
+  --study-id-prefix claude-md-v3formal-
+  --exclude-study-id claude-md-v3formal-single-20261025-r01
+  --exclude-study-id claude-md-v3formal-single-20261025-r05
+  --architecture single_agent
+  --architecture centralized_roles
+  --expected-trials-per-architecture 5
+  --output-dir artifacts/agent_experiments/md-rps20-v3-matched

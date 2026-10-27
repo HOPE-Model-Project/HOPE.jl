@@ -1,4 +1,9 @@
-# Maryland Full-Year 20% RPS Physical Holistic Benchmark
+# Internal Maryland Full-Year 20% RPS Validation Case
+
+!!! warning "Development validation asset"
+    This case pair is maintained to validate GTEP-to-PCM linkage and future
+    agent workflows. It is not an end-user reference case or a production
+    Maryland planning dataset.
 
 This is HOPE's canonical high-resolution Maryland GTEP-to-PCM benchmark. It
 combines an aggregated planning view with a detailed physical operating view
@@ -16,7 +21,7 @@ The paired ModelCases are:
 
 The assumptions behind spatial realization, parameter transfer, validation
 scope, and computing limits are registered under stable IDs in the
-[Holistic Linkage Assumption and Decision Log](holistic_assumption_log.md).
+[Holistic Linkage Assumption and Decision Log](../../holistic_assumption_log.md).
 
 Their raw inputs are in, respectively:
 
@@ -126,3 +131,10 @@ The detailed solved-data report is in the PCM case's
 Its companion `july_linkage_validation_summary.csv` provides a compact
 machine-readable record of the annual GTEP decisions, exact handoff
 reconciliation, and July PCM operating results.
+
+HOPE can also regenerate a single evidence bundle from the published run
+artifacts. See the
+[internal GTEP-to-PCM benchmark evidence](gtep_pcm_benchmark.md)
+for the
+strict consistency boundary, the candidate-to-bus physical-realization trace,
+and the reporting command.

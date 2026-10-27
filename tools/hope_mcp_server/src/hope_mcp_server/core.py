@@ -19,6 +19,8 @@ from typing import Any
 
 import yaml
 
+from . import agent_evaluation
+
 # The MCP package lives at <repo>/tools/hope_mcp_server/src/hope_mcp_server.
 # Keep the environment override for installed deployments, but make a source
 # checkout work on every developer machine without a user-specific path.
@@ -3206,12 +3208,16 @@ def hope_launch_holistic_study(
     )
     finished_at = time.time()
     receipts["executor"].update(
-        completed_at_unix=finished_at,
-        run_ok=bool(run.get("ok")),
+        launch_completed_at_unix=finished_at,
         job_id=run.get("job_id"),
         run_manifest_path=run.get("manifest_path"),
     )
     if not run.get("ok"):
+        receipts["executor"].update(
+            completed_at_unix=finished_at,
+            run_ok=False,
+            run_status=str(run.get("status", "failed")).lower(),
+        )
         with _holistic_study_lock:
             manifest.update(
                 status="PREPARED",
@@ -3230,6 +3236,20 @@ def hope_launch_holistic_study(
             run=run,
         )
     run_status = str(run.get("status", "running")).lower()
+    receipts["executor"]["run_status"] = run_status
+    if run_status == "done":
+        receipts["executor"].update(
+            completed_at_unix=finished_at,
+            run_ok=True,
+        )
+    elif run_status in {"failed", "cancelled"}:
+        receipts["executor"].update(
+            completed_at_unix=finished_at,
+            run_ok=False,
+        )
+    else:
+        receipts["executor"]["run_ok"] = None
+        receipts["executor"].pop("completed_at_unix", None)
     study_status = "READY_FOR_AUDIT" if run_status == "done" else "RUNNING"
     with _holistic_study_lock:
         manifest.update(
@@ -3265,12 +3285,19 @@ def hope_holistic_study_status(study_id: str) -> dict[str, Any]:
             receipts = dict(manifest.get("receipts", {}))
             executor_receipt = dict(receipts.get("executor", {}))
             executor_receipt.update(
-                run_ok=run_status == "done",
+                run_status=run_status,
                 job_id=run.get("job_id"),
                 run_manifest_path=run.get("manifest_path"),
             )
-            if run_status == "done" and "completed_at_unix" not in executor_receipt:
-                executor_receipt["completed_at_unix"] = time.time()
+            if run_status == "done":
+                executor_receipt["run_ok"] = True
+                executor_receipt.setdefault("completed_at_unix", time.time())
+            elif run_status in {"failed", "cancelled"}:
+                executor_receipt["run_ok"] = False
+                executor_receipt.setdefault("completed_at_unix", time.time())
+            else:
+                executor_receipt["run_ok"] = None
+                executor_receipt.pop("completed_at_unix", None)
             receipts["executor"] = executor_receipt
             manifest["receipts"] = receipts
             manifest["run_request_id"] = manifest.get("study_id")
@@ -3284,6 +3311,17 @@ def hope_holistic_study_status(study_id: str) -> dict[str, Any]:
                 else:
                     manifest["status"] = "RUNNING"
         elif run.get("error_type") == "job_failed":
+            receipts = dict(manifest.get("receipts", {}))
+            executor_receipt = dict(receipts.get("executor", {}))
+            executor_receipt.update(
+                run_status="failed",
+                run_ok=False,
+                completed_at_unix=time.time(),
+                job_id=run.get("job_id"),
+                run_manifest_path=run.get("manifest_path"),
+            )
+            receipts["executor"] = executor_receipt
+            manifest["receipts"] = receipts
             manifest["status"] = "FAILED"
             manifest["last_error"] = {
                 "type": run.get("error_type"),
@@ -3293,6 +3331,74 @@ def hope_holistic_study_status(study_id: str) -> dict[str, Any]:
         with _holistic_study_lock:
             _write_yaml_atomic(manifest_path, manifest)
     return _holistic_study_response(manifest, reused=True, run=run)
+
+
+def hope_wait_holistic_study(
+    study_id: str,
+    timeout_seconds: float = 45.0,
+    poll_interval_seconds: float = 5.0,
+) -> dict[str, Any]:
+    """Wait briefly for a holistic study to reach a terminal lifecycle state."""
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)):
+        return error_result(
+            "invalid_wait_timeout",
+            "timeout_seconds must be a number between 1 and 55.",
+            study_id=study_id,
+        )
+    if timeout_seconds < 1 or timeout_seconds > 55:
+        return error_result(
+            "invalid_wait_timeout",
+            "timeout_seconds must be between 1 and 55.",
+            study_id=study_id,
+        )
+    if isinstance(poll_interval_seconds, bool) or not isinstance(
+        poll_interval_seconds, (int, float)
+    ):
+        return error_result(
+            "invalid_wait_interval",
+            "poll_interval_seconds must be a number between 0.25 and 10.",
+            study_id=study_id,
+        )
+    if (
+        poll_interval_seconds < 0.25
+        or poll_interval_seconds > 10
+        or poll_interval_seconds > timeout_seconds
+    ):
+        return error_result(
+            "invalid_wait_interval",
+            "poll_interval_seconds must be between 0.25 and 10 and no greater than timeout_seconds.",
+            study_id=study_id,
+        )
+
+    started_at = time.monotonic()
+    poll_count = 0
+    terminal_statuses = {"ready_for_audit", "accepted", "rejected", "failed"}
+    while True:
+        result = hope_holistic_study_status(study_id)
+        poll_count += 1
+        elapsed = time.monotonic() - started_at
+        if not result.get("ok"):
+            return {
+                **result,
+                "wait_timed_out": False,
+                "wait_poll_count": poll_count,
+                "wait_elapsed_seconds": round(elapsed, 3),
+            }
+        if str(result.get("status", "")).lower() in terminal_statuses:
+            return {
+                **result,
+                "wait_timed_out": False,
+                "wait_poll_count": poll_count,
+                "wait_elapsed_seconds": round(elapsed, 3),
+            }
+        if elapsed >= timeout_seconds:
+            return {
+                **result,
+                "wait_timed_out": True,
+                "wait_poll_count": poll_count,
+                "wait_elapsed_seconds": round(elapsed, 3),
+            }
+        time.sleep(min(float(poll_interval_seconds), max(0.0, timeout_seconds - elapsed)))
 
 
 def _resolved_artifact_path(value: Any, workspace: Path) -> Path | None:
@@ -3501,6 +3607,168 @@ def hope_audit_holistic_study(
         )
         _write_yaml_atomic(manifest_path, manifest)
     return _holistic_study_response(manifest, reused=False, run=status_result.get("run"))
+
+
+def record_holistic_agent_tool_event(
+    *,
+    study_id: str,
+    operation: str,
+    role: str,
+    agent_label: str | None,
+    arguments: dict[str, Any],
+    result: dict[str, Any],
+    started_at_unix: float,
+) -> dict[str, Any]:
+    """Record a server-observed lifecycle call without trusting agent narration."""
+    manifest, manifest_path, error = _load_holistic_study(study_id)
+    if error is not None:
+        return error
+    assert manifest is not None and manifest_path is not None
+    try:
+        return agent_evaluation.append_tool_event(
+            manifest_path.parent,
+            study_id=str(manifest["study_id"]),
+            operation=operation,
+            role=role,
+            agent_label=agent_label,
+            arguments=arguments,
+            result=result,
+            started_at_unix=started_at_unix,
+        )
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return error_result(
+            "agent_trace_write_failed",
+            str(exc),
+            study_id=study_id,
+        )
+
+
+def hope_submit_holistic_agent_report(
+    study_id: str,
+    claims: dict[str, bool],
+    evidence_paths: list[str],
+    *,
+    task_id: str = "md-rps20-annual-gtep-july-pcm-v1",
+    architecture: str = "centralized_roles",
+    monitoring_mode: str | None = None,
+    agent_label: str | None = None,
+    approvals: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Persist the agent's final claims and scoped evidence for independent scoring."""
+    started_at = time.time()
+    reporter, error = _normalize_agent_label(agent_label, "reporting-agent")
+    if error is not None:
+        return error
+    status_result = hope_holistic_study_status(study_id)
+    if not status_result.get("ok"):
+        return status_result
+    status = str(status_result.get("manifest_status", "UNKNOWN")).upper()
+    if status not in {"ACCEPTED", "REJECTED", "FAILED"}:
+        result = error_result(
+            "study_not_ready_for_agent_report",
+            "Submit the final agent report only after the study is ACCEPTED, REJECTED, or FAILED.",
+            study_id=study_id,
+            status=status.lower(),
+            allowed_statuses=["accepted", "rejected", "failed"],
+            next_action=status_result.get("next_action"),
+        )
+        trace_result = record_holistic_agent_tool_event(
+            study_id=study_id,
+            operation="hope_submit_holistic_agent_report",
+            role="reporter",
+            agent_label=reporter,
+            arguments={
+                "task_id": task_id,
+                "architecture": architecture,
+                "monitoring_mode": monitoring_mode,
+                "claim_names": sorted(claims),
+                "evidence_count": len(evidence_paths),
+            },
+            result=result,
+            started_at_unix=started_at,
+        )
+        if not trace_result.get("ok"):
+            return {
+                **result,
+                "trace_recorded": False,
+                "trace_warning": trace_result,
+            }
+        result["trace_recorded"] = True
+        return result
+    manifest, manifest_path, error = _load_holistic_study(study_id)
+    if error is not None:
+        return error
+    assert manifest is not None and manifest_path is not None and reporter is not None
+    result = agent_evaluation.submit_agent_report(
+        manifest_path.parent,
+        manifest,
+        task_id=task_id,
+        architecture=architecture,
+        monitoring_mode=monitoring_mode,
+        agent_label=reporter,
+        claims=claims,
+        evidence_paths=evidence_paths,
+        approvals=approvals,
+    )
+    trace_result = record_holistic_agent_tool_event(
+        study_id=str(manifest["study_id"]),
+        operation="hope_submit_holistic_agent_report",
+        role="reporter",
+        agent_label=reporter,
+        arguments={
+            "task_id": task_id,
+            "architecture": architecture,
+            "monitoring_mode": monitoring_mode,
+            "claim_names": sorted(claims),
+            "evidence_count": len(evidence_paths),
+        },
+        result=result,
+        started_at_unix=started_at,
+    )
+    if not trace_result.get("ok"):
+        return {
+            **result,
+            "trace_recorded": False,
+            "trace_warning": trace_result,
+        }
+    result["trace_recorded"] = True
+    return result
+
+
+def hope_evaluate_holistic_agent_study(
+    study_id: str,
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """Score agent behavior independently from deterministic model correctness."""
+    status_result = hope_holistic_study_status(study_id)
+    if not status_result.get("ok"):
+        return status_result
+    status = str(status_result.get("manifest_status", "UNKNOWN")).upper()
+    if status not in {"ACCEPTED", "REJECTED", "FAILED"}:
+        return error_result(
+            "study_not_ready_for_agent_evaluation",
+            "Evaluate agent behavior only after the study is ACCEPTED, REJECTED, or FAILED.",
+            study_id=study_id,
+            status=status.lower(),
+            allowed_statuses=["accepted", "rejected", "failed"],
+            next_action=status_result.get("next_action"),
+        )
+    manifest, manifest_path, error = _load_holistic_study(study_id)
+    if error is not None:
+        return error
+    assert manifest is not None and manifest_path is not None
+    try:
+        return agent_evaluation.evaluate_agent_study(
+            manifest_path.parent,
+            manifest,
+            task_id=task_id,
+        )
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return error_result(
+            "agent_evaluation_failed",
+            str(exc),
+            study_id=study_id,
+        )
 
 
 # ---------------------------------------------------------------------------

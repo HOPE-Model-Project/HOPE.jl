@@ -98,9 +98,10 @@ agents without changing the GTEP, physical-realization, or PCM mathematics:
 2. An executor calls `hope_launch_holistic_study` using only the study ID. HOPE
    rejects changed source inputs, then delegates the numerical work to the
    existing isolated and idempotent `hope_run_holistic` transaction.
-3. Any client can call `hope_holistic_study_status` after a disconnect. The
-   durable study record reconciles its state with the durable run manifest and
-   reports the next allowed action.
+3. Any client can call `hope_holistic_study_status` after a disconnect, or use
+   `hope_wait_holistic_study` for a bounded server-side long poll. The durable
+   study record reconciles its state with the durable run manifest and reports
+   the next allowed action.
 4. A validation agent calls `hope_audit_holistic_study`. It independently reads
    the published run and verifies source hashes, request identity, artifact
    scope, handoff and transfer validity, coverage, and every acceptance check.
@@ -171,9 +172,99 @@ The repository currently demonstrates the GTEP-to-PCM portion of this mechanism,
 including stable request and study IDs, coordinator/executor/auditor receipts,
 asynchronous status, reconnect-safe polling, immutable source cases, handoff
 validation, operational templates, and restricted and high-resolution
-integration tests. The next architectural work should evaluate this protocol
-with independent LLM tasks and deepen physical realization and operational
-feedback between GTEP and PCM before adding DART to the connected workflow.
+integration tests.
+
+The literature-informed next step is evaluation, not further agent splitting.
+HOPE preserves the first versioned evaluation task,
+`md-rps20-annual-gtep-july-pcm-v1`, and provides
+`md-rps20-annual-gtep-july-pcm-v2` for reproducing the first traced-wait
+baseline. V2 requires the
+traced `hope_wait_holistic_study` operation and a `hope_mcp_only` monitoring
+attestation, together with server-observed traces, scoped
+evidence submission, and an independent artifact-based scorer. These pieces
+should be used with the completed annual-GTEP/July-PCM benchmark to compare:
+
+1. the deterministic Julia workflow;
+2. one LLM agent using the supported MCP tools; and
+3. the current coordinator/executor/auditor protocol.
+
+All three conditions should use the same cases, acceptance contract, tool surface,
+and approximate computation budget. An independent evaluator should recompute
+acceptance from artifacts and separately score task compliance, evidence-backed
+reporting, invalid or duplicate calls, reconnect behavior, unsafe conclusions,
+approval compliance, latency, and cost. Agent traces are hash-chained and the
+evaluator classifies failures as system-design, inter-agent-misalignment, or
+task-verification failures. It keeps the deterministic `model_passed` result
+separate from `agent_passed`, so a good solve cannot conceal poor tool use or
+unsupported reporting. The repeated matched benchmark is complete. Five valid
+single-agent trials and five valid centralized-role trials all passed both model
+and agent evaluation, with zero invalid calls, duplicate role calls, false-safe
+claims, or classified failures. This validates the workflow-governance mechanism
+around one composite transaction; it does not validate a GTEP-agent,
+realization-agent, and PCM-agent scientific architecture. See the
+[Workflow-Governance Agent Benchmark](@ref workflow-governance-benchmark) for
+the protocol, exclusions, results, and classification.
+
+The HOPE trace observes only calls crossing the HOPE MCP boundary. It cannot
+independently detect a local watcher, shell command, or another connector. The
+monitoring attestation makes the intended boundary explicit; independent proof
+of exclusive HOPE-tool use requires host-level telemetry.
+
+The recommended v3 task removes solver-runtime bias from the efficiency gate.
+It keeps passive wait calls in the trace and metrics but applies its 10-call
+budget only to active tool decisions. Evaluations report total, active, passive,
+and budgeted calls separately. It also requires zero duplicate role-bearing
+calls: repeating prepare, launch, audit, or report submission fails the v3 agent
+evaluation even if the lifecycle operation is idempotent. V1 and v2 remain
+unchanged so their completed trials can still be reproduced exactly.
+
+The first end-to-end v3 centralized-role pilot passed both model and agent
+evaluation. It used 29 total calls, of which 23 were passive waits and only six
+were active decisions. That pilot validates the runtime-neutral accounting, but
+one successful run is not evidence that the role-separated architecture is
+better. The controlled protocol in
+`tools/hope_mcp_server/experiments/md_rps20_v3_matched_trials.yml` therefore
+specifies five fresh single-agent and five fresh centralized-role repetitions.
+The `hope-agent-experiment-summary` command checks their request, source-case,
+and solver hashes before comparing pass rates, tool behavior, elapsed time,
+false-safe claims, and classified failures.
+
+For architecture comparisons, elapsed time is the executor receipt's interval
+from launch completion to run completion. This covers the launched model job
+but excludes uncontrolled pauses while a human opens the next role thread. The
+evaluator also retains the complete trace span as `workflow_elapsed_seconds`;
+that value is useful for diagnosing handoff delays but is not a model-runtime
+metric.
+
+The lifecycle is now enforced at the server boundary rather than left to prompt
+obedience. HOPE rejects final-report submission and agent evaluation until the
+study is `ACCEPTED`, `REJECTED`, or `FAILED`. A trace-write problem is returned
+as a warning alongside the underlying lifecycle result, so an agent cannot
+mistake a locked trace file for a failed model. Evaluation reports pin the
+authoritative run and audit hashes, and the experiment summarizer excludes
+scores that have become stale because those artifacts changed afterward.
+
+A prompt-design pilot that used descriptive output fields instead of the four
+required claim keys was rejected before evaluation. The current protocol names
+those keys explicitly. The evaluator can now score a rejected or missing final
+report as agent failure while still recognizing a successful model run, and the
+experiment summary blocks comparison when any formal study lacks an evaluation
+artifact. This prevents failed trials from being lost through survivorship bias.
+The first formal-prefix single-agent attempt on 2026-10-25 is also explicitly
+excluded: it submitted and evaluated while the run was still active, although
+the run later published successfully. It is retained as system-design evidence,
+not counted as a scientific architecture replicate. Single-agent replicate 05
+is likewise retained but excluded because the accepted study was later reused,
+adding a second prepare and report submission to its trace. Replicate 07 replaces
+it in the five-run formal matrix.
+
+The comparison is now complete and does not decide whether GTEP, physical
+realization, and PCM benefit from separate persistent agents, because both
+architectures called the same composite transaction. The next agent-design step
+is to specify stage-level scientific authority, artifact contracts, revision
+requests, convergence rules, and human approvals. Physical-realization and
+operational-feedback development should continue as deterministic model work,
+so added model scope is not confused with added agent complexity.
 
 See [Multi-Model and Multi-Agent System Design](multi_agent_system_design.md) for
 the broader design rationale and development roadmap.

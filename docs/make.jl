@@ -26,7 +26,6 @@ pages = OrderedDict(
         "Maryland Full-Year Holistic Case" => "case_md_holistic_full8760.md",
         "Maryland Restricted Linkage Benchmark" => "case_md_restricted_linkage.md",
         "Maryland 20% RPS Public Holistic Benchmark" => "case_md_rps20_holistic.md",
-        "Maryland Full-Year 20% RPS Physical Benchmark" => "case_md_rps20_full8760_holistic.md",
         "USA 64-Zone GTEP Case" => "case_usa64_gtep.md",
         "RTS24 PCM Multizone4 Congested 1-Month Case" => "case_rts24_pcm_multizone4.md",
         "RTS24 DART Case" => "case_rts24_dart.md",
@@ -61,12 +60,16 @@ pages = OrderedDict(
     ],
     "HOPE-AI" => [
         "HOPE-AI (LLM Agent)" => "hope_ai.md",
-        "Multi-Model and Multi-Agent Design" => "multi_agent_system_design.md",
-        "Multi-Agent Mechanism" => "multi_agent_mechanism.md",
+        "Multi-Model and Multi-Agent Design" => "development/holistic_agent/multi_agent_system_design.md",
+        "Adaptive Holistic Assessment Agents" => "development/holistic_agent/adaptive_gtep_pcm_agents.md",
+        "Multi-Agent Mechanism" => "development/holistic_agent/multi_agent_mechanism.md",
+        "Workflow-Governance Benchmark" => "development/holistic_agent/workflow_governance_benchmark.md",
     ],
     "Project" => [
         "Contributing" => "90-contributing.md",
         "Developer Guide" => "91-developer.md",
+        "Internal GTEP-to-PCM Benchmark" => "development/holistic_agent/gtep_pcm_benchmark.md",
+        "Internal Maryland Validation Case" => "development/holistic_agent/md_rps20_validation_case.md",
     ],
 )
 
