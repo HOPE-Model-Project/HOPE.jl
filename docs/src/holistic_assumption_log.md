@@ -1,7 +1,7 @@
 # Holistic Linkage Assumption and Decision Log
 
 **Status:** Living document
-**Last updated:** 2026-10-26
+**Last updated:** 2026-10-27
 
 ## Purpose
 
@@ -70,6 +70,8 @@ At minimum, a new entry records:
 | HLA-024 | Study acceptance | Input validity, execution, mathematical feasibility, and assessment-specific criteria are separate gates pinned before execution | Proposed |
 | HLA-025 | Iteration lineage | Every approved revision creates immutable child artifacts with a machine-readable delta | Proposed |
 | HLA-026 | Change authority | Agents may make only allowlisted changes; material scientific assumptions require recorded human approval | Proposed |
+| HLA-027 | Downscaling v1 | Computed siting uses hard candidate screening followed by deterministic constrained allocation and network screening | Proposed |
+| HLA-028 | Energy reconciliation | Capacity is conserved exactly; PCM dispatch is endogenous and compared with GTEP energy unless a study explicitly requires hard matching | Proposed |
 
 ## Detailed entries
 
@@ -222,8 +224,8 @@ At minimum, a new entry records:
   ambiguity explicitly as a set of diverse, defensible physical realizations.
 - Computed realization should consume a reviewed candidate-site catalog,
   reference network, operational templates, and versioned policy. It should
-  conserve zonal MW and MWh while enforcing technology, zone, site,
-  interconnection, unitization, and network-reference constraints.
+  conserve zonal generation MW and storage MW/MWh while enforcing technology,
+  zone, site, interconnection, unitization, and network-reference constraints.
 - The allocation objective, weights, solver, tolerances, diversity settings,
   and tie-breaker are scientific assumptions and must be present in the
   artifact. Given identical pinned inputs and policy, generation of the
@@ -231,6 +233,40 @@ At minimum, a new entry records:
 - The validated `explicit_bus` rule remains a supported declared-realization
   strategy and the regression baseline. General siting is a new layer rather
   than a replacement hidden inside the existing linkage.
+
+### HLA-027 and HLA-028 — downscaling method v1
+
+- The first computed method is `constrained_site_allocate_v1`. It first applies
+  hard exclusions, then allocates zonal technology builds among eligible sites
+  using a versioned weighted objective, and finally applies deterministic
+  topology, connectivity, interface, and stress-hour screens.
+- The objective may include interconnection and site cost, network stress,
+  resource quality, fragmentation, brownfield preference, and evidence quality.
+  Its normalized terms, weights, solver settings, tolerances, and tie-breaker
+  are pinned in `RealizationPolicy` rather than stored in an agent prompt.
+- The default candidate order is reuse with documented headroom, reviewed
+  brownfield or interconnection expansion, and then eligible greenfield sites.
+  This is a preference, not a rule that can override eligibility, site caps, or
+  stronger resource and network evidence.
+- When the mapping is underdetermined, version 1 publishes a balanced baseline,
+  an existing-site-priority alternative, and a resource/network-priority
+  alternative when feasible. All members conserve the same parent plan and
+  disclose why they differ.
+- GTEP generation-build and retirement MW and storage power/energy are hard
+  physical handoffs. GTEP generation by time block is retained for
+  reconciliation, but PCM commitment and dispatch remain endogenous by default
+  so that congestion, curtailment, reserves, load shedding, and infeasibility
+  remain observable.
+- Hard equality between PCM hourly sums and GTEP time-block energy is permitted
+  only when the study contract explicitly defines the task as disaggregation of
+  an aggregate energy or emissions projection. It is not the default for a
+  planning-to-operations assessment.
+- Site-level weather profiles must share a pinned chronology and be validated
+  for distributions, ramps, extremes, spatial variability, and cross-variable
+  synchronicity. Version 1 uses reviewed profiles rather than training a new
+  machine-learning downscaler.
+- The detailed algorithm, validation criteria, and literature basis are in
+  [Adaptive Holistic Assessment Agents](@ref adaptive-gtep-pcm-agents).
 
 ### HLA-023 through HLA-026 — adaptive scientific workflow
 
@@ -268,7 +304,7 @@ At minimum, a new entry records:
 
 | Decision | Related IDs | Required work |
 | --- | --- | --- |
-| Nodal siting from zonal-only GTEP | HLA-003, HLA-004, HLA-021, HLA-022 | Implement the proposed candidate-site schema, deterministic allocation objective, diverse realization set, and screening sequence |
+| Computed downscaling v1 | HLA-003, HLA-004, HLA-021, HLA-022, HLA-027, HLA-028 | Define the candidate catalog and policy schemas, implement screening and constrained allocation, publish three policy-labelled realizations when feasible, and automate conservation, deterministic-repeatability, profile, and network-screen checks |
 | Operational template registry | HLA-005, HLA-007, HLA-008 | Define schema and precedence; update realization and audits |
 | Production-grade unitization | HLA-005, HLA-008 | Assign unit sizes and commitment parameters by technology |
 | Exact annual or rolling PCM | HLA-012, HLA-019 | Add state carry and annual-policy accounting or provision a high-memory worker |
@@ -280,6 +316,7 @@ At minimum, a new entry records:
 
 | Date | Change |
 | --- | --- |
+| 2026-10-27 | Specified `constrained_site_allocate_v1`, including hard screening before ranking, three policy-labelled alternatives, exact capacity conservation, endogenous PCM dispatch, aggregate-energy reconciliation, weather-profile validation, and the decision to defer learned downscaling. |
 | 2026-10-26 | Generalized the adaptive design from a reliability-oriented GTEP-PCM example to a holistic-assessment framework with distinct invalid-input, execution-failure, infeasible, feasible-but-failed, and accepted outcomes. |
 | 2026-10-26 | Added proposed general nodal-realization, operational-feedback, acceptance, iteration-lineage, and agent-authority decisions for the adaptive GTEP-realization-PCM workflow. |
 | 2026-10-24 | Added the separate high-resolution transfer-coverage benchmark, including pinned retirement, transmission, physical-flow, and source-immutability evidence. |
