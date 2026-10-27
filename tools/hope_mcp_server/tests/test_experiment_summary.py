@@ -42,6 +42,14 @@ class ExperimentSummaryTests(unittest.TestCase):
             "audit_accepted",
             "all_acceptance_checks_passed",
         }
+        self.assertEqual(protocol["status"], "completed")
+        self.assertEqual(
+            protocol["classification"], "workflow_governance_benchmark"
+        )
+        self.assertEqual(
+            protocol["scientific_unit"],
+            "composite_gtep_physical_realization_pcm_transaction",
+        )
         self.assertEqual(set(protocol["required_claims"]), required)
         for prompt_name in ("single_agent", "auditor"):
             prompt = protocol["prompt_templates"][prompt_name]

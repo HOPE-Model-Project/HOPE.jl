@@ -62,6 +62,7 @@ pages = OrderedDict(
         "HOPE-AI (LLM Agent)" => "hope_ai.md",
         "Multi-Model and Multi-Agent Design" => "development/holistic_agent/multi_agent_system_design.md",
         "Multi-Agent Mechanism" => "development/holistic_agent/multi_agent_mechanism.md",
+        "Workflow-Governance Benchmark" => "development/holistic_agent/workflow_governance_benchmark.md",
     ],
     "Project" => [
         "Contributing" => "90-contributing.md",

@@ -4,7 +4,10 @@ purpose: >-
   Compare one HOPE-capable LLM agent with the centralized
   coordinator/executor/auditor protocol under matched conditions.
 evaluation_task_id: md-rps20-annual-gtep-july-pcm-v3
-status: ready
+status: completed
+classification: workflow_governance_benchmark
+completed_at: "2026-10-26"
+scientific_unit: composite_gtep_physical_realization_pcm_transaction
 repetitions_per_architecture: 5
 required_claims:
   - study_accepted

@@ -196,9 +196,14 @@ approval compliance, latency, and cost. Agent traces are hash-chained and the
 evaluator classifies failures as system-design, inter-agent-misalignment, or
 task-verification failures. It keeps the deterministic `model_passed` result
 separate from `agent_passed`, so a good solve cannot conceal poor tool use or
-unsupported reporting. The remaining work is to run repeated matched trials and
-compare their distributions rather than judge the architectures from one
-successful demonstration.
+unsupported reporting. The repeated matched benchmark is complete. Five valid
+single-agent trials and five valid centralized-role trials all passed both model
+and agent evaluation, with zero invalid calls, duplicate role calls, false-safe
+claims, or classified failures. This validates the workflow-governance mechanism
+around one composite transaction; it does not validate a GTEP-agent,
+realization-agent, and PCM-agent scientific architecture. See the
+[Workflow-Governance Agent Benchmark](@ref workflow-governance-benchmark) for
+the protocol, exclusions, results, and classification.
 
 The HOPE trace observes only calls crossing the HOPE MCP boundary. It cannot
 independently detect a local watcher, shell command, or another connector. The
@@ -253,12 +258,13 @@ is likewise retained but excluded because the accepted study was later reused,
 adding a second prepare and report submission to its trace. Replicate 07 replaces
 it in the five-run formal matrix.
 
-Only after this comparison should HOPE decide whether GTEP, physical realization,
-and PCM benefit from separate persistent agents. Meanwhile, physical-realization
-and operational-feedback development can continue as deterministic model work.
-DART should be added to the connected workflow after the GTEP-to-PCM evaluation
-protocol is stable, so added model scope is not confused with added agent
-complexity.
+The comparison is now complete and does not decide whether GTEP, physical
+realization, and PCM benefit from separate persistent agents, because both
+architectures called the same composite transaction. The next agent-design step
+is to specify stage-level scientific authority, artifact contracts, revision
+requests, convergence rules, and human approvals. Physical-realization and
+operational-feedback development should continue as deterministic model work,
+so added model scope is not confused with added agent complexity.
 
 See [Multi-Model and Multi-Agent System Design](multi_agent_system_design.md) for
 the broader design rationale and development roadmap.

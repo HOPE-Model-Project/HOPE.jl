@@ -125,6 +125,12 @@ role-separated variants perform the same lifecycle operations; only role
 assignment differs. Pilot and confounded studies are explicitly excluded from
 the formal repetitions.
 
+This is a workflow-governance benchmark around one composite deterministic
+GTEP-to-PCM transaction. It does not test separate GTEP, physical-realization,
+and PCM agents or cross-model scientific feedback. The completed 5-versus-5
+study found 100% model and agent pass rates for both architectures, with zero
+invalid calls, duplicate role calls, false-safe claims, or classified failures.
+
 After one or more trials have produced `agent_evaluation_report.yml`, aggregate
 the authoritative reports with:
 

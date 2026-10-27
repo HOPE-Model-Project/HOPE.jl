@@ -5,6 +5,22 @@ HOPE supports agentic AI control via the [Model Context Protocol (MCP)](https://
 - **Claude Desktop** with a local full-access `stdio` MCP server for running cases, changing settings, and opening dashboards.
 - **ChatGPT web** with a remote read-only MCP server for inspecting cases and outputs through developer mode.
 
+## Current product boundary
+
+The current implementation is a usable **HOPE AI-agent tool foundation**. An
+MCP-capable LLM can run HOPE modes, validate settings, inspect outputs, execute
+the durable composite GTEP-to-PCM workflow, and submit evidence for independent
+evaluation.
+
+It is not yet the complete cooperating model-specialist system in which separate
+GTEP, physical-realization, and PCM agents control stage-level tools and exchange
+bounded scientific revision requests. The completed
+[Workflow-Governance Agent Benchmark](@ref workflow-governance-benchmark)
+evaluated one agent versus separated coordinator/executor/auditor roles around
+the same composite transaction. See
+[Multi-Model and Multi-Agent System Design](@ref multi-agent-system-design) for
+the unfinished scientific-agent design boundary.
+
 !!! note "PowerAgent community"
     The HOPE MCP server is part of [PowerAgent](https://poweragent.seas.harvard.edu/) — an open-source community for agentic AI in power systems, maintained by the [Power and AI Initiative (PAI)](https://pai.seas.harvard.edu/) at Harvard SEAS. The HOPE server is also distributed through [PowerMCP](https://github.com/Power-Agent/PowerMCP/tree/main/HOPE), a collection of MCP servers for power system software.
 

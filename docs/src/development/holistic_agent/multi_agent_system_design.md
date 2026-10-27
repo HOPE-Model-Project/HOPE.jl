@@ -631,9 +631,13 @@ interfaces.
   resumable workflow engine.
 - Phase 5 now has its first implementation slice: server-observed hash-chained
   traces, scoped evidence submission, versioned task rules, and an independent
-  evaluator that reports model and agent success separately. The immediate next
-  milestone is to execute repeated single-agent and role-separated trials on the
-  completed annual-GTEP/July-PCM transaction.
+  evaluator that reports model and agent success separately. Five matched
+  single-agent and five centralized-role workflow-governance trials are complete;
+  all passed both scores. Because both architectures called the same composite
+  transaction, this closes the governance benchmark but not the design of
+  cooperating model-specialist agents. The next milestone is a product contract
+  for stage-level GTEP, physical-realization, and PCM agent authority, artifacts,
+  revision requests, convergence, and human approval.
 
 ### Phase 0 - standalone consistency
 
@@ -698,9 +702,11 @@ run workspaces. The independent evaluator reopens the model manifest and audit
 rather than trusting those claims. Its `agent_evaluation_report.yml` exposes
 `model_passed` and `agent_passed` independently, along with invalid and duplicate
 calls, polling count, elapsed time, evidence coverage, false-safe claims, and
-the three failure families above. This is evaluation infrastructure, not a
-claim that the multi-agent architecture has outperformed the single-agent
-baseline; repeated matched trials remain required.
+the three failure families above. The completed matched trials found equal model
+and agent pass rates for the single workflow agent and centralized governance
+roles. This is evidence for the evaluation infrastructure, not evidence that a
+model-specialist multi-agent architecture outperforms a single scientific agent;
+that architecture was not tested.
 
 This trace boundary is explicit. HOPE can verify the calls received by its MCP
 server but cannot prove that an agent did not also use a shell, local script, or
