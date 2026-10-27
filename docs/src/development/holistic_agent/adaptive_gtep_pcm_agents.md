@@ -7,7 +7,9 @@ after the validated deterministic GTEP-to-PCM composite tool. GTEP,
 realization, and PCM form the first concrete workflow, not the limit of the
 framework. This remains a design specification for the agent system. The
 version-1 computed-realization engine described below is now implemented as a
-standalone deterministic service, but it is not yet wired into an adaptive
+standalone deterministic service. Its GTEP adapter, topology-screened Maryland
+catalog builder, and selected-variant PCM handoff are also implemented. It is
+not yet invoked automatically by `run_hope_holistic` or wired into an adaptive
 multi-agent loop.
 
 The motivating study pattern is iterative:
@@ -518,6 +520,25 @@ The terminal result may be `ACCEPTED`, `NOT_ACCEPTED`, or `INCONCLUSIVE`.
 `INCONCLUSIVE` is preferable to silently weakening the criterion.
 
 ## Recommended first vertical slice
+
+The deterministic portion of steps 2 through 4 now has an executable baseline:
+
+- `capacity_plan_from_gtep` extracts positive solved generation and storage
+  decisions without losing `Candidate_ID` lineage;
+- `build_candidate_site_catalog_from_pcm` constructs a conservative catalog
+  from existing interconnection buses, installed generation, and incident
+  branch-rating proxies;
+- `compute_nodal_realizations` publishes the three policy-labelled variants;
+  and
+- `prepare_pcm_inputs_from_computed_realization` materializes one selected
+  variant and delegates resource construction, operational templates, and
+  reconciliation to the established PCM handoff.
+
+The reproducible Maryland example contains 48 technology-specific catalog rows
+over 12 buses. It is a topology-screened workflow input, not a final siting
+study: land, queue, environmental, renewable-resource, and detailed power-flow
+evidence remain external review layers. The default `explicit_bus` Maryland
+case remains unchanged.
 
 The first scientific-agent implementation should be deliberately narrower than
 the final architecture:

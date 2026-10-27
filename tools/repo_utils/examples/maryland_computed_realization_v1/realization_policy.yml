@@ -1,0 +1,34 @@
+schema_version: 1
+artifact_type: HOPE.realization_policy
+method: constrained_site_allocate_v1
+solver: highs
+tolerance_mw: 1.0e-6
+minimum_allocation_mw: 0.0
+tie_break_epsilon: 1.0e-9
+variant_order:
+  - balanced_baseline
+  - existing_site_priority
+  - resource_network_priority
+weights:
+  site_cost: 1.0
+  network_stress: 1.0
+  resource_quality: 1.0
+  brownfield: 1.0
+  evidence_quality: 0.25
+  fragmentation: 0.1
+variants:
+  balanced_baseline: {}
+  existing_site_priority:
+    weights:
+      site_cost: 1.0
+      network_stress: 0.5
+      resource_quality: 0.0
+      brownfield: 4.0
+      evidence_quality: 0.5
+  resource_network_priority:
+    weights:
+      site_cost: 0.25
+      network_stress: 4.0
+      resource_quality: 1.0
+      brownfield: 0.25
+      evidence_quality: 0.5

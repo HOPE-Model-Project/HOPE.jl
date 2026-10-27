@@ -267,6 +267,18 @@ At minimum, a new entry records:
   machine-learning downscaler.
 - The detailed algorithm, validation criteria, and literature basis are in
   [Adaptive Holistic Assessment Agents](@ref adaptive-gtep-pcm-agents).
+- The first executable Maryland catalog is generated reproducibly from the
+  public PCM fleet, buses, and branch ratings. It retains three existing
+  interconnection buses per planning zone (48 technology-specific rows over 12
+  buses), uses transparent installed-capacity and incident-rating proxies, and
+  assigns neutral renewable-resource quality. It is suitable for workflow and
+  topology-screen testing, not a permitting, queue, land-use, or final siting
+  claim.
+- A selected computed-realization variant can now be expanded into
+  site-specific GTEP candidate rows and passed through the existing PCM
+  construction and reconciliation functions. Automatic selection inside
+  `run_hope_holistic` and the adaptive revision loop remain future integration
+  work; `explicit_bus` remains the default benchmark contract.
 
 ### HLA-023 through HLA-026 — adaptive scientific workflow
 

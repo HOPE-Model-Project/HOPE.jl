@@ -50,6 +50,21 @@ audits candidate-to-bus allocations, while the existing linkage continues to
 construct PCM resources and apply operational templates. This separation keeps
 the validated `explicit_bus` path unchanged.
 
+Build a topology-screened catalog from an existing GTEP/PCM case pair:
+
+```powershell
+julia --project=. tools/repo_utils/build_computed_site_catalog.jl `
+  ModelCases/MD_GTEP_RPS20_4zone_public_case/Data_MD_GTEP_RPS20_4zone_public `
+  ModelCases/MD_PCM_RPS20_transmission_public_case/Data_MD_PCM_RPS20_transmission_public `
+  ModelCases/MD_GTEP_RPS20_4zone_public_case/references/computed_candidate_site_catalog.csv `
+  3
+```
+
+The builder ranks existing interconnection buses using installed PCM generation
+and incident branch-rating proxies. Renewable-resource quality remains neutral;
+land, queue, environmental, and detailed power-flow evidence must be supplied
+as separate reviewed inputs.
+
 ## General Repository Utilities
 
 - `generate_case_network_svgs.ps1`: regenerate SVG network figures used by case documentation.

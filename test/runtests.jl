@@ -16,6 +16,7 @@ using Test
     include("test-holistic.jl")
     include("test-holistic-linkage.jl")
     include("test-computed-realization.jl")
+    include("test-computed-realization-handoff.jl")
     include("test-holistic-contract.jl")
     include("test-holistic-benchmark.jl")
     include("test-lmp-sign-regression.jl")
