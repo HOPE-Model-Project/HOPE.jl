@@ -307,4 +307,46 @@ end
             @test YAML.load_file(paths["computed_realization"])["fast_screen_valid"]
         end
     end
+
+    @testset "Declared plan adapts to the established linkage contract" begin
+        gtep_output, template_input = _computed_handoff_fixture()
+        template_input = deepcopy(template_input)
+        template_input["Gendata"] =
+            DataFrame(:Type => ["Existing"], :Zone => ["Z1"], Symbol("Pmax (MW)") => [25.0])
+        template_input["Linedata_candidate"] = DataFrame()
+        plan = HOPE.capacity_plan_from_gtep(gtep_output, template_input)
+        fixture = HOPE.capacity_plan_to_gtep_fixture(plan, template_input)
+
+        @test fixture["adapter_kind"] == "declared_capacity_plan_fixture"
+        @test nrow(fixture["gtep_input"]["Gendata_candidate"]) == 2
+        @test nrow(fixture["gtep_input"]["Estoragedata_candidate"]) == 1
+        @test sum(fixture["gtep_output"]["capacity"][!, Symbol("Capacity_FIN (MW)")]) ==
+              205.0
+        @test sum(fixture["gtep_output"]["es_capacity"][!, Symbol("Capacity (MW)")]) == 40.0
+        @test sum(
+            fixture["gtep_output"]["es_capacity"][!, Symbol("EnergyCapacity (MWh)")],
+        ) == 160.0
+    end
+
+    @testset "PCM ensemble outcomes remain scientifically distinct" begin
+        thresholds = (max_load_shedding_mwh = 1e-6, max_rps_slack_mwh = 1e-6)
+        passing = Dict("pcm_load_shedding_mwh" => 0.0, "pcm_rps_slack_mwh" => 0.0)
+        reliability_failure = merge(passing, Dict("pcm_load_shedding_mwh" => 2.0))
+        policy_failure = merge(passing, Dict("pcm_rps_slack_mwh" => 3.0))
+
+        @test HOPE._ensemble_classification(passing, true; thresholds = thresholds)[1] ==
+              "ACCEPTED"
+        @test HOPE._ensemble_classification(
+            reliability_failure,
+            true;
+            thresholds = thresholds,
+        )[1] == "ACCEPTANCE_FAILED"
+        @test HOPE._ensemble_classification(
+            policy_failure,
+            true;
+            thresholds = thresholds,
+        )[1] == "ACCEPTANCE_FAILED"
+        @test HOPE._ensemble_classification(passing, false; thresholds = thresholds)[1] ==
+              "PCM_INFEASIBLE"
+    end
 end

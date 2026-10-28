@@ -81,3 +81,18 @@ julia --project=. tools/repo_utils/run_md_incremental_project_siting.jl `
 The destination is immutable by default. Use a new destination for another run.
 The package contains the selected nodal projects, screening evidence, variant
 summary, and a manifest with SHA-256 hashes of every source and output.
+
+## Assess the alternatives in PCM
+
+After reviewing the siting inputs, run every distinct physical portfolio under
+identical PCM settings:
+
+```powershell
+julia --project=. tools/repo_utils/run_md_incremental_pcm_ensemble.jl `
+  artifacts/computed_realization_runs/md_incremental_pcm_ensemble_v1 highs
+```
+
+The runner performs fast screens and transfer reconciliation before solving.
+It reports model infeasibility, operational acceptance failure, unresolved
+human approval, and acceptance as separate outcomes. Identical physical
+portfolios reuse one solve and record the source variant explicitly.

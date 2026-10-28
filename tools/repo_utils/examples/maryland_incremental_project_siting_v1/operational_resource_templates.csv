@@ -1,0 +1,5 @@
+Operational_Template_ID,Resource_Kind,Type,Cost ($/MWh),EF,CC,AF,FOR,RM_SPIN,RU,RD,Flag_thermal,Flag_VRE,Flag_mustrun,Flag_UC,Min_down_time,Min_up_time,Start_up_cost ($/MW),Charging efficiency,Discharging efficiency,Charging Rate,Discharging Rate
+HOPE_NGCC_DEFAULT,generation,NGCC,35.0,0.37,0.9,1.0,0.05,0.1,1.0,1.0,1,0,0,1,1,1,25000.0,,,,
+HOPE_SolarPV_DEFAULT,generation,SolarPV,0.0,0.0,0.25,1.0,0.0,0.0,1.0,1.0,0,1,0,0,0,0,0.0,,,,
+HOPE_WindOn_DEFAULT,generation,WindOn,0.0,0.0,0.15,1.0,0.0,0.0,1.0,1.0,0,1,0,0,0,0,0.0,,,,
+HOPE_BATTERY_4H_DEFAULT,storage,Battery,0.1,0.0,1.0,,,,,,,,,,,,,0.92,0.92,1.0,1.0

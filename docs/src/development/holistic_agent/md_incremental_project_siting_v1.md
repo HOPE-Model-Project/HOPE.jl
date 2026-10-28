@@ -121,3 +121,35 @@ This case establishes a useful version-1 downscaling boundary:
 It does not yet establish real Maryland project viability, endogenous project
 sizing, AC interconnection feasibility, production-cost acceptance, or the
 adaptive GTEP-realization-PCM revision loop.
+
+## First PCM ensemble assessment
+
+The next layer converts every variant through the existing deterministic
+GTEP-to-PCM data contract, verifies identity and capacity reconciliation, and
+solves each distinct physical portfolio using the same 168-hour Maryland PCM
+settings. An explicit, reviewed operational-template registry accompanies the
+benchmark so the test does not depend on silent legacy defaults.
+
+All four variants passed the structural fast screen and transfer reconciliation.
+The balanced and grid-ready variants are the same physical portfolio, so the
+assessment solves that portfolio once and records reuse. The three distinct
+portfolios all reached an optimal feasible PCM solution with zero load
+shedding. They nevertheless produced about 222,580 MWh of Maryland RPS slack,
+so all four policy variants were classified `ACCEPTANCE_FAILED` under the
+declared zero-slack threshold.
+
+This is a useful feedback result, not a failed downscaling algorithm and not a
+PCM infeasibility. It says the realized plan is operable, but its technology
+mix does not satisfy the operational RPS criterion in this PCM horizon. The
+appropriate next agent action is therefore upstream review of the GTEP
+technology mix, RPS assumptions, renewable availability, or firm clean-energy
+contribution. Moving the same MW among buses cannot by itself cure that policy
+shortfall. The assessment also reports `HUMAN_REVIEW` separately when model
+thresholds pass but selected projects still lack required approval.
+
+Reproduce the assessment with:
+
+```powershell
+julia --project=. tools/repo_utils/run_md_incremental_pcm_ensemble.jl `
+  artifacts/computed_realization_runs/md_incremental_pcm_ensemble_v1 highs
+```
