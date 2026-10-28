@@ -14,6 +14,17 @@ required_top_level:
 
 optional_top_level:
   solver: { type: string, default: highs, allowed: [highs] }
+  allocation_mode:
+    type: string
+    default: continuous
+    allowed: [continuous, discrete_project]
+    description: >-
+      discrete_project requires each plan item to match one whole candidate
+      project with the same MW and, for storage, MWh rating.
+  project_size_tolerance_mw:
+    type: number
+    default: tolerance_mw
+    exclusive_minimum: 0
   tolerance_mw: { type: number, default: 1.0e-6, exclusive_minimum: 0 }
   minimum_allocation_mw: { type: number, default: 0, minimum: 0 }
   max_sites_per_plan_item: { type: integer, minimum: 1 }
@@ -27,6 +38,10 @@ optional_top_level:
       - resource_quality
       - brownfield
       - evidence_quality
+      - environmental_sensitivity
+      - permitting_complexity
+      - community_impact
+      - interconnection_cost
       - fragmentation
   variants:
     type: mapping

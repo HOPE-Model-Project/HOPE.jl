@@ -69,6 +69,43 @@ optional_columns:
     type: number
     default: 1
     preference: higher_is_better
+  Permit_Status:
+    type: string
+    description: >-
+      denied, prohibited, rejected, and withdrawn are hard exclusions;
+      conditional, pre_application, and under_review require human review.
+  Environmental_Eligible:
+    type: boolean
+    default: true
+  Interconnection_Headroom_MW:
+    type: number
+    description: Must be at least Candidate_Max_MW when supplied.
+  Land_Available_Acres: { type: number }
+  Land_Required_Acres: { type: number }
+  Commercial_Operation_Year: { type: integer }
+  Required_In_Service_Year: { type: integer }
+  Queue_Status:
+    type: string
+    description: withdrawn, rejected, and suspended are hard exclusions.
+  Community_Review_Required:
+    type: boolean
+    default: false
+  Environmental_Sensitivity_Score:
+    type: number
+    default: 0
+    preference: lower_is_better
+  Permitting_Complexity_Score:
+    type: number
+    default: 0
+    preference: lower_is_better
+  Community_Impact_Score:
+    type: number
+    default: 0
+    preference: lower_is_better
+  Interconnection_Cost_Score:
+    type: number
+    default: 0
+    preference: lower_is_better
   Latitude: { type: number }
   Longitude: { type: number }
   Evidence_Source: { type: string }

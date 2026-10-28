@@ -1,0 +1,28 @@
+schema_version: 1
+artifact_type: HOPE.incremental_project_siting_scenario
+scenario_id: md_incremental_project_siting_v1
+status: geographically_grounded_synthetic_benchmark
+planning_year: 2035
+required_in_service_year: 2035
+planning_reserve_margin: 0.15
+coincident_peak_mw: 18344.8091605737
+reserve_requirement_mw: 21096.5305346598
+existing_accredited_capacity_mw: 6765.71
+assumed_firm_pjm_capacity_contribution_mw: 13525.82
+residual_accredited_need_mw: 805.0
+incremental_plan:
+  project_blocks: 9
+  generation_mw: 1500
+  storage_power_mw: 200
+  storage_energy_mwh: 800
+  accredited_capacity_mw: 805
+capacity_credit_assumptions:
+  SolarPV: 0.25
+  WindOn: 0.15
+  NGCC: 0.90
+  Battery: 1.00
+disclaimer: >-
+  The transmission buses and zone structure come from the public Maryland HOPE
+  benchmark. Project, permit, environmental, community, queue, land, cost, and
+  firm-capacity assumptions are synthetic and exist to exercise agent workflow
+  decisions. They are not claims about actual Maryland projects or permits.

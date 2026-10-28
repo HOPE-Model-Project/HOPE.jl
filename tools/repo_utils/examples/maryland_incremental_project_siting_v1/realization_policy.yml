@@ -1,0 +1,64 @@
+schema_version: 1
+artifact_type: HOPE.realization_policy
+method: constrained_site_allocate_v1
+solver: highs
+allocation_mode: discrete_project
+project_size_tolerance_mw: 1.0e-6
+tolerance_mw: 1.0e-6
+minimum_allocation_mw: 0
+max_sites_per_plan_item: 1
+tie_break_epsilon: 1.0e-9
+
+variant_order:
+  - balanced_permitting
+  - least_cost
+  - environmental_caution
+  - grid_ready
+
+weights:
+  site_cost: 1.0
+  network_stress: 1.5
+  resource_quality: 1.0
+  brownfield: 1.0
+  evidence_quality: 0.5
+  environmental_sensitivity: 2.0
+  permitting_complexity: 1.5
+  community_impact: 1.0
+  interconnection_cost: 1.5
+  fragmentation: 0.05
+
+variants:
+  balanced_permitting: {}
+  least_cost:
+    weights:
+      site_cost: 8.0
+      network_stress: 0.25
+      resource_quality: 0.25
+      brownfield: 0.25
+      evidence_quality: 0.1
+      environmental_sensitivity: 0.25
+      permitting_complexity: 0.25
+      community_impact: 0.1
+      interconnection_cost: 1.0
+  environmental_caution:
+    weights:
+      site_cost: 0.5
+      network_stress: 1.0
+      resource_quality: 1.0
+      brownfield: 2.0
+      evidence_quality: 1.0
+      environmental_sensitivity: 5.0
+      permitting_complexity: 2.0
+      community_impact: 3.0
+      interconnection_cost: 0.5
+  grid_ready:
+    weights:
+      site_cost: 1.0
+      network_stress: 5.0
+      resource_quality: 0.5
+      brownfield: 1.0
+      evidence_quality: 1.0
+      environmental_sensitivity: 1.0
+      permitting_complexity: 2.0
+      community_impact: 0.5
+      interconnection_cost: 5.0

@@ -9,8 +9,11 @@ framework. This remains a design specification for the agent system. The
 version-1 computed-realization engine described below is now implemented as a
 standalone deterministic service. Its GTEP adapter, topology-screened Maryland
 catalog builder, selected-variant PCM handoff, pre-PCM structural screens, and
-opt-in `run_hope_holistic` integration are also implemented. It is not yet
-wired into an adaptive multi-agent revision loop.
+opt-in `run_hope_holistic` integration are also implemented. Discrete-project
+selection, development-evidence screens, human-review flags, and multiple
+policy realizations are exercised by the
+[Maryland Incremental Project-Siting Benchmark v1](@ref md-incremental-project-siting-v1).
+The service is not yet wired into an adaptive multi-agent revision loop.
 
 The motivating study pattern is iterative:
 
@@ -146,10 +149,13 @@ hashed realization-set package. The command-line entry point is
 `tools/repo_utils/compute_nodal_realizations.jl`; its three input contracts are
 documented in `schemas/capacity_plan_v1.yml`,
 `schemas/candidate_site_catalog_v1.yml`, and
-`schemas/realization_policy_v1.yml`. A synthetic executable example is under
-`tools/repo_utils/examples/computed_realization_v1/`. Integration with solved
-GTEP outputs, reviewed Maryland candidates, the existing PCM resource builder,
-and a live network screen remains subsequent work.
+`schemas/realization_policy_v1.yml`. A small synthetic executable example is
+under `tools/repo_utils/examples/computed_realization_v1/`; the geographically
+grounded synthetic Maryland project-siting benchmark is under
+`tools/repo_utils/examples/maryland_incremental_project_siting_v1/`. The
+adapter to solved GTEP outputs and the selected-realization PCM resource builder
+are implemented. Real project evidence, live interconnection studies, and the
+adaptive revision loop remain subsequent work.
 
 The first general realization method should be useful before it is elaborate.
 It should adapt the fundamentals-based logic of Site-and-Grow to HOPE without

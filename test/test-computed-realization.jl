@@ -165,6 +165,114 @@ end
         @test sum(shared.AllocatedMW) <= 40.0 + 1e-6
     end
 
+    @testset "Discrete project mode selects whole, unique, screened projects" begin
+        plan = DataFrame(
+            :Plan_Item_ID => ["SOLAR_BLOCK_1", "SOLAR_BLOCK_2", "BATTERY_BLOCK"],
+            :Resource_Kind => ["generation", "generation", "storage"],
+            :Zone => fill("Z1", 3),
+            :Type => ["Solar", "Solar", "Battery"],
+            :Build_MW => [100.0, 100.0, 50.0],
+            :Build_MWh => [0.0, 0.0, 200.0],
+        )
+        catalog = DataFrame(
+            :Candidate_Site_ID =>
+                ["SOL_A", "SOL_B", "SOL_ENV", "SOL_GRID", "BAT_A", "BAT_SHORT"],
+            :Site_ID => ["A", "B", "C", "D", "E", "F"],
+            :Bus_id => ["B1", "B2", "B3", "B4", "B5", "B6"],
+            :Resource_Kind => [
+                "generation",
+                "generation",
+                "generation",
+                "generation",
+                "storage",
+                "storage",
+            ],
+            :Zone => fill("Z1", 6),
+            :Type => ["Solar", "Solar", "Solar", "Solar", "Battery", "Battery"],
+            :Candidate_Max_MW => [100.0, 100.0, 100.0, 100.0, 50.0, 50.0],
+            :Candidate_Max_MWh => [missing, missing, missing, missing, 200.0, 100.0],
+            :Site_Cost => [0.0, 1.0, 2.0, 3.0, 0.0, 1.0],
+            :Environmental_Eligible => [true, true, false, true, true, true],
+            :Interconnection_Headroom_MW => [100.0, 100.0, 100.0, 50.0, 50.0, 50.0],
+            :Permit_Status => [
+                "approved",
+                "conditional",
+                "approved",
+                "approved",
+                "approved",
+                "approved",
+            ],
+            :Community_Review_Required => [false, true, false, false, false, false],
+        )
+        _, _, policy = _computed_test_inputs()
+        policy["allocation_mode"] = "discrete_project"
+        policy["project_size_tolerance_mw"] = 1e-6
+        policy["max_sites_per_plan_item"] = 1
+        policy["variant_order"] = ["balanced_baseline"]
+        policy["variants"] = Dict("balanced_baseline" => Dict{String,Any}())
+        result = HOPE.compute_nodal_realizations(plan, catalog, policy)
+        allocations = result["allocations"]
+        screening = result["screening"]
+
+        @test nrow(allocations) == 3
+        @test length(unique(allocations.CandidateSiteID)) == 3
+        @test Set(allocations.CandidateSiteID) == Set(["SOL_A", "SOL_B", "BAT_A"])
+        @test sort(allocations.AllocatedMW) == [50.0, 100.0, 100.0]
+        @test allocations.ReviewRequired[allocations.CandidateSiteID.=="SOL_B"] == [true]
+        @test occursin(
+            "environmental_screen_failed",
+            only(screening.ScreenReason[screening.CandidateSiteID.=="SOL_ENV"]),
+        )
+        @test occursin(
+            "insufficient_interconnection_headroom",
+            only(screening.ScreenReason[screening.CandidateSiteID.=="SOL_GRID"]),
+        )
+        @test !("BAT_SHORT" in allocations.CandidateSiteID)
+    end
+
+    @testset "Maryland incremental project-siting benchmark" begin
+        example = joinpath(
+            @__DIR__,
+            "..",
+            "tools",
+            "repo_utils",
+            "examples",
+            "maryland_incremental_project_siting_v1",
+        )
+        plan = HOPE.load_capacity_plan(joinpath(example, "capacity_plan.csv"))
+        catalog = HOPE.load_candidate_site_catalog(
+            joinpath(example, "candidate_project_catalog.csv"),
+        )
+        policy = HOPE.load_realization_policy(joinpath(example, "realization_policy.yml"))
+        result = HOPE.compute_nodal_realizations(plan, catalog, policy)
+        allocations = result["allocations"]
+        screening = result["screening"]
+
+        @test nrow(screening) == 27
+        @test count(screening.ScreenedIn) == 18
+        @test count(.!screening.ScreenedIn) == 9
+        @test count(screening.ReviewRequired) == 9
+        @test nrow(allocations) == 36
+        excluded = Set(screening.CandidateSiteID[.!screening.ScreenedIn])
+        @test isempty(intersect(Set(allocations.CandidateSiteID), excluded))
+
+        signatures = Set{String}()
+        for variant in result["summary"].Variant
+            selected = allocations[allocations.Variant.==variant, :]
+            @test nrow(selected) == 9
+            @test length(unique(selected.PlanItemID)) == 9
+            @test length(unique(selected.CandidateSiteID)) == 9
+            @test sum(selected.AllocatedMW) ≈ 1700.0
+            @test sum(selected.AllocatedMWh) ≈ 800.0
+            push!(signatures, join(sort(selected.CandidateSiteID), "|"))
+        end
+        @test length(signatures) >= 3
+        least_cost = allocations[allocations.Variant.=="least_cost", :]
+        environmental = allocations[allocations.Variant.=="environmental_caution", :]
+        @test count(least_cost.ReviewRequired) == 0
+        @test count(environmental.ReviewRequired) == 9
+    end
+
     @testset "Infeasible plans and invalid policies fail closed" begin
         plan, catalog, policy = _computed_test_inputs()
         catalog = catalog[catalog.Candidate_Site_ID.!="SOL_RESOURCE", :]

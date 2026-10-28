@@ -9,6 +9,10 @@ const COMPUTED_REALIZATION_WEIGHT_NAMES = (
     "resource_quality",
     "brownfield",
     "evidence_quality",
+    "environmental_sensitivity",
+    "permitting_complexity",
+    "community_impact",
+    "interconnection_cost",
     "fragmentation",
 )
 
@@ -18,6 +22,10 @@ const COMPUTED_REALIZATION_DEFAULT_WEIGHTS = Dict(
     "resource_quality" => 1.0,
     "brownfield" => 0.5,
     "evidence_quality" => 0.5,
+    "environmental_sensitivity" => 0.0,
+    "permitting_complexity" => 0.0,
+    "community_impact" => 0.0,
+    "interconnection_cost" => 0.0,
     "fragmentation" => 0.05,
 )
 
@@ -173,6 +181,17 @@ function validate_realization_policy(policy::AbstractDict)
         "tie_break_epsilon",
     )
     tie_break >= 0.0 || throw(ArgumentError("tie_break_epsilon must be nonnegative."))
+    allocation_mode =
+        lowercase(strip(string(get(normalized, "allocation_mode", "continuous"))))
+    allocation_mode in ("continuous", "discrete_project") ||
+        throw(ArgumentError("allocation_mode must be continuous or discrete_project."))
+    project_size_tolerance = _computed_float(
+        get(normalized, "project_size_tolerance_mw", tolerance),
+        tolerance,
+        "project_size_tolerance_mw",
+    )
+    project_size_tolerance > 0.0 ||
+        throw(ArgumentError("project_size_tolerance_mw must be positive."))
     for (_, variant) in _computed_variants(normalized)
         _computed_policy_weights(normalized, variant)
         excluded = get(variant, "exclude_candidate_ids", String[])
@@ -183,6 +202,8 @@ function validate_realization_policy(policy::AbstractDict)
     normalized["tolerance_mw"] = tolerance
     normalized["minimum_allocation_mw"] = minimum
     normalized["tie_break_epsilon"] = tie_break
+    normalized["allocation_mode"] = allocation_mode
+    normalized["project_size_tolerance_mw"] = project_size_tolerance
     return normalized
 end
 
@@ -270,6 +291,8 @@ function validate_candidate_site_catalog(catalog::AbstractDataFrame; atol::Float
         Type = String[],
         ScreenedIn = Bool[],
         ScreenReason = String[],
+        ReviewRequired = Bool[],
+        ReviewReason = String[],
     )
     for row = 1:nrow(catalog)
         candidate_id = _computed_text_column(catalog, row, "Candidate_Site_ID")
@@ -280,6 +303,7 @@ function validate_candidate_site_catalog(catalog::AbstractDataFrame; atol::Float
         resource_type = _computed_text_column(catalog, row, "Type")
         max_mw = _computed_value(catalog, row, "Candidate_Max_MW", NaN)
         reasons = String[]
+        review_reasons = String[]
         isempty(site_id) && push!(reasons, "blank_site_id")
         isempty(bus_id) && push!(reasons, "blank_bus_id")
         kind in ("generation", "storage") || push!(reasons, "invalid_resource_kind")
@@ -296,12 +320,62 @@ function validate_candidate_site_catalog(catalog::AbstractDataFrame; atol::Float
         end
         exclusion = _computed_text_column(catalog, row, "Exclusion_Reason")
         isempty(exclusion) || push!(reasons, "excluded:$(exclusion)")
+        permit_status = lowercase(_computed_text_column(catalog, row, "Permit_Status"))
+        permit_status in ("denied", "prohibited", "rejected", "withdrawn") &&
+            push!(reasons, "permit_status_$(permit_status)")
+        permit_status in ("conditional", "pre_application", "under_review") &&
+            push!(review_reasons, "permit_status_$(permit_status)")
+        if "Environmental_Eligible" in names(catalog) &&
+           !_computed_bool(catalog[row, "Environmental_Eligible"], true)
+            push!(reasons, "environmental_screen_failed")
+        end
+        queue_status = lowercase(_computed_text_column(catalog, row, "Queue_Status"))
+        queue_status in ("withdrawn", "rejected", "suspended") &&
+            push!(reasons, "queue_status_$(queue_status)")
+        if "Interconnection_Headroom_MW" in names(catalog)
+            headroom = _computed_value(catalog, row, "Interconnection_Headroom_MW", NaN)
+            (!isfinite(headroom) || headroom + atol < max_mw) &&
+                push!(reasons, "insufficient_interconnection_headroom")
+        end
+        if all(
+            column -> column in names(catalog),
+            ("Land_Available_Acres", "Land_Required_Acres"),
+        )
+            available = _computed_value(catalog, row, "Land_Available_Acres", NaN)
+            required = _computed_value(catalog, row, "Land_Required_Acres", NaN)
+            (!isfinite(available) || !isfinite(required) || available + atol < required) &&
+                push!(reasons, "insufficient_land_area")
+        end
+        if all(
+            column -> column in names(catalog),
+            ("Commercial_Operation_Year", "Required_In_Service_Year"),
+        )
+            commercial_year =
+                _computed_value(catalog, row, "Commercial_Operation_Year", NaN)
+            required_year = _computed_value(catalog, row, "Required_In_Service_Year", NaN)
+            (
+                !isfinite(commercial_year) ||
+                !isfinite(required_year) ||
+                commercial_year > required_year + atol
+            ) && push!(reasons, "commercial_operation_after_required_year")
+        end
+        if "Community_Review_Required" in names(catalog) &&
+           _computed_bool(catalog[row, "Community_Review_Required"], false)
+            push!(review_reasons, "community_review_required")
+        end
         if kind == "storage" && "Candidate_Max_MWh" in names(catalog)
             max_mwh = _computed_value(catalog, row, "Candidate_Max_MWh", NaN)
             (!isfinite(max_mwh) || max_mwh <= atol) &&
                 push!(reasons, "nonpositive_candidate_max_mwh")
         end
-        for column in ("Site_Cost", "Network_Stress_Score")
+        for column in (
+            "Site_Cost",
+            "Network_Stress_Score",
+            "Environmental_Sensitivity_Score",
+            "Permitting_Complexity_Score",
+            "Community_Impact_Score",
+            "Interconnection_Cost_Score",
+        )
             value = _computed_value(catalog, row, column, 0.0)
             value >= 0.0 || push!(reasons, "negative_$(lowercase(column))")
         end
@@ -321,6 +395,8 @@ function validate_candidate_site_catalog(catalog::AbstractDataFrame; atol::Float
                 resource_type,
                 isempty(reasons),
                 isempty(reasons) ? "eligible" : join(reasons, ";"),
+                !isempty(review_reasons),
+                isempty(review_reasons) ? "" : join(review_reasons, ";"),
             ),
         )
     end
@@ -340,6 +416,8 @@ function _computed_matching_pairs(
     catalog::AbstractDataFrame,
     screening::DataFrame,
     excluded::Set{String},
+    allocation_mode::AbstractString,
+    project_size_tolerance_mw::Float64,
 )
     pairs = Tuple{Int,Int}[]
     for item = 1:nrow(plan), candidate = 1:nrow(catalog)
@@ -351,6 +429,22 @@ function _computed_matching_pairs(
         _computed_text_column(catalog, candidate, "Zone") || continue
         _computed_text_column(plan, item, "Type") ==
         _computed_text_column(catalog, candidate, "Type") || continue
+        if allocation_mode == "discrete_project"
+            build_mw = _computed_value(plan, item, "Build_MW", NaN)
+            project_mw = _computed_value(catalog, candidate, "Candidate_Max_MW", NaN)
+            isapprox(project_mw, build_mw; atol = project_size_tolerance_mw, rtol = 1e-8) ||
+                continue
+            if lowercase(_computed_text_column(plan, item, "Resource_Kind")) == "storage"
+                build_mwh = _computed_value(plan, item, "Build_MWh", NaN)
+                project_mwh = _computed_value(catalog, candidate, "Candidate_Max_MWh", NaN)
+                isapprox(
+                    project_mwh,
+                    build_mwh;
+                    atol = project_size_tolerance_mw,
+                    rtol = 1e-8,
+                ) || continue
+            end
+        end
         push!(pairs, (item, candidate))
     end
     return pairs
@@ -387,10 +481,30 @@ function _computed_candidate_components(
             _computed_value(catalog, row, "Evidence_Confidence", 1.0) for
             row in candidate_rows
         ]
+        environmental = [
+            _computed_value(catalog, row, "Environmental_Sensitivity_Score", 0.0) for
+            row in candidate_rows
+        ]
+        permitting = [
+            _computed_value(catalog, row, "Permitting_Complexity_Score", 0.0) for
+            row in candidate_rows
+        ]
+        community = [
+            _computed_value(catalog, row, "Community_Impact_Score", 0.0) for
+            row in candidate_rows
+        ]
+        interconnection = [
+            _computed_value(catalog, row, "Interconnection_Cost_Score", 0.0) for
+            row in candidate_rows
+        ]
         cost_penalty = _computed_normalized_penalty(costs)
         network_penalty = _computed_normalized_penalty(network)
         resource_penalty = _computed_normalized_penalty(resources; higher_is_better = true)
         evidence_penalty = _computed_normalized_penalty(evidence; higher_is_better = true)
+        environmental_penalty = _computed_normalized_penalty(environmental)
+        permitting_penalty = _computed_normalized_penalty(permitting)
+        community_penalty = _computed_normalized_penalty(community)
+        interconnection_penalty = _computed_normalized_penalty(interconnection)
         for (index, candidate) in enumerate(candidate_rows)
             existing =
                 "Existing_Site" in names(catalog) ?
@@ -401,6 +515,10 @@ function _computed_candidate_components(
                 resource_quality = resource_penalty[index],
                 brownfield = existing ? 0.0 : 1.0,
                 evidence_quality = evidence_penalty[index],
+                environmental_sensitivity = environmental_penalty[index],
+                permitting_complexity = permitting_penalty[index],
+                community_impact = community_penalty[index],
+                interconnection_cost = interconnection_penalty[index],
                 rank = index,
             )
         end
@@ -447,8 +565,17 @@ function _computed_solve_variant(
     tolerance = Float64(policy["tolerance_mw"])
     minimum = Float64(policy["minimum_allocation_mw"])
     tie_break = Float64(policy["tie_break_epsilon"])
+    allocation_mode = string(policy["allocation_mode"])
+    project_size_tolerance = Float64(policy["project_size_tolerance_mw"])
     excluded = Set(string.(get(variant, "exclude_candidate_ids", String[])))
-    pairs = _computed_matching_pairs(plan, catalog, screening, excluded)
+    pairs = _computed_matching_pairs(
+        plan,
+        catalog,
+        screening,
+        excluded,
+        allocation_mode,
+        project_size_tolerance,
+    )
     components = _computed_candidate_components(plan, catalog, pairs)
     weights = _computed_policy_weights(policy, variant)
     site_caps = _computed_site_caps(catalog, screening)
@@ -470,6 +597,11 @@ function _computed_solve_variant(
         indices = [p for p = 1:pair_count if pairs[p][1] == item]
         build = _computed_value(plan, item, "Build_MW", NaN)
         @constraint(model, sum(allocation[p] for p in indices) == build)
+        if allocation_mode == "discrete_project"
+            for p in indices
+                @constraint(model, allocation[p] == build * used[p])
+            end
+        end
         max_sites_value = _computed_float(
             get(
                 variant,
@@ -491,6 +623,8 @@ function _computed_solve_variant(
         isempty(indices) && continue
         max_mw = _computed_value(catalog, candidate, "Candidate_Max_MW", NaN)
         @constraint(model, sum(allocation[p] for p in indices) <= max_mw)
+        allocation_mode == "discrete_project" &&
+            @constraint(model, sum(used[p] for p in indices) <= 1)
         for p in indices
             @constraint(model, allocation[p] <= max_mw * used[p])
             minimum > 0.0 && @constraint(model, allocation[p] >= minimum * used[p])
@@ -531,7 +665,11 @@ function _computed_solve_variant(
             weights["network_stress"] * component.network_stress +
             weights["resource_quality"] * component.resource_quality +
             weights["brownfield"] * component.brownfield +
-            weights["evidence_quality"] * component.evidence_quality
+            weights["evidence_quality"] * component.evidence_quality +
+            weights["environmental_sensitivity"] * component.environmental_sensitivity +
+            weights["permitting_complexity"] * component.permitting_complexity +
+            weights["community_impact"] * component.community_impact +
+            weights["interconnection_cost"] * component.interconnection_cost
     end
     @objective(
         model,
@@ -571,6 +709,12 @@ function _computed_solve_variant(
         ResourceQualityPenalty = Float64[],
         BrownfieldPenalty = Float64[],
         EvidenceQualityPenalty = Float64[],
+        EnvironmentalSensitivityPenalty = Float64[],
+        PermittingComplexityPenalty = Float64[],
+        CommunityImpactPenalty = Float64[],
+        InterconnectionCostPenalty = Float64[],
+        ReviewRequired = Bool[],
+        ReviewReason = String[],
         WeightedScorePerMW = Float64[],
         ObjectiveContribution = Float64[],
     )
@@ -589,6 +733,8 @@ function _computed_solve_variant(
             _computed_bool(catalog[candidate, "Existing_Site"], false) : false
         score = coefficient[(item, candidate)]
         fragment = value(used[p]) > 0.5 ? weights["fragmentation"] : 0.0
+        review_required = screening.ReviewRequired[candidate]
+        review_reason = screening.ReviewReason[candidate]
         push!(
             allocations,
             (
@@ -613,6 +759,12 @@ function _computed_solve_variant(
                 component.resource_quality,
                 component.brownfield,
                 component.evidence_quality,
+                component.environmental_sensitivity,
+                component.permitting_complexity,
+                component.community_impact,
+                component.interconnection_cost,
+                review_required,
+                review_reason,
                 score,
                 score * allocated + fragment,
             ),
