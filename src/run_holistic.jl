@@ -1077,17 +1077,51 @@ function _run_hope_holistic_impl(
         pcm_config,
         "run_hope_holistic_pcm_reload_done",
     )
-    updated_pcm_input = prepare_pcm_inputs_from_gtep_linked(
+    computed_realization = build_computed_realization_handoff_from_contract(
         gtep_output,
         gtep_input,
+        pcm_input,
+        handoff_contract["physical_realization"],
+        gtep_path,
+    )
+    computed_active =
+        computed_realization !== nothing && get(computed_realization, "active", false)
+    handoff_gtep_output =
+        computed_active ? computed_realization["materialized_gtep_output"] : gtep_output
+    handoff_gtep_input =
+        computed_active ? computed_realization["materialized_gtep_input"] : gtep_input
+    if computed_active
+        println(
+            "Computed realization selected variant '",
+            computed_realization["specification"]["selected_variant"],
+            "' and passed pre-PCM fast screens",
+        )
+    end
+    updated_pcm_input = prepare_pcm_inputs_from_gtep_linked(
+        handoff_gtep_output,
+        handoff_gtep_input,
         gtep_config,
         pcm_input,
         pcm_config,
         handoff_contract["physical_realization"],
     )
+    if computed_active
+        updated_pcm_input["LinkageAudit"]["computed_realization"] =
+            computed_realization["materialization_audit"]
+        updated_pcm_input["LinkageAudit"]["computed_fast_screen"] =
+            computed_realization["fast_screen"]["checks"]
+        updated_pcm_input["ComputedRealization"] = Dict{String,Any}(
+            "specification" => computed_realization["specification"],
+            "capacity_plan" => computed_realization["capacity_plan"],
+            "allocations" => computed_realization["realization"]["allocations"],
+            "screening" => computed_realization["realization"]["screening"],
+            "summary" => computed_realization["realization"]["summary"],
+            "fast_screen" => computed_realization["fast_screen"],
+        )
+    end
     transfer_reconciliation = validate_holistic_transfer_reconciliation(
-        gtep_output,
-        gtep_input,
+        handoff_gtep_output,
+        handoff_gtep_input,
         pcm_input,
         updated_pcm_input,
         pcm_config,
@@ -1195,6 +1229,7 @@ function _run_hope_holistic_impl(
         "pcm_output" => pcm_output,
         "transfer_summary" => transfer_summary,
         "transfer_reconciliation" => transfer_reconciliation,
+        "computed_realization" => computed_realization,
         "handoff_contract" => handoff_contract,
         "handoff_contract_paths" => handoff_contract_paths,
         "gtep_activity" => gtep_activity,

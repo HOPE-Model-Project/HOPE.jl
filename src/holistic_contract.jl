@@ -181,13 +181,13 @@ function _holistic_contract_bus_checks!(
         (("generation", "Gendata_candidate"), ("storage", "Estoragedata_candidate"))
         rule = get(siting, kind, Dict{String,Any}())
         method = lowercase(string(get(rule, "method", "legacy_zone")))
-        supported = method in ("explicit_bus", "legacy_zone")
+        supported = method in ("explicit_bus", "legacy_zone", "computed_allocation")
         _holistic_contract_add!(
             checks,
             "$(kind)_siting_method",
             "physical_realization",
             supported,
-            "method=$(method); supported=explicit_bus|legacy_zone",
+            "method=$(method); supported=explicit_bus|legacy_zone|computed_allocation",
         )
         haskey(gtep_input, table_key) || continue
         candidates = gtep_input[table_key]
@@ -234,6 +234,72 @@ function _holistic_contract_bus_checks!(
             end
         end
     end
+end
+
+function _holistic_contract_computed_realization_checks!(
+    checks::DataFrame,
+    contract::Dict,
+    gtep_case::AbstractString,
+)
+    methods =
+        [_computed_contract_method(contract, kind) for kind in ("generation", "storage")]
+    "computed_allocation" in methods || return
+    declaration_error = try
+        computed_realization_contract_spec(contract, gtep_case)
+        nothing
+    catch error
+        error
+    end
+    _holistic_contract_add!(
+        checks,
+        "computed_realization_declaration",
+        "physical_realization",
+        declaration_error === nothing,
+        declaration_error === nothing ?
+        "catalog, policy, variant, and fast-screen declaration resolve" :
+        sprint(showerror, declaration_error),
+    )
+    declaration_error === nothing || return
+    specification = computed_realization_contract_spec(contract, gtep_case)
+    catalog_error = try
+        load_candidate_site_catalog(specification["candidate_site_catalog"])
+        nothing
+    catch error
+        error
+    end
+    _holistic_contract_add!(
+        checks,
+        "computed_candidate_site_catalog",
+        "physical_realization",
+        catalog_error === nothing,
+        catalog_error === nothing ? specification["candidate_site_catalog"] :
+        sprint(showerror, catalog_error),
+    )
+    policy = nothing
+    policy_error = try
+        policy = load_realization_policy(specification["realization_policy"])
+        nothing
+    catch error
+        error
+    end
+    _holistic_contract_add!(
+        checks,
+        "computed_realization_policy",
+        "physical_realization",
+        policy_error === nothing,
+        policy_error === nothing ? specification["realization_policy"] :
+        sprint(showerror, policy_error),
+    )
+    policy_error === nothing || return
+    variant = specification["selected_variant"]
+    variant_valid = variant in policy["variant_order"]
+    _holistic_contract_add!(
+        checks,
+        "computed_selected_variant",
+        "physical_realization",
+        variant_valid,
+        "selected=$(variant); available=$(join(policy["variant_order"], ','))",
+    )
 end
 
 function _holistic_contract_line_checks!(
@@ -568,6 +634,7 @@ function validate_holistic_handoff_contract(
             "schema_version=$(get(contract, "schema_version", "missing")); artifact_type=$(get(contract, "artifact_type", "missing")); workflow=$(get(contract, "workflow", "missing"))",
         )
         _holistic_contract_bus_checks!(checks, gtep_input, pcm_input, contract)
+        _holistic_contract_computed_realization_checks!(checks, contract, gtep_case)
         _holistic_contract_line_checks!(checks, gtep_input, pcm_input, contract)
         _holistic_contract_resource_realization_checks!(checks, gtep_input, contract)
         _holistic_contract_provenance_checks!(checks, contract, gtep_case, pcm_case)

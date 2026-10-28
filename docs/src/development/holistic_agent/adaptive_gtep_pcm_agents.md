@@ -8,9 +8,9 @@ realization, and PCM form the first concrete workflow, not the limit of the
 framework. This remains a design specification for the agent system. The
 version-1 computed-realization engine described below is now implemented as a
 standalone deterministic service. Its GTEP adapter, topology-screened Maryland
-catalog builder, and selected-variant PCM handoff are also implemented. It is
-not yet invoked automatically by `run_hope_holistic` or wired into an adaptive
-multi-agent loop.
+catalog builder, selected-variant PCM handoff, pre-PCM structural screens, and
+opt-in `run_hope_holistic` integration are also implemented. It is not yet
+wired into an adaptive multi-agent revision loop.
 
 The motivating study pattern is iterative:
 
@@ -539,6 +539,14 @@ over 12 buses. It is a topology-screened workflow input, not a final siting
 study: land, queue, environmental, renewable-resource, and detailed power-flow
 evidence remain external review layers. The default `explicit_bus` Maryland
 case remains unchanged.
+
+Automatic execution is activated only when both generation and storage declare
+`method: computed_allocation` and the physical-realization contract names the
+catalog, policy, and selected variant. Before PCM construction, HOPE verifies
+bus references, planning-zone consistency, and physical connectivity. It also
+reports each bus's allocation-to-incident-rating ratio. That ratio becomes a
+hard gate only when the study contract supplies a positive threshold; it is a
+transparent topology proxy, not a DC/AC load-flow or contingency proof.
 
 The first scientific-agent implementation should be deliberately narrower than
 the final architecture:

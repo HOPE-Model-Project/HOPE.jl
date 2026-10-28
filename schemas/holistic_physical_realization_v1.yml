@@ -52,7 +52,7 @@ resource_siting:
     type: mapping
     fields:
       method:
-        allowed: [explicit_bus, legacy_zone]
+        allowed: [explicit_bus, legacy_zone, computed_allocation]
       bus_column:
         required_when: method == explicit_bus
         default: Bus_id
@@ -62,7 +62,7 @@ resource_siting:
     type: mapping
     fields:
       method:
-        allowed: [explicit_bus, legacy_zone]
+        allowed: [explicit_bus, legacy_zone, computed_allocation]
       bus_column:
         required_when: method == explicit_bus
         default: Bus_id
@@ -75,6 +75,38 @@ resource_siting:
     legacy_zone: >-
       Existing validated row or aggregate mapping remains available for old
       zonal cases. It is not sufficient for a strict nodal realization contract.
+    computed_allocation: >-
+      A versioned candidate-site catalog and realization policy allocate solved
+      zonal builds before the existing explicit-bus PCM construction is called.
+
+computed_realization:
+  optional: true
+  required_when: >-
+    generation.method == computed_allocation or storage.method == computed_allocation
+  fields:
+    candidate_site_catalog:
+      type: path
+      description: CSV path relative to the GTEP case unless absolute.
+    realization_policy:
+      type: path
+      description: YAML path relative to the GTEP case unless absolute.
+    selected_variant:
+      type: string
+      default: balanced_baseline
+    fast_screen:
+      type: mapping
+      optional: true
+      fields:
+        require_pass:
+          type: boolean
+          default: true
+        max_allocation_to_incident_rating_ratio:
+          type: number
+          exclusive_minimum: 0
+          optional: true
+          description: >-
+            Optional study-specific proxy threshold. When absent the ratio is
+            reported but is not treated as a power-flow acceptance criterion.
 
 generation_realization:
   optional_candidate_columns:

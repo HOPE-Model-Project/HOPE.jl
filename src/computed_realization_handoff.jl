@@ -480,3 +480,271 @@ function prepare_pcm_inputs_from_computed_realization(
         "materialization_audit" => materialized["audit"],
     )
 end
+
+function _computed_contract_path(case_path::AbstractString, value, label::AbstractString)
+    text = strip(string(value))
+    isempty(text) && throw(ArgumentError("$(label) path is blank."))
+    return isabspath(text) ? normpath(text) : normpath(joinpath(case_path, text))
+end
+
+function _computed_contract_method(contract::AbstractDict, kind::AbstractString)
+    siting = get(contract, "resource_siting", Dict{String,Any}())
+    rule = get(siting, kind, Dict{String,Any}())
+    return lowercase(strip(string(get(rule, "method", "legacy_zone"))))
+end
+
+"""Return the normalized computed-realization declaration, or `nothing`."""
+function computed_realization_contract_spec(
+    physical_realization,
+    gtep_case_path::AbstractString,
+)
+    physical_realization isa AbstractDict || return nothing
+    methods = Dict(
+        kind => _computed_contract_method(physical_realization, kind) for
+        kind in ("generation", "storage")
+    )
+    active = [kind for (kind, method) in methods if method == "computed_allocation"]
+    isempty(active) && return nothing
+    length(active) == 2 || throw(
+        ArgumentError(
+            "Computed realization must be declared for both generation and storage; active=$(join(sort(active), ',')).",
+        ),
+    )
+    declaration = get(physical_realization, "computed_realization", nothing)
+    declaration isa AbstractDict || throw(
+        ArgumentError(
+            "A computed_allocation siting method requires a computed_realization mapping.",
+        ),
+    )
+    catalog_path = _computed_contract_path(
+        gtep_case_path,
+        get(declaration, "candidate_site_catalog", ""),
+        "computed_realization.candidate_site_catalog",
+    )
+    policy_path = _computed_contract_path(
+        gtep_case_path,
+        get(declaration, "realization_policy", ""),
+        "computed_realization.realization_policy",
+    )
+    isfile(catalog_path) ||
+        throw(ArgumentError("Candidate-site catalog not found: $(catalog_path)"))
+    isfile(policy_path) ||
+        throw(ArgumentError("Realization policy not found: $(policy_path)"))
+    variant = strip(string(get(declaration, "selected_variant", "balanced_baseline")))
+    isempty(variant) &&
+        throw(ArgumentError("computed_realization.selected_variant is blank."))
+    fast_screen = get(declaration, "fast_screen", Dict{String,Any}())
+    fast_screen isa AbstractDict ||
+        throw(ArgumentError("computed_realization.fast_screen must be a mapping."))
+    ratio_raw = get(fast_screen, "max_allocation_to_incident_rating_ratio", nothing)
+    max_ratio = ratio_raw === nothing ? Inf : Float64(ratio_raw)
+    (isinf(max_ratio) || (isfinite(max_ratio) && max_ratio > 0.0)) || throw(
+        ArgumentError(
+            "fast_screen.max_allocation_to_incident_rating_ratio must be positive when supplied.",
+        ),
+    )
+    return Dict{String,Any}(
+        "candidate_site_catalog" => catalog_path,
+        "realization_policy" => policy_path,
+        "selected_variant" => variant,
+        "require_pass" => _computed_bool(get(fast_screen, "require_pass", true), true),
+        "max_allocation_to_incident_rating_ratio" => max_ratio,
+    )
+end
+
+"""
+    screen_computed_realization(allocations, pcm_input; variant,
+        max_allocation_to_incident_rating_ratio=Inf)
+
+Run deterministic pre-PCM structural screens. Every allocated bus must exist,
+belong to the declared planning zone, and have at least one rated physical
+branch. A bus-allocation/incident-rating threshold is enforced only when the
+study contract supplies one; the measured ratio is always reported.
+"""
+function screen_computed_realization(
+    allocations::AbstractDataFrame,
+    pcm_input::AbstractDict;
+    variant::AbstractString,
+    max_allocation_to_incident_rating_ratio::Float64 = Inf,
+)
+    selected = allocations[string.(allocations[!, "Variant"]).==String(variant), :]
+    nrow(selected) > 0 ||
+        throw(ArgumentError("Realization variant $(variant) has no allocations to screen."))
+    haskey(pcm_input, "Busdata") || throw(ArgumentError("PCM input has no Busdata table."))
+    busdata = pcm_input["Busdata"]
+    all(column -> column in names(busdata), ("Bus_id", "Zone_id")) ||
+        throw(ArgumentError("PCM Busdata must contain Bus_id and Zone_id."))
+    bus_zone = Dict(
+        strip(string(row["Bus_id"])) => strip(string(row["Zone_id"])) for
+        row in eachrow(busdata)
+    )
+    branchdata = get(pcm_input, "Branchdata", DataFrame())
+    incident = _computed_incident_capacity(branchdata)
+    checks = DataFrame(
+        Check = String[],
+        BusID = String[],
+        Zone = String[],
+        AllocatedMW = Float64[],
+        IncidentRatingMW = Float64[],
+        AllocationToIncidentRatio = Float64[],
+        Limit = String[],
+        Passed = Bool[],
+        Evidence = String[],
+    )
+    for rows in groupby(selected, [:BusID, :Zone])
+        bus = string(first(rows.BusID))
+        zone = string(first(rows.Zone))
+        allocated = sum(rows.AllocatedMW)
+        exists = haskey(bus_zone, bus)
+        zone_matches = exists && bus_zone[bus] == zone
+        rating = get(incident, bus, 0.0)
+        connected = rating > 0.0
+        ratio = connected ? allocated / rating : Inf
+        ratio_pass =
+            isinf(max_allocation_to_incident_rating_ratio) ||
+            ratio <= max_allocation_to_incident_rating_ratio + 1e-9
+        push!(
+            checks,
+            (
+                "bus_reference",
+                bus,
+                zone,
+                allocated,
+                rating,
+                ratio,
+                "bus exists",
+                exists,
+                exists ? "PCM zone=$(bus_zone[bus])" : "bus is absent from PCM Busdata",
+            ),
+        )
+        push!(
+            checks,
+            (
+                "planning_zone_consistency",
+                bus,
+                zone,
+                allocated,
+                rating,
+                ratio,
+                "allocation zone equals PCM Zone_id",
+                zone_matches,
+                exists ? "allocation=$(zone); pcm=$(bus_zone[bus])" :
+                "bus reference failed",
+            ),
+        )
+        push!(
+            checks,
+            (
+                "physical_connectivity",
+                bus,
+                zone,
+                allocated,
+                rating,
+                ratio,
+                "incident rating > 0",
+                connected,
+                "summed incident directional rating proxy=$(rating) MW",
+            ),
+        )
+        limit_text =
+            isinf(max_allocation_to_incident_rating_ratio) ? "reported_only" :
+            string(max_allocation_to_incident_rating_ratio)
+        push!(
+            checks,
+            (
+                "allocation_to_incident_rating",
+                bus,
+                zone,
+                allocated,
+                rating,
+                ratio,
+                limit_text,
+                ratio_pass,
+                "ratio=$(ratio); a finite limit is a study assumption, not a power-flow proof",
+            ),
+        )
+    end
+    valid = all(checks.Passed)
+    return Dict{String,Any}(
+        "schema_version" => 1,
+        "variant" => String(variant),
+        "valid" => valid,
+        "checks" => checks,
+        "summary" => Dict(
+            "allocated_buses" => length(unique(selected.BusID)),
+            "allocated_mw" => sum(selected.AllocatedMW),
+            "allocated_mwh" => sum(selected.AllocatedMWh),
+            "maximum_allocation_to_incident_rating_ratio" =>
+                maximum(checks.AllocationToIncidentRatio),
+            "enforced_ratio_limit" =>
+                isinf(max_allocation_to_incident_rating_ratio) ? nothing :
+                max_allocation_to_incident_rating_ratio,
+        ),
+    )
+end
+
+"""
+    build_computed_realization_handoff_from_contract(...)
+
+Resolve an opt-in physical-realization contract, compute all declared variants,
+screen the selected variant, and return the materialized GTEP handoff bundle.
+Returns `nothing` when the contract keeps the default declared/legacy siting path.
+"""
+function build_computed_realization_handoff_from_contract(
+    gtep_output::AbstractDict,
+    gtep_input::AbstractDict,
+    pcm_input::AbstractDict,
+    physical_realization,
+    gtep_case_path::AbstractString,
+)
+    specification = computed_realization_contract_spec(physical_realization, gtep_case_path)
+    specification === nothing && return nothing
+    plan = capacity_plan_from_gtep(gtep_output, gtep_input)
+    nrow(plan) > 0 || return Dict{String,Any}(
+        "active" => false,
+        "reason" => "no_positive_generation_or_storage_builds",
+        "specification" => specification,
+        "capacity_plan" => plan,
+    )
+    catalog = load_candidate_site_catalog(specification["candidate_site_catalog"])
+    policy = load_realization_policy(specification["realization_policy"])
+    variant = specification["selected_variant"]
+    variant in policy["variant_order"] || throw(
+        ArgumentError(
+            "Selected realization variant $(variant) is absent from policy variant_order.",
+        ),
+    )
+    realization = compute_nodal_realizations(plan, catalog, policy)
+    fast_screen = screen_computed_realization(
+        realization["allocations"],
+        pcm_input;
+        variant = variant,
+        max_allocation_to_incident_rating_ratio = specification["max_allocation_to_incident_rating_ratio"],
+    )
+    specification["require_pass"] &&
+        !fast_screen["valid"] &&
+        throw(
+            ArgumentError(
+                "Computed-realization fast screen failed for variant $(variant).",
+            ),
+        )
+    materialized = materialize_computed_realization_handoff(
+        gtep_output,
+        gtep_input,
+        realization["allocations"];
+        variant = variant,
+        atol = policy["tolerance_mw"],
+    )
+    return Dict{String,Any}(
+        "active" => true,
+        "specification" => specification,
+        "capacity_plan" => plan,
+        "catalog" => catalog,
+        "policy" => policy,
+        "realization" => realization,
+        "fast_screen" => fast_screen,
+        "materialized_gtep_output" => materialized["gtep_output"],
+        "materialized_gtep_input" => materialized["gtep_input"],
+        "materialization_audit" => materialized["audit"],
+    )
+end

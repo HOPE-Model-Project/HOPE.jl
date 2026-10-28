@@ -1,6 +1,8 @@
 using HOPE
 using Test
+using CSV
 using DataFrames
+using YAML
 
 function _computed_handoff_fixture()
     generation = DataFrame(
@@ -48,6 +50,28 @@ function _computed_handoff_fixture()
     )
     gtep_output = Dict("capacity" => capacity, "es_capacity" => es_capacity)
     return gtep_output, gtep_input
+end
+
+function _computed_contract_test_policy()
+    return Dict{String,Any}(
+        "schema_version" => 1,
+        "artifact_type" => "HOPE.realization_policy",
+        "method" => "constrained_site_allocate_v1",
+        "solver" => "highs",
+        "tolerance_mw" => 1e-6,
+        "minimum_allocation_mw" => 0.0,
+        "tie_break_epsilon" => 1e-9,
+        "variant_order" => ["balanced_baseline"],
+        "weights" => Dict(
+            "site_cost" => 1.0,
+            "network_stress" => 1.0,
+            "resource_quality" => 1.0,
+            "brownfield" => 1.0,
+            "evidence_quality" => 0.0,
+            "fragmentation" => 0.0,
+        ),
+        "variants" => Dict("balanced_baseline" => Dict{String,Any}()),
+    )
 end
 
 @testset "Computed realization GTEP/PCM handoff" begin
@@ -189,5 +213,98 @@ end
         @test isapprox(sum(realized_storage[!, Symbol("Capacity (MWh)")]), 160.0)
         @test sum(generation_audit.BuiltMW) == 180.0
         @test sum(storage_audit.BuiltPowerMW) == 40.0
+    end
+
+    @testset "Contract activation and pre-PCM fast screens" begin
+        plan = HOPE.capacity_plan_from_gtep(gtep_output, gtep_input)
+        catalog = DataFrame(
+            Candidate_Site_ID = ["NG_B1", "SOL_B1", "BAT_B1"],
+            Site_ID = fill("B1", 3),
+            Bus_id = fill("B1", 3),
+            Resource_Kind = ["generation", "generation", "storage"],
+            Zone = fill("Z1", 3),
+            Type = ["NGCC", "SolarPV", "Battery"],
+            Candidate_Max_MW = [80.0, 100.0, 40.0],
+            Candidate_Max_MWh = [missing, missing, 160.0],
+            Existing_Site = fill(true, 3),
+            Network_Stress_Score = zeros(3),
+            Resource_Quality_Score = fill(0.5, 3),
+            Site_Cost = zeros(3),
+        )
+        pcm_input = Dict(
+            "Busdata" => DataFrame(Bus_id = ["B1"], Zone_id = ["Z1"]),
+            "Branchdata" => DataFrame(
+                :from_bus => ["B1"],
+                :to_bus => ["B2"],
+                Symbol("Forward Capacity (MW)") => [500.0],
+                Symbol("Reverse Capacity (MW)") => [500.0],
+            ),
+        )
+        mktempdir() do directory
+            catalog_path = joinpath(directory, "catalog.csv")
+            policy_path = joinpath(directory, "policy.yml")
+            CSV.write(catalog_path, catalog)
+            YAML.write_file(policy_path, _computed_contract_test_policy())
+            contract = Dict{String,Any}(
+                "resource_siting" => Dict(
+                    "generation" => Dict("method" => "computed_allocation"),
+                    "storage" => Dict("method" => "computed_allocation"),
+                ),
+                "computed_realization" => Dict(
+                    "candidate_site_catalog" => basename(catalog_path),
+                    "realization_policy" => basename(policy_path),
+                    "selected_variant" => "balanced_baseline",
+                    "fast_screen" => Dict("require_pass" => true),
+                ),
+            )
+            bundle = HOPE.build_computed_realization_handoff_from_contract(
+                gtep_output,
+                gtep_input,
+                pcm_input,
+                contract,
+                directory,
+            )
+            @test bundle["active"]
+            @test bundle["fast_screen"]["valid"]
+            @test nrow(bundle["fast_screen"]["checks"]) == 4
+            @test bundle["fast_screen"]["summary"]["allocated_mw"] == sum(plan.Build_MW)
+            strict = HOPE.screen_computed_realization(
+                bundle["realization"]["allocations"],
+                pcm_input;
+                variant = "balanced_baseline",
+                max_allocation_to_incident_rating_ratio = 0.1,
+            )
+            @test !strict["valid"]
+            @test any(
+                (strict["checks"].Check .== "allocation_to_incident_rating") .&
+                .!strict["checks"].Passed,
+            )
+            updated = Dict{String,Any}(
+                "Gendata" => DataFrame(),
+                "Storagedata" => DataFrame(),
+                "Linedata" => DataFrame(),
+                "LinkageAudit" => Dict{String,Any}(
+                    "computed_realization" => bundle["materialization_audit"],
+                    "computed_fast_screen" => bundle["fast_screen"]["checks"],
+                ),
+                "ComputedRealization" => Dict{String,Any}(
+                    "specification" => bundle["specification"],
+                    "capacity_plan" => bundle["capacity_plan"],
+                    "allocations" => bundle["realization"]["allocations"],
+                    "screening" => bundle["realization"]["screening"],
+                    "summary" => bundle["realization"]["summary"],
+                    "fast_screen" => bundle["fast_screen"],
+                ),
+            )
+            output_directory = joinpath(directory, "persisted")
+            paths = HOPE.persist_realized_pcm_inputs_for_holistic(
+                output_directory,
+                Dict("resource_aggregation" => 0, "DataCase" => "Data"),
+                updated,
+            )
+            @test isfile(paths["computed_capacity_plan"])
+            @test isfile(paths["computed_nodal_allocations"])
+            @test YAML.load_file(paths["computed_realization"])["fast_screen_valid"]
+        end
     end
 end

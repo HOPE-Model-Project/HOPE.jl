@@ -29,3 +29,25 @@ At runtime, a solved GTEP result is converted with
 `HOPE.capacity_plan_from_gtep`, allocated with
 `HOPE.compute_nodal_realizations`, and transferred to PCM with
 `HOPE.prepare_pcm_inputs_from_computed_realization`.
+
+## Automatic holistic-run activation
+
+`HOPE_physical_realization.computed.example.yml` is an opt-in replacement for
+the Maryland GTEP case's `Settings/HOPE_physical_realization.yml`. Use it only
+in a fresh study workspace; the repository's canonical case remains on
+`explicit_bus` for regression stability.
+
+When both resource-siting methods are `computed_allocation`,
+`run_hope_holistic` automatically performs the following after GTEP solves and
+before PCM is constructed:
+
+1. create the immutable capacity plan;
+2. generate every policy-declared realization;
+3. select the named variant;
+4. verify bus references, planning-zone consistency, and physical connectivity;
+5. report allocation-to-incident-rating ratios and enforce a threshold only if
+   the contract explicitly supplies one; and
+6. materialize the selected allocation through the existing PCM linkage.
+
+The realized-input directory records the plan, all allocations, catalog
+screening, realization summary, materialization audit, and fast-screen checks.

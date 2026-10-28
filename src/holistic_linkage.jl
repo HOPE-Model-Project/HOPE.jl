@@ -1587,6 +1587,38 @@ function persist_realized_pcm_inputs_for_holistic(
         written["$(name)_audit"] = path
     end
 
+    computed = get(updated_input, "ComputedRealization", nothing)
+    computed_manifest = Dict{String,Any}()
+    if computed isa AbstractDict
+        computed_tables = Dict(
+            "computed_capacity_plan" => get(computed, "capacity_plan", DataFrame()),
+            "computed_nodal_allocations" => get(computed, "allocations", DataFrame()),
+            "computed_candidate_screening" => get(computed, "screening", DataFrame()),
+            "computed_realization_summary" => get(computed, "summary", DataFrame()),
+        )
+        for (name, table) in computed_tables
+            table isa AbstractDataFrame || continue
+            path = joinpath(data_dir, "$(name).csv")
+            CSV.write(path, table, header = true)
+            written[name] = path
+        end
+        fast_screen = get(computed, "fast_screen", Dict{String,Any}())
+        specification = get(computed, "specification", Dict{String,Any}())
+        computed_manifest = Dict{String,Any}(
+            "selected_variant" => get(specification, "selected_variant", ""),
+            "candidate_site_catalog" =>
+                get(specification, "candidate_site_catalog", ""),
+            "realization_policy" => get(specification, "realization_policy", ""),
+            "fast_screen_valid" => get(fast_screen, "valid", false),
+            "fast_screen_summary" => get(fast_screen, "summary", Dict{String,Any}()),
+        )
+        computed_manifest_path = joinpath(data_dir, "computed_realization.yml")
+        open(computed_manifest_path, "w") do io
+            YAML.write(io, computed_manifest)
+        end
+        written["computed_realization"] = computed_manifest_path
+    end
+
     summary = holistic_transfer_summary(updated_input)
     transfer_reconciliation === nothing ||
         _write_holistic_transfer_reconciliation!(written, data_dir, transfer_reconciliation)
@@ -1603,6 +1635,7 @@ function persist_realized_pcm_inputs_for_holistic(
             isempty(gtep_case_path) || gtep_config === nothing ? Dict{String,String}() :
             _holistic_source_hashes(gtep_case_path, gtep_config),
         "transfer_summary" => summary,
+        "computed_realization" => computed_manifest,
         "transfer_reconciliation" =>
             transfer_reconciliation === nothing ? Dict{String,Any}() :
             Dict(

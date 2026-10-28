@@ -276,9 +276,15 @@ At minimum, a new entry records:
   claim.
 - A selected computed-realization variant can now be expanded into
   site-specific GTEP candidate rows and passed through the existing PCM
-  construction and reconciliation functions. Automatic selection inside
-  `run_hope_holistic` and the adaptive revision loop remain future integration
-  work; `explicit_bus` remains the default benchmark contract.
+  construction and reconciliation functions. An opt-in physical-realization
+  contract can activate this path automatically inside `run_hope_holistic`.
+  The adaptive revision loop remains future work; `explicit_bus` remains the
+  default benchmark contract.
+- Pre-PCM structural screens require valid bus references, matching planning
+  zones, and physical connectivity. Allocation-to-incident-rating ratios are
+  always recorded but become a hard limit only when declared by the study.
+  This ratio is a topology proxy and must not be reported as power-flow,
+  contingency, queue, or interconnection evidence.
 
 ### HLA-023 through HLA-026 — adaptive scientific workflow
 
