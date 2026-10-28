@@ -96,3 +96,20 @@ The runner performs fast screens and transfer reconciliation before solving.
 It reports model infeasibility, operational acceptance failure, unresolved
 human approval, and acceptance as separate outcomes. Identical physical
 portfolios reuse one solve and record the source variant explicitly.
+
+## Generate bounded feedback
+
+`ensemble_assessment_observed.yml` records the verified first ensemble result.
+Create typed findings and approval-gated revision requests with:
+
+```powershell
+julia --project=. tools/repo_utils/generate_holistic_feedback.jl `
+  tools/repo_utils/examples/maryland_incremental_project_siting_v1/ensemble_assessment_observed.yml `
+  tools/repo_utils/examples/maryland_incremental_project_siting_v1/feedback_policy.yml `
+  artifacts/computed_realization_runs/md_incremental_feedback_v1 `
+  md-incremental-feedback-v1 1
+```
+
+The policy authorizes only a bounded child-scenario search. It does not lower
+assessment thresholds, edit the accepted capacity plan, or allow a PCM agent
+to dictate a planning decision.

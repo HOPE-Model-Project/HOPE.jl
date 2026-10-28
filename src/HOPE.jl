@@ -58,6 +58,7 @@ include("computed_realization.jl") #deterministic zonal-to-nodal site allocation
 include("computed_realization_handoff.jl") #GTEP/PCM adapters for computed allocation
 include("holistic_coverage.jl")    #machine-readable holistic coverage and acceptance
 include("realization_ensemble.jl") #multi-realization PCM preparation and assessment
+include("adaptive_feedback.jl")   #typed findings and approval-gated revision requests
 include("holistic_contract.jl")    #versioned handoff and physical-realization contracts
 include("run_holistic.jl")         #Holistic assessment: GTEP-PCM two stage
 include("holistic_benchmark.jl")   #Deterministic solved-value and handoff evidence
@@ -143,6 +144,11 @@ export write_computed_realization_set
 export capacity_plan_to_gtep_fixture
 export prepare_pcm_realization_ensemble
 export assess_pcm_realization_ensemble
+export build_holistic_feedback
+export load_feedback_policy
+export record_revision_decision
+export validate_feedback_policy
+export write_holistic_feedback_package
 export load_operational_resource_templates
 export validate_operational_resource_templates
 export validate_holistic_handoff_contract

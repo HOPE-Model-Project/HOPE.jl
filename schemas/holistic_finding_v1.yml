@@ -1,0 +1,20 @@
+schema_name: HOPE holistic assessment finding
+schema_version: 1
+artifact_type: HOPE.finding
+status: proposed
+format: YAML
+required_fields:
+  finding_id: { type: string, constraints: [nonblank] }
+  study_id: { type: string, constraints: [nonblank] }
+  iteration: { type: integer, minimum: 1 }
+  status: { type: string, allowed: [open, resolved, superseded] }
+  gate: { type: string, constraints: [nonblank] }
+  classification: { type: string, constraints: [nonblank] }
+  severity: { type: string, constraints: [nonblank] }
+  responsible_owner: { type: string, constraints: [nonblank] }
+  observation: { type: mapping }
+  inference: { type: mapping }
+semantics:
+  - Observation is authoritative assessment evidence.
+  - Inference is a nonbinding diagnostic hypothesis and must remain separate.
+  - A finding never mutates its parent artifacts.

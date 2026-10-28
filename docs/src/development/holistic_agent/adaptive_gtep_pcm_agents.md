@@ -13,7 +13,11 @@ opt-in `run_hope_holistic` integration are also implemented. Discrete-project
 selection, development-evidence screens, human-review flags, and multiple
 policy realizations are exercised by the
 [Maryland Incremental Project-Siting Benchmark v1](@ref md-incremental-project-siting-v1).
-The service is not yet wired into an adaptive multi-agent revision loop.
+The service now includes a first deterministic feedback boundary in
+`src/adaptive_feedback.jl`. It converts assessment evidence into typed
+`Finding` and `RevisionRequest` artifacts, records human decisions separately,
+and enforces an iteration limit. It deliberately stops before automatically
+editing or rerunning a GTEP case.
 
 The motivating study pattern is iterative:
 
@@ -424,7 +428,7 @@ Agents may propose changes; deterministic tools apply approved changes. No
 agent may directly mutate an accepted parent artifact. Every revision creates a
 child scenario and a machine-readable delta.
 
-A `RevisionRequest` should include fields similar to:
+A `RevisionRequest` includes fields similar to:
 
 ```yaml
 artifact_type: HOPE.revision_request
@@ -459,6 +463,15 @@ The request must distinguish an observed result from an inferred cause and a
 proposed remedy. The GTEP agent may accept, reject, or replace the proposal with
 another documented change; it must not treat a PCM agent's inference as an
 authoritative planning instruction.
+
+Version 1 is implemented by `build_holistic_feedback`,
+`record_revision_decision`, and `write_holistic_feedback_package`. The schemas
+are documented in `schemas/holistic_finding_v1.yml` and
+`schemas/revision_request_v1.yml`. The deterministic generator refuses to edit
+the parent artifacts, emits stable content-derived IDs, preserves forbidden
+actions, and stops with `INCONCLUSIVE` when the policy's iteration limit is
+reached. Approval authorizes construction of a child scenario; it does not
+authorize in-place changes to an accepted case.
 
 ## Agent authority
 
@@ -560,7 +573,8 @@ the final architecture:
 1. Freeze the current explicit-bus composite tool as the reference baseline.
 2. Define version-1 `CapacityPlan`, `CandidateSiteCatalog`, `RealizationPolicy`,
    `RealizationSet`, `AssessmentResult`, `Finding`, `RevisionRequest`, and
-   `HolisticAssessmentContract` schemas.
+   `HolisticAssessmentContract` schemas. The `Finding` and `RevisionRequest`
+   boundary is now executable; the full assessment contract remains future work.
 3. Implement one deterministic computed-siting method alongside
    `explicit_bus`; do not remove the validated method.
 4. Generate a small number of diverse nodal realizations for one zonal GTEP

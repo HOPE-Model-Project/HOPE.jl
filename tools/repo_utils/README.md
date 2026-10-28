@@ -5,6 +5,7 @@ This folder contains general repository utilities that are not specific to a sin
 ## Holistic Case Utilities
 
 - `audit_holistic_case_pair.jl`: validate that a paired GTEP and PCM case use a topology-compatible holistic setup before solving.
+- `generate_holistic_feedback.jl`: convert assessment evidence into immutable findings and approval-gated revision requests without mutating parent cases.
 - `audit_pcm_network_components.jl`: audit nodal PCM connectivity and identify demand-bearing components without local generation or storage.
 - `build_md_holistic_full_pair.jl`: build the canonical Maryland full-year holistic benchmark pair.
 - `build_md_restricted_linkage_pair.jl`: build the compact Maryland stress pair that verifies retirement, generation, storage, and transmission transfer with a machine-readable acceptance contract.

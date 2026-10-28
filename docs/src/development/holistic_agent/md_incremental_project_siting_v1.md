@@ -153,3 +153,30 @@ Reproduce the assessment with:
 julia --project=. tools/repo_utils/run_md_incremental_pcm_ensemble.jl `
   artifacts/computed_realization_runs/md_incremental_pcm_ensemble_v1 highs
 ```
+
+## Bounded feedback package
+
+The checked-in observed assessment can be routed through the first adaptive
+feedback boundary without rerunning PCM:
+
+```powershell
+julia --project=. tools/repo_utils/generate_holistic_feedback.jl `
+  tools/repo_utils/examples/maryland_incremental_project_siting_v1/ensemble_assessment_observed.yml `
+  tools/repo_utils/examples/maryland_incremental_project_siting_v1/feedback_policy.yml `
+  artifacts/computed_realization_runs/md_incremental_feedback_v1 `
+  md-incremental-feedback-v1 1
+```
+
+The result contains two findings. The RPS shortfall appears in all four policy
+variants and three distinct physical portfolios, so it is routed to the GTEP
+owner as a planning-structural hypothesis. Its request permits a bounded search
+over qualifying clean-energy candidates, but explicitly forbids lowering the
+RPS target, changing the PCM threshold, or editing the parent plan. Because
+three policy variants also select projects with conditional evidence, a second
+request is routed to a human approver. Approval is recorded as a new artifact;
+it is never inferred from silence.
+
+This layer proposes no numerical capacity adjustment. The GTEP model must
+produce the child `CapacityPlan` because it alone can reconcile the RPS finding
+with reserve margin, candidate limits, costs, and the rest of the planning
+formulation.

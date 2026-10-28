@@ -1,0 +1,24 @@
+schema_name: HOPE model revision request
+schema_version: 1
+artifact_type: HOPE.revision_request
+status: proposed
+format: YAML
+required_fields:
+  request_id: { type: string, constraints: [nonblank] }
+  study_id: { type: string, constraints: [nonblank] }
+  iteration: { type: integer, minimum: 1 }
+  finding_ids: { type: list, minimum_length: 1 }
+  requested_owner: { type: string, constraints: [nonblank] }
+  classification: { type: string, constraints: [nonblank] }
+  observed_result: { type: mapping }
+  inferred_cause: { type: mapping }
+  proposed_changes: { type: list }
+  allowed_actions: { type: list }
+  forbidden_actions: { type: list }
+  approval_class: { type: string }
+  approval_required: { type: boolean }
+  status: { type: string, value: proposed }
+semantics:
+  - The requested owner may accept, reject, or replace the proposed remedy.
+  - Approval authorizes a child scenario; it never edits the accepted parent.
+  - Assessment thresholds and authoritative outputs cannot be changed by a revision request.
