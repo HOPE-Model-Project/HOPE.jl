@@ -1,0 +1,16 @@
+schema_name: HOPE revision decision
+schema_version: 1
+artifact_type: HOPE.revision_decision
+status: proposed
+format: YAML
+required_fields:
+  decision_id: { type: string, constraints: [nonblank] }
+  request_id: { type: string, constraints: [nonblank] }
+  decision: { type: string, allowed: [approved, rejected] }
+  approver: { type: string, constraints: [nonblank] }
+  rationale: { type: string, constraints: [nonblank] }
+  decided_at: { type: string, constraints: [nonblank] }
+semantics:
+  - Approval applies only to the named revision request.
+  - Approval authorizes creation of a child scenario and never mutation of the parent.
+  - Rejection prevents materialization.

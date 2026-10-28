@@ -1,0 +1,26 @@
+schema_name: HOPE approved GTEP child scenario specification
+schema_version: 1
+artifact_type: HOPE.gtep_child_scenario_spec
+status: proposed
+format: YAML
+required_fields:
+  request_id: { type: string, constraints: [nonblank] }
+  decision_id: { type: string, constraints: [nonblank] }
+  operation:
+    type: string
+    value: qualifying_renewable_candidate_capacity_envelope
+  parent_candidate_table_sha256: { type: string, constraints: [nonblank] }
+  changes:
+    type: list
+    minimum_length: 1
+    item_fields:
+      candidate_id: { type: string, constraints: [nonblank, unique] }
+      before_max_mw: { type: number, minimum: 0 }
+      after_max_mw: { type: number, exclusive_minimum: before_max_mw }
+      rationale: { type: string }
+semantics:
+  - Every changed candidate must be RPS eligible in the hashed parent table.
+  - The parent must use continuous candidate builds (inv_dcs_bin = 0).
+  - The sum of candidate-limit increases cannot exceed the approved request envelope.
+  - All other input files must remain byte-identical to the parent case.
+  - Materialization does not run GTEP or claim the downstream finding is resolved.

@@ -113,3 +113,11 @@ julia --project=. tools/repo_utils/generate_holistic_feedback.jl `
 The policy authorizes only a bounded child-scenario search. It does not lower
 assessment thresholds, edit the accepted capacity plan, or allow a PCM agent
 to dictate a planning decision.
+
+An approved request can be materialized with
+`tools/repo_utils/materialize_gtep_child_scenario.jl` after a reviewer supplies
+a matching `HOPE.revision_decision` and concrete
+`HOPE.gtep_child_scenario_spec`. No Maryland approval or numerical revision is
+checked in here. The public parent already has large renewable candidate upper
+bounds, so increasing them without first identifying a binding planning
+constraint would not be a defensible experiment.

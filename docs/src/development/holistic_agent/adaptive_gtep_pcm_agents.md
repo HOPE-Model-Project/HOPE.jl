@@ -473,6 +473,26 @@ actions, and stops with `INCONCLUSIVE` when the policy's iteration limit is
 reached. Approval authorizes construction of a child scenario; it does not
 authorize in-place changes to an accepted case.
 
+The first approved-change materializer is implemented by
+`build_gtep_child_scenario_spec` and
+`materialize_approved_gtep_child_scenario`. It supports one deliberately narrow
+operation: increasing the upper bounds of named RPS-eligible GTEP candidates
+when candidate builds are continuous (`inv_dcs_bin = 0`). Discrete candidate
+rows require a separate unitization-aware operation.
+The concrete specification must include the expected parent values and parent
+candidate-table hash, the total increase must remain inside the approved
+request envelope, and every other data file must remain byte-identical. The
+tool copies no stale model outputs, writes request/decision/specification/delta
+lineage, and marks the child `materialized_pending_gtep_solve` with validation
+`NOT_RUN`. Its contracts are documented in
+`schemas/revision_decision_v1.yml` and
+`schemas/gtep_child_scenario_spec_v1.yml`.
+
+This operation expands an optimization option; it does not force the model to
+build the capacity and does not claim the downstream finding is resolved. A
+new GTEP solve, a new `CapacityPlan`, realization, PCM assessment, and verifier
+decision are still required.
+
 ## Agent authority
 
 | Role | May do | Must not do without escalation |

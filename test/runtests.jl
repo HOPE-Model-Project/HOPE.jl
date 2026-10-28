@@ -18,6 +18,7 @@ using Test
     include("test-computed-realization.jl")
     include("test-computed-realization-handoff.jl")
     include("test-adaptive-feedback.jl")
+    include("test-gtep-child-scenario.jl")
     include("test-holistic-contract.jl")
     include("test-holistic-benchmark.jl")
     include("test-lmp-sign-regression.jl")

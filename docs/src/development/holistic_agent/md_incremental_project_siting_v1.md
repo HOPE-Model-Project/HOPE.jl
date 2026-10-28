@@ -180,3 +180,20 @@ This layer proposes no numerical capacity adjustment. The GTEP model must
 produce the child `CapacityPlan` because it alone can reconcile the RPS finding
 with reserve margin, candidate limits, costs, and the rest of the planning
 formulation.
+
+## Approved child-case boundary
+
+HOPE can now materialize an approved child GTEP case with
+`tools/repo_utils/materialize_gtep_child_scenario.jl`. The command requires five
+explicit inputs: the parent case, revision request, approval decision, concrete
+child specification, and a new destination. It never edits the parent.
+
+The Maryland public GTEP case already contains large solar and wind candidate
+limits. Therefore this benchmark does **not** check in or automatically approve
+an arbitrary capacity increase: additional candidate headroom may not be the
+binding cause of the operational RPS shortfall. A domain reviewer should first
+decide whether the child experiment should change candidate availability,
+renewable chronology or accreditation, clean imports, or another planning
+assumption. Only the first option is currently allowlisted by the materializer.
+Supporting another option requires its own typed operation, bounds, protected
+fields, and tests.

@@ -61,6 +61,7 @@ include("realization_ensemble.jl") #multi-realization PCM preparation and assess
 include("adaptive_feedback.jl")   #typed findings and approval-gated revision requests
 include("holistic_contract.jl")    #versioned handoff and physical-realization contracts
 include("run_holistic.jl")         #Holistic assessment: GTEP-PCM two stage
+include("gtep_child_scenario.jl")  #approval-gated immutable GTEP child cases
 include("holistic_benchmark.jl")   #Deterministic solved-value and handoff evidence
 
 #export HOPE functions
@@ -149,6 +150,9 @@ export load_feedback_policy
 export record_revision_decision
 export validate_feedback_policy
 export write_holistic_feedback_package
+export build_gtep_child_scenario_spec
+export materialize_approved_gtep_child_scenario
+export validate_gtep_child_scenario_spec
 export load_operational_resource_templates
 export validate_operational_resource_templates
 export validate_holistic_handoff_contract
