@@ -319,6 +319,37 @@ function assess_pcm_realization_ensemble(
     max_load_shedding_mwh::Float64 = 1e-6,
     max_rps_slack_mwh::Float64 = 1e-6,
 )
+    solver_name = _effective_solver_name(pcm_config, solver_override)
+    if haskey(OPTIONAL_SOLVER_PACKAGES, solver_name)
+        _ensure_optional_solver_loaded(solver_name)
+        return Base.invokelatest(
+            _assess_pcm_realization_ensemble_impl,
+            prepared,
+            pcm_case_path,
+            pcm_config;
+            solver_override = solver_override,
+            max_load_shedding_mwh = max_load_shedding_mwh,
+            max_rps_slack_mwh = max_rps_slack_mwh,
+        )
+    end
+    return _assess_pcm_realization_ensemble_impl(
+        prepared,
+        pcm_case_path,
+        pcm_config;
+        solver_override = solver_override,
+        max_load_shedding_mwh = max_load_shedding_mwh,
+        max_rps_slack_mwh = max_rps_slack_mwh,
+    )
+end
+
+function _assess_pcm_realization_ensemble_impl(
+    prepared::AbstractDict,
+    pcm_case_path::AbstractString,
+    pcm_config::Dict;
+    solver_override = nothing,
+    max_load_shedding_mwh::Float64 = 1e-6,
+    max_rps_slack_mwh::Float64 = 1e-6,
+)
     max_load_shedding_mwh >= 0.0 ||
         throw(ArgumentError("max_load_shedding_mwh must be nonnegative."))
     max_rps_slack_mwh >= 0.0 ||

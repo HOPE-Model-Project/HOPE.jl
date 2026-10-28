@@ -1,0 +1,33 @@
+schema_name: HOPE compact RPS planning experiment contract
+schema_version: 1
+artifact_type: HOPE.compact_rps_planning_contract
+status: implemented
+format: YAML plus CSV contribution table
+required_fields:
+  parent_case: { type: path }
+  child_case: { type: path }
+  external_zone: { type: string, constraints: [nonblank] }
+  firm_external_contribution_mw: { type: number, exclusive_minimum: 0 }
+  external_energy_marginal_cost_usd_per_mwh: { type: number, minimum: 0 }
+  external_resource_is_rps_eligible: { type: boolean, value: false }
+  enforced_constraints: { type: list, minimum_length: 2 }
+  changed_data_files:
+    { type: list, value: [gendata.csv, gen_availability_timeseries.csv] }
+  candidate_availability_contract:
+    type: mapping
+    required_fields:
+      method:
+        { type: string, value: explicit_post_materialization_generator_columns }
+      candidate_profile_sources: { type: mapping }
+      proxy_columns_added: { type: integer, minimum: 1 }
+      candidate_columns_added: { type: integer, minimum: 1 }
+      static_fallback_allowed_for_vre: { type: boolean, value: false }
+  limitations: { type: list, minimum_length: 1 }
+semantics:
+  - External resources are declared existing supply proxies, not new projects.
+  - Each proxy has a stable identity, capacity, and physical PCM boundary bus.
+  - Proxy capacity may support system reserve adequacy but is not Maryland RPS eligible.
+  - Zero marginal decision cost represents a sunk baseline contract, not a price forecast.
+  - Appended proxy generators shift positional generator indices; candidate availability columns are rebuilt after that shift.
+  - Candidate solar and wind use aligned zonal time series and may not use static availability fallback.
+  - The parent case and its outputs are never modified or inherited as child validation.

@@ -1,0 +1,16 @@
+artifact_type: HOPE.capacity_plan_unitization_policy
+schema_version: 1
+method: equal_blocks_nearest_target_v1
+resources:
+  SolarPV:
+    target_mw: 550.0
+    minimum_mw: 400.0
+    maximum_mw: 650.0
+  WindOn:
+    target_mw: 300.0
+    minimum_mw: 200.0
+    maximum_mw: 400.0
+  Battery:
+    target_mw: 200.0
+    minimum_mw: 100.0
+    maximum_mw: 250.0

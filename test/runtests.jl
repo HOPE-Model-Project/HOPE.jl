@@ -20,6 +20,7 @@ using Test
     include("test-adaptive-feedback.jl")
     include("test-gtep-child-scenario.jl")
     include("test-planning-feedback-diagnostic.jl")
+    include("test-compact-planning-experiment.jl")
     include("test-holistic-contract.jl")
     include("test-holistic-benchmark.jl")
     include("test-lmp-sign-regression.jl")

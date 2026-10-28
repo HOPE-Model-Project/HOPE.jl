@@ -63,6 +63,7 @@ include("holistic_contract.jl")    #versioned handoff and physical-realization c
 include("run_holistic.jl")         #Holistic assessment: GTEP-PCM two stage
 include("gtep_child_scenario.jl")  #approval-gated immutable GTEP child cases
 include("planning_feedback_diagnostic.jl") #planning evidence before revision
+include("compact_planning_experiment.jl") #compact RPS plan and project unitization
 include("holistic_benchmark.jl")   #Deterministic solved-value and handoff evidence
 
 #export HOPE functions
@@ -156,6 +157,10 @@ export materialize_approved_gtep_child_scenario
 export validate_gtep_child_scenario_spec
 export diagnose_gtep_feedback_context
 export write_gtep_feedback_diagnostic
+export materialize_compact_rps_gtep_case
+export unitize_capacity_plan
+export add_compact_planning_proxies_to_pcm
+export build_unitized_project_catalog
 export load_operational_resource_templates
 export validate_operational_resource_templates
 export validate_holistic_handoff_contract

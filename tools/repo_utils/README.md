@@ -8,6 +8,8 @@ This folder contains general repository utilities that are not specific to a sin
 - `generate_holistic_feedback.jl`: convert assessment evidence into immutable findings and approval-gated revision requests without mutating parent cases.
 - `materialize_gtep_child_scenario.jl`: create an immutable child GTEP case from a matching approved decision and bounded candidate-capacity specification.
 - `diagnose_md_incremental_planning_feedback.jl`: determine whether the Maryland RPS feedback supports candidate-headroom revision or reveals a capacity-plan contract gap.
+- `run_md_compact_rps_planning.jl`: materialize and solve an immutable Maryland compact-planning child with explicit candidate VRE profiles, then publish a unitized `CapacityPlan`.
+- `run_md_compact_rps_pcm_ensemble.jl`: site the compact plan under four restricted nodal policies and assess every distinct portfolio in PCM.
 - `audit_pcm_network_components.jl`: audit nodal PCM connectivity and identify demand-bearing components without local generation or storage.
 - `build_md_holistic_full_pair.jl`: build the canonical Maryland full-year holistic benchmark pair.
 - `build_md_restricted_linkage_pair.jl`: build the compact Maryland stress pair that verifies retirement, generation, storage, and transmission transfer with a machine-readable acceptance contract.

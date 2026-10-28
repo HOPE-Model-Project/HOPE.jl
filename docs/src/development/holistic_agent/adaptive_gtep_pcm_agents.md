@@ -13,6 +13,13 @@ opt-in `run_hope_holistic` integration are also implemented. Discrete-project
 selection, development-evidence screens, human-review flags, and multiple
 policy realizations are exercised by the
 [Maryland Incremental Project-Siting Benchmark v1](@ref md-incremental-project-siting-v1).
+The subsequent
+[Maryland Compact RPS Planning and Realization Experiment v1](@ref md-compact-rps-planning-v1)
+now exercises the complete GTEP-derived path: an RPS- and reserve-constrained
+plan, deterministic project unitization, restricted alternative nodal
+realizations, and PCM verification. It also records a material generator-index
+and VRE-profile contract failure discovered during the first trial, then shows
+the corrected plan passing the operational RPS and load-shedding gates.
 The service now includes a first deterministic feedback boundary in
 `src/adaptive_feedback.jl`. It converts assessment evidence into typed
 `Finding` and `RevisionRequest` artifacts, records human decisions separately,

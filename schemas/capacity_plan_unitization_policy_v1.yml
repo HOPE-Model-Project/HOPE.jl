@@ -1,0 +1,21 @@
+schema_name: HOPE capacity-plan unitization policy
+schema_version: 1
+artifact_type: HOPE.capacity_plan_unitization_policy
+status: implemented
+format: YAML
+required_fields:
+  method:
+    type: string
+    value: equal_blocks_nearest_target_v1
+  resources:
+    type: mapping
+    item_fields:
+      target_mw: { type: number, exclusive_minimum: 0 }
+      minimum_mw: { type: number, exclusive_minimum: 0 }
+      maximum_mw: { type: number, exclusive_minimum: 0 }
+semantics:
+  - Each solved GTEP build is divided into equal project blocks.
+  - The block count is nearest the declared target while every block remains inside its minimum and maximum.
+  - Equal blocks avoid an arbitrary residual project.
+  - Total MW and storage MWh are conserved exactly within numerical tolerance.
+  - Unitization does not select physical sites or change the GTEP technology mix.
