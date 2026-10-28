@@ -121,3 +121,20 @@ a matching `HOPE.revision_decision` and concrete
 checked in here. The public parent already has large renewable candidate upper
 bounds, so increasing them without first identifying a binding planning
 constraint would not be a defensible experiment.
+
+## Diagnose the planning feedback
+
+Run the read-only evidence check before authoring any concrete child-case
+specification:
+
+```powershell
+julia --project=. tools/repo_utils/diagnose_md_incremental_planning_feedback.jl `
+  artifacts/computed_realization_runs/md_incremental_planning_diagnostic_v1
+```
+
+For the checked-in evidence, the result is
+`capacity_plan_policy_contract_gap`. The validated parent GTEP passes RPS and
+retains about 9.76 GW of qualifying candidate headroom, while this benchmark's
+compact `CapacityPlan` enforced reserve adequacy but not annual RPS. The tool
+therefore refuses to support a candidate-headroom revision and recommends
+deriving the next `CapacityPlan` from an RPS-constrained GTEP solve.

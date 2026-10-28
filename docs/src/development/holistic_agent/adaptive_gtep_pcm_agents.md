@@ -473,6 +473,28 @@ actions, and stops with `INCONCLUSIVE` when the policy's iteration limit is
 reached. Approval authorizes construction of a child scenario; it does not
 authorize in-place changes to an accepted case.
 
+Before a concrete planning change is approved, the read-only
+`diagnose_gtep_feedback_context` boundary compares downstream evidence with
+the parent GTEP solution, candidate utilization, and the declared derivation
+contract of the `CapacityPlan`. It distinguishes at least three situations:
+
+- `capacity_plan_policy_contract_gap`: the parent passes the policy gate, the
+  downstream plan did not enforce that policy, and the failure cannot justify
+  changing candidate bounds;
+- `qualifying_candidate_envelope_exhausted`: the operational RPS gate fails
+  and the eligible planning envelope is actually exhausted, so a bounded
+  candidate-headroom experiment may be reviewed; and
+- `rps_failure_requires_planning_model_diagnosis`: the plan claims to enforce
+  RPS while headroom remains, so chronology, accreditation, clean imports, or
+  other binding constraints require investigation.
+
+The diagnostic writes immutable evidence tables and hashes under the contract
+documented in `schemas/gtep_feedback_diagnostic_v1.yml`. It proposes no
+numerical change and grants no approval. In the Maryland incremental benchmark
+it identifies a capacity-plan policy-contract gap: the synthetic plan enforced
+reserve adequacy but not annual RPS, while the validated parent GTEP passed RPS
+and retained about 9.76 GW of eligible candidate headroom.
+
 The first approved-change materializer is implemented by
 `build_gtep_child_scenario_spec` and
 `materialize_approved_gtep_child_scenario`. It supports one deliberately narrow

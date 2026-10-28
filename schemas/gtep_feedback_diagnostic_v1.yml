@@ -1,0 +1,44 @@
+schema_name: HOPE GTEP feedback diagnostic
+schema_version: 1
+artifact_type: HOPE.gtep_feedback_diagnostic
+status: implemented
+format: YAML plus CSV evidence tables
+required_fields:
+  classification:
+    type: string
+    allowed_values:
+      - capacity_plan_policy_contract_gap
+      - qualifying_candidate_envelope_exhausted
+      - rps_failure_requires_planning_model_diagnosis
+      - no_rps_failure
+  recommended_action: { type: string, constraints: [nonblank] }
+  candidate_headroom_revision_supported: { type: boolean }
+  evidence:
+    type: mapping
+    required_fields:
+      observed_pcm_rps_slack_mwh: { type: number, minimum: 0 }
+      pcm_rps_slack_threshold_mwh: { type: number, minimum: 0 }
+      parent_gtep_rps_slack_mwh: { type: number, minimum: 0 }
+      parent_gtep_rps_passed: { type: boolean }
+      capacity_plan_enforced_rps: { type: boolean }
+      aggregate_rps_candidate_headroom_mw: { type: number, minimum: 0 }
+      aggregate_rps_candidate_headroom_exhausted: { type: boolean }
+      rps_candidates_at_upper_bound: { type: integer, minimum: 0 }
+      rps_candidate_count: { type: integer, minimum: 0 }
+  source_hashes:
+    type: mapping
+    required_fields:
+      gendata_candidate.csv: { type: sha256 }
+      capacity.csv: { type: sha256 }
+companion_files:
+  candidate_utilization.csv:
+    purpose: Candidate-level built capacity, upper bounds, headroom, and RPS eligibility.
+  capacity_plan_summary.csv:
+    purpose: Capacity-plan MW and MWh grouped by resource kind, technology, and RPS eligibility.
+  manifest.yml:
+    purpose: SHA-256 hashes of every diagnostic output file.
+semantics:
+  - The diagnostic is read-only and cannot authorize or apply a planning revision.
+  - Candidate-headroom revision support is true only when the qualifying candidate envelope is exhausted.
+  - Capacity-plan policy coverage comes from the declared capacity_plan_contract, not an inference from technology names.
+  - A downstream RPS failure in a plan that did not enforce RPS is a contract gap, not evidence that candidate limits bind.

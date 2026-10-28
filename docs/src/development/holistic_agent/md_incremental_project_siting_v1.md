@@ -197,3 +197,33 @@ renewable chronology or accreditation, clean imports, or another planning
 assumption. Only the first option is currently allowlisted by the materializer.
 Supporting another option requires its own typed operation, bounds, protected
 fields, and tests.
+
+## Planning diagnosis before revision
+
+The read-only planning diagnostic makes that preliminary decision from the
+authoritative artifacts:
+
+```powershell
+julia --project=. tools/repo_utils/diagnose_md_incremental_planning_feedback.jl `
+  artifacts/computed_realization_runs/md_incremental_planning_diagnostic_v1
+```
+
+For the validated Maryland evidence it returns
+`capacity_plan_policy_contract_gap`, not candidate exhaustion. The parent GTEP
+run satisfies its RPS constraint with zero slack and builds 17,054.26 MW of
+solar plus 9,188.25 MW of wind. Its qualifying candidate envelope still has
+9,757.48 MW of aggregate headroom: 2,945.74 MW of solar and 6,811.75 MW of
+wind. Five of eight individual renewable candidate rows bind, but the
+aggregate envelope does not.
+
+The incremental benchmark plan, by contrast, was deliberately derived only to
+meet the 805 MW accredited-capacity residual. Its contract did not enforce an
+annual RPS or chronological energy balance. The observed 222,579.56 MWh PCM
+RPS slack therefore does not support increasing GTEP candidate limits. It
+shows that this synthetic reserve-constrained plan is not a policy-complete
+child of the RPS-constrained GTEP solution.
+
+The defensible next planning experiment is to derive a compact child
+`CapacityPlan` from an RPS-constrained GTEP solve, preserving its technology
+mix and lineage, and then pass that plan through the same realization and PCM
+assessment. No Maryland child case is materialized from this diagnosis alone.

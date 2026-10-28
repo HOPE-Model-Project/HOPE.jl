@@ -21,6 +21,18 @@ capacity_credit_assumptions:
   WindOn: 0.15
   NGCC: 0.90
   Battery: 1.00
+capacity_plan_contract:
+  derivation_method: declared_incremental_project_blocks
+  enforced_constraints:
+    - planning_reserve_margin
+    - accredited_capacity_balance
+  not_enforced_constraints:
+    - annual_rps
+    - chronological_energy_balance
+  note: >-
+    This compact benchmark plan was declared to exercise project siting. It is
+    not the output of the RPS-constrained Maryland GTEP case and does not claim
+    to satisfy an annual energy policy before PCM assessment.
 disclaimer: >-
   The transmission buses and zone structure come from the public Maryland HOPE
   benchmark. Project, permit, environmental, community, queue, land, cost, and
