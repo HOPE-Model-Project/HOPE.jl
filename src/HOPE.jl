@@ -59,6 +59,7 @@ include("computed_realization_handoff.jl") #GTEP/PCM adapters for computed alloc
 include("holistic_coverage.jl")    #machine-readable holistic coverage and acceptance
 include("realization_ensemble.jl") #multi-realization PCM preparation and assessment
 include("adaptive_feedback.jl")   #typed findings and approval-gated revision requests
+include("adaptive_study.jl")      #bounded adaptive-study orchestration state machine
 include("holistic_contract.jl")    #versioned handoff and physical-realization contracts
 include("run_holistic.jl")         #Holistic assessment: GTEP-PCM two stage
 include("gtep_child_scenario.jl")  #approval-gated immutable GTEP child cases
@@ -152,6 +153,18 @@ export load_feedback_policy
 export record_revision_decision
 export validate_feedback_policy
 export write_holistic_feedback_package
+export validate_holistic_study_spec
+export load_holistic_study_spec
+export initialize_adaptive_study
+export record_adaptive_stage
+export evaluate_ensemble_acceptance
+export verify_adaptive_study
+export request_adaptive_revision
+export record_adaptive_revision_decision
+export start_adaptive_child_iteration
+export stop_adaptive_study
+export run_adaptive_study_iteration
+export write_adaptive_study_state
 export build_gtep_child_scenario_spec
 export materialize_approved_gtep_child_scenario
 export validate_gtep_child_scenario_spec

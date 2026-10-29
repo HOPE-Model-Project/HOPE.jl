@@ -18,6 +18,7 @@ using Test
     include("test-computed-realization.jl")
     include("test-computed-realization-handoff.jl")
     include("test-adaptive-feedback.jl")
+    include("test-adaptive-study.jl")
     include("test-gtep-child-scenario.jl")
     include("test-planning-feedback-diagnostic.jl")
     include("test-compact-planning-experiment.jl")

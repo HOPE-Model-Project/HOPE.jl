@@ -1,0 +1,34 @@
+schema_name: HOPE holistic study specification
+schema_version: 1
+artifact_type: HOPE.holistic_study_spec
+status: implemented
+format: YAML
+required_fields:
+  study_id: { type: string, constraints: [nonblank] }
+  objectives: { type: list, minimum_length: 1 }
+  fixed_assumptions: { type: mapping }
+  acceptance:
+    type: mapping
+    required_fields:
+      ensemble_policy:
+        { type: string, allowed: [any, all, fraction, worst_case] }
+      minimum_fraction: { type: number, minimum: 0.0, maximum: 1.0 }
+  iteration_budget: { type: integer, minimum: 1 }
+  allowed_revision_types:
+    type: list
+    allowed:
+      - realization_local_resiting
+      - candidate_zone_eligibility
+      - candidate_capacity_envelope
+      - transmission_interface
+      - assumption_change
+  approval_policy:
+    type: mapping
+    required_fields:
+      require_human_for: { type: list }
+semantics:
+  - Objectives, acceptance criteria, and the iteration budget are pinned for the study lineage.
+  - A fixed assumption can change only through an approved assumption_change revision.
+  - An assumption_change always requires human approval.
+  - Every iteration creates immutable child artifacts; no accepted parent artifact is edited.
+  - Budget exhaustion, repeated revisions, or missing authority terminate as INCONCLUSIVE rather than weakening a gate.

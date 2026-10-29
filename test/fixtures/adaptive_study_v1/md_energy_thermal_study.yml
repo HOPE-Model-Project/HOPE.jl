@@ -1,0 +1,29 @@
+schema_version: 1
+artifact_type: HOPE.holistic_study_spec
+study_id: md_compact_energy_thermal_feedback_loop_v1
+objectives:
+  - Build and site enough dispatchable capacity to serve the Maryland operational case without load shedding.
+fixed_assumptions:
+  maryland_rps_fraction: 0.0
+  planning_reserve_margin: 0.0
+  voll_usd_per_mwh: 100000.0
+  load_multiplier: 1.10
+  firm_external_contribution_mw: 10820.656
+  allowed_generation_candidate_types: [NGCC]
+  storage_candidates_enabled: false
+acceptance:
+  ensemble_policy: any
+  minimum_fraction: 0.25
+iteration_budget: 3
+allowed_revision_types:
+  - realization_local_resiting
+  - candidate_zone_eligibility
+  - candidate_capacity_envelope
+  - transmission_interface
+  - assumption_change
+approval_policy:
+  require_human_for:
+    - candidate_zone_eligibility
+    - candidate_capacity_envelope
+    - transmission_interface
+    - assumption_change

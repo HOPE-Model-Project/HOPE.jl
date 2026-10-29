@@ -555,6 +555,25 @@ approval.
 
 ## Iteration, convergence, and stopping
 
+Version 1 of the bounded orchestration contract is implemented in
+`src/adaptive_study.jl`. A `HOPE.holistic_study_spec` pins objectives, fixed
+assumptions, ensemble acceptance, iteration budget, allowed revision types, and
+the human-approval boundary. `run_adaptive_study_iteration` executes injected
+GTEP, realization, PCM, and verification handlers through the ordered state
+machine; it does not embed an LLM or give a handler authority to change the
+contract.
+
+The supported ensemble policies are `any`, `all`, `fraction`, and
+`worst_case`. The latter requires every declared realization to pass, making
+the conservative interpretation explicit. Failed verification remains active
+only while a typed, authorized revision is possible. Acceptance, budget
+exhaustion, repeated revision fingerprints, and explicit stops produce the
+terminal states `ACCEPTED`, `INCONCLUSIVE`, or `NOT_ACCEPTED` without weakening
+the pinned gate. The Maryland energy-serving thermal example is the first
+regression fixture: its initial all-failed ensemble motivates an approved
+PEPCO eligibility revision, and its child iteration passes under the declared
+`any` policy because the verified `least_cost` realization is accepted.
+
 An adaptive study is a lineage of immutable attempts, not one case directory
 edited repeatedly:
 
