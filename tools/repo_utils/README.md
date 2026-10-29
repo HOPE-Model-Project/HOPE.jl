@@ -24,9 +24,9 @@ This folder contains general repository utilities that are not specific to a sin
 
 The transfer implementation itself is package code, not a utility script:
 
-- `src/holistic_linkage.jl` realizes retirements and generation, storage, and transmission builds;
-- `src/holistic_contract.jl` validates identity, topology, siting, provenance, and source immutability; and
-- `src/run_holistic.jl` orchestrates the two solves and persists realized PCM inputs and audits.
+- `src/holistic/holistic_linkage.jl` realizes retirements and generation, storage, and transmission builds;
+- `src/holistic/holistic_contract.jl` validates identity, topology, siting, provenance, and source immutability; and
+- `src/holistic/run_holistic.jl` orchestrates the two solves and persists realized PCM inputs and audits.
 
 Files under `artifacts/agent_runs/` and `artifacts/benchmarks/` are generated run
 workspaces and are ignored by Git. They are not package modules, published
@@ -53,7 +53,7 @@ The input contracts are described by `schemas/capacity_plan_v1.yml`,
 `schemas/realization_policy_v1.yml`. A runnable synthetic example is under
 `tools/repo_utils/examples/computed_realization_v1/`.
 
-The tool is deliberately upstream of `src/holistic_linkage.jl`: it computes and
+The tool is deliberately upstream of `src/holistic/holistic_linkage.jl`: it computes and
 audits candidate-to-bus allocations, while the existing linkage continues to
 construct PCM resources and apply operational templates. This separation keeps
 the validated `explicit_bus` path unchanged.

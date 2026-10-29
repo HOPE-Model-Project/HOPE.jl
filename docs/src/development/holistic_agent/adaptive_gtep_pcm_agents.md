@@ -20,7 +20,7 @@ realizations, and PCM verification. It also records a material generator-index
 and VRE-profile contract failure discovered during the first trial, then shows
 the corrected plan passing the operational RPS and load-shedding gates.
 The service now includes a first deterministic feedback boundary in
-`src/adaptive_feedback.jl`. It converts assessment evidence into typed
+`src/holistic/adaptive_feedback.jl`. It converts assessment evidence into typed
 `Finding` and `RevisionRequest` artifacts, records human decisions separately,
 and enforces an iteration limit. It deliberately stops before automatically
 editing or rerunning a GTEP case.
@@ -153,7 +153,7 @@ realization engine, inspect its evidence, and explain or revise the policy.
 
 ### Computed downscaling method v1: constrained site-and-allocate
 
-**Implementation status:** `src/computed_realization.jl` implements the
+**Implementation status:** `src/holistic/computed_realization.jl` implements the
 screening, constrained allocation, policy variants, exact capacity checks, and
 hashed realization-set package. The command-line entry point is
 `tools/repo_utils/compute_nodal_realizations.jl`; its three input contracts are
@@ -556,7 +556,7 @@ approval.
 ## Iteration, convergence, and stopping
 
 Version 1 of the bounded orchestration contract is implemented in
-`src/adaptive_study.jl`. A `HOPE.holistic_study_spec` pins objectives, fixed
+`src/holistic/adaptive_study.jl`. A `HOPE.holistic_study_spec` pins objectives, fixed
 assumptions, ensemble acceptance, iteration budget, allowed revision types, and
 the human-approval boundary. `run_adaptive_study_iteration` executes injected
 GTEP, realization, PCM, and verification handlers through the ordered state

@@ -215,10 +215,10 @@ result = HOPE.run_hope_holistic_fresh(
 )
 ```
 
-That workflow is preferred over case-specific runner scripts because it keeps the reusable orchestration in `src/run_holistic.jl` and avoids reusing stale `output/` trees.
+That workflow is preferred over case-specific runner scripts because it keeps the reusable orchestration in `src/holistic/run_holistic.jl` and avoids reusing stale `output/` trees.
 
 ## Reference Files
 
 - Source pair builder: `tools/repo_utils/build_md_holistic_full_pair.jl`
-- Holistic library entry points: `src/run_holistic.jl` via `HOPE.run_hope_holistic(...)` and `HOPE.run_hope_holistic_fresh(...)`
+- Holistic library entry points: `src/holistic/run_holistic.jl` via `HOPE.run_hope_holistic(...)` and `HOPE.run_hope_holistic_fresh(...)`
 - Structural validator: `tools/repo_utils/md_holistic_full_pair/validate_md_holistic_full_pair.jl`

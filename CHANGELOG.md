@@ -84,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   planning-oriented feature engineering.
 - Resource aggregation (`src/aggregation.jl`): group generators by technology
   type and zone to reduce model size while preserving system-level behaviour.
-- Holistic GTEP→PCM two-stage planning workflow (`src/run_holistic.jl`):
+- Holistic GTEP→PCM two-stage planning workflow (`src/holistic/run_holistic.jl`):
   `run_hope_holistic` and `run_hope_holistic_fresh` inject GTEP capacity
   decisions into a PCM case and solve both models in sequence.
 - EREC (Energy Resilience and Efficiency Criterion) module (`src/erec.jl`):

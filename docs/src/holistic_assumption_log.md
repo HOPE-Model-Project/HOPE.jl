@@ -118,7 +118,7 @@ At minimum, a new entry records:
   unless the candidate supplies `PCM_Unit_Size_MW`.
 - **Rationale:** Preserve compatibility with existing continuous GTEP cases while
   supporting explicit unit disaggregation when physical detail is available.
-- **Evidence:** `realize_generation_builds` in `src/holistic_linkage.jl` and the
+- **Evidence:** `realize_generation_builds` in `src/holistic/holistic_linkage.jl` and the
   generation-build audit.
 - **Consequence:** Without `PCM_Unit_Size_MW`, a thermal build is one committed
   aggregate row even when it represents several physical units. This is useful

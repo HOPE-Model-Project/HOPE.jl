@@ -37,7 +37,6 @@ include("utils.jl")                #utility functions
 include("rep_day.jl")              #representative-day utilities
 include("aggregation.jl")          #resource aggregation settings/utilities
 include("network_utils.jl")        #network/DCOPF helper utilities
-include("holistic_operational_templates.jl") #PCM operating templates for GTEP builds
 include("read_input_data.jl")#read input data module
 include("GTEP.jl")#capacity expansion model
 include("PCM.jl")#production cost model
@@ -53,19 +52,7 @@ include("solve.jl")                #solve model function
 include("run.jl")                  #run module
 include("erec.jl")                 #EREC postprocessing module
 include("debug.jl")                #debug function
-include("holistic_linkage.jl")     #auditable multi-resolution GTEP-PCM linkage
-include("computed_realization.jl") #deterministic zonal-to-nodal site allocation
-include("computed_realization_handoff.jl") #GTEP/PCM adapters for computed allocation
-include("holistic_coverage.jl")    #machine-readable holistic coverage and acceptance
-include("realization_ensemble.jl") #multi-realization PCM preparation and assessment
-include("adaptive_feedback.jl")   #typed findings and approval-gated revision requests
-include("adaptive_study.jl")      #bounded adaptive-study orchestration state machine
-include("holistic_contract.jl")    #versioned handoff and physical-realization contracts
-include("run_holistic.jl")         #Holistic assessment: GTEP-PCM two stage
-include("gtep_child_scenario.jl")  #approval-gated immutable GTEP child cases
-include("planning_feedback_diagnostic.jl") #planning evidence before revision
-include("compact_planning_experiment.jl") #compact RPS plan and project unitization
-include("holistic_benchmark.jl")   #Deterministic solved-value and handoff evidence
+include("holistic/holistic.jl")    #planning-realization-assessment subsystem
 
 #export HOPE functions
 export aggregate_gendata_gtep
