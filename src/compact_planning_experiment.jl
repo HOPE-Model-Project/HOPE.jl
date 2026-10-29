@@ -203,23 +203,56 @@ function _compact_proxy_row(
 end
 
 """
-    materialize_compact_rps_gtep_case(parent_case, child_case, contributions; ...)
+    materialize_compact_gtep_case(parent_case, child_case, contributions; ...)
 
 Create an immutable experimental GTEP child with a declared firm external
 contribution split among physical PCM boundary buses. The proxy is existing,
 non-RPS capacity. It changes no candidate envelope and does not claim that the
 external contribution is a real PJM contract or a contingency-deliverable
-resource.
+resource. `rps_fraction` declares the Maryland-to-Maryland annual RPS fraction;
+setting it to zero also disables the clean-energy-policy block in the child.
 """
-function materialize_compact_rps_gtep_case(
+function materialize_compact_gtep_case(
     parent_case::AbstractString,
     child_case::AbstractString,
     contributions::AbstractDataFrame;
     external_zone::AbstractString = "EXT",
     marginal_cost_per_mwh::Float64 = 0.0,
+    rps_fraction::Float64 = 0.20,
+    storage_candidate_cost_per_mw_year::Union{Nothing,Float64} = nothing,
+    planning_reserve_margin::Union{Nothing,Float64} = nothing,
+    voll_per_mwh::Union{Nothing,Float64} = nothing,
+    load_multiplier::Float64 = 1.0,
+    allowed_generation_candidate_types::Union{Nothing,Vector{String}} = nothing,
+    allowed_generation_candidate_zones::Union{Nothing,Vector{String}} = nothing,
+    storage_candidates_enabled::Bool = true,
 )
     marginal_cost_per_mwh >= 0.0 ||
         throw(ArgumentError("marginal_cost_per_mwh must be nonnegative."))
+    0.0 <= rps_fraction <= 1.0 ||
+        throw(ArgumentError("rps_fraction must lie between zero and one."))
+    isnothing(storage_candidate_cost_per_mw_year) ||
+        storage_candidate_cost_per_mw_year >= 0.0 ||
+        throw(ArgumentError("storage_candidate_cost_per_mw_year must be nonnegative."))
+    isnothing(planning_reserve_margin) ||
+        planning_reserve_margin >= 0.0 ||
+        throw(ArgumentError("planning_reserve_margin must be nonnegative."))
+    isnothing(voll_per_mwh) ||
+        voll_per_mwh >= 0.0 ||
+        throw(ArgumentError("voll_per_mwh must be nonnegative."))
+    load_multiplier > 0.0 || throw(ArgumentError("load_multiplier must be positive."))
+    if !isnothing(allowed_generation_candidate_types)
+        isempty(allowed_generation_candidate_types) &&
+            throw(ArgumentError("allowed_generation_candidate_types must not be empty."))
+        all(value -> !isempty(strip(value)), allowed_generation_candidate_types) ||
+            throw(ArgumentError("Allowed generation candidate types must be nonblank."))
+    end
+    if !isnothing(allowed_generation_candidate_zones)
+        isempty(allowed_generation_candidate_zones) &&
+            throw(ArgumentError("allowed_generation_candidate_zones must not be empty."))
+        all(value -> !isempty(strip(value)), allowed_generation_candidate_zones) ||
+            throw(ArgumentError("Allowed generation candidate zones must be nonblank."))
+    end
     _compact_required_columns(
         contributions,
         ["Proxy_ID", "Bus_id", "Capacity_MW"],
@@ -243,14 +276,12 @@ function materialize_compact_rps_gtep_case(
 
     parent_path, config = load_case_config_for_holistic(
         parent_case;
-        context = "materialize_compact_rps_gtep_case",
+        context = "materialize_compact_gtep_case",
     )
     lowercase(_feedback_text(get(config, "model_mode", ""))) == "gtep" ||
         throw(ArgumentError("Parent case must use model_mode GTEP."))
     Int(get(config, "planning_reserve_mode", 0)) > 0 ||
         throw(ArgumentError("Parent case must enforce planning reserve adequacy."))
-    Int(get(config, "clean_energy_policy", 0)) > 0 ||
-        throw(ArgumentError("Parent case must enforce a clean-energy policy."))
     child_path = abspath(child_case)
     ispath(child_path) && throw(ArgumentError("Child case already exists: $(child_path)"))
     data_directory = normpath(joinpath(parent_path, String(config["DataCase"])))
@@ -278,6 +309,36 @@ function materialize_compact_rps_gtep_case(
     _copy_gtep_child_tree(parent_path, child_path)
     child_data = normpath(joinpath(child_path, String(config["DataCase"])))
     child_generation_path = joinpath(child_data, "gendata.csv")
+    generation_candidate_path = joinpath(child_data, "gendata_candidate.csv")
+    if !isnothing(allowed_generation_candidate_types) ||
+       !isnothing(allowed_generation_candidate_zones)
+        generation_candidates = CSV.read(generation_candidate_path, DataFrame)
+        _compact_required_columns(
+            generation_candidates,
+            ["Type", "Zone", "Candidate_ID"],
+            "Generation candidate table",
+        )
+        if !isnothing(allowed_generation_candidate_types)
+            allowed_types = Set(strip.(allowed_generation_candidate_types))
+            generation_candidates = generation_candidates[
+                strip.(string.(generation_candidates.Type)).∈Ref(allowed_types),
+                :,
+            ]
+        end
+        if !isnothing(allowed_generation_candidate_zones)
+            allowed_zones = Set(strip.(allowed_generation_candidate_zones))
+            generation_candidates = generation_candidates[
+                strip.(string.(generation_candidates.Zone)).∈Ref(allowed_zones),
+                :,
+            ]
+        end
+        nrow(generation_candidates) > 0 || throw(
+            ArgumentError(
+                "No generation candidates remain after applying the allowed type and zone filters.",
+            ),
+        )
+        CSV.write(generation_candidate_path, generation_candidates)
+    end
     child_generation = CSV.read(child_generation_path, DataFrame)
     allowmissing!(child_generation)
     for row in eachindex(proxy_ids)
@@ -302,7 +363,80 @@ function materialize_compact_rps_gtep_case(
     settings_path = joinpath(child_path, "Settings", "HOPE_model_settings.yml")
     child_settings = YAML.load_file(settings_path)
     child_settings["solver"] = "highs"
+    child_settings["clean_energy_policy"] = rps_fraction > 0.0 ? 2 : 0
+    if !isnothing(planning_reserve_margin)
+        child_settings["planning_reserve_mode"] = planning_reserve_margin > 0.0 ? 1 : 0
+    end
     YAML.write_file(settings_path, child_settings)
+    parameter_path = joinpath(child_data, "single_parameter.csv")
+    isfile(parameter_path) ||
+        throw(ArgumentError("Single-parameter table not found: $(parameter_path)"))
+    parameters = CSV.read(parameter_path, DataFrame)
+    nrow(parameters) == 1 ||
+        throw(ArgumentError("Single-parameter table must contain exactly one row."))
+    _compact_required_columns(
+        parameters,
+        ["VOLL", "planning_reserve_margin"],
+        "Single-parameter table",
+    )
+    if !isnothing(planning_reserve_margin)
+        parameters[1, "planning_reserve_margin"] = planning_reserve_margin
+    end
+    if !isnothing(voll_per_mwh)
+        parameters[1, "VOLL"] = voll_per_mwh
+    end
+    CSV.write(parameter_path, parameters)
+    load_path = joinpath(child_data, "load_timeseries_regional.csv")
+    isfile(load_path) || throw(ArgumentError("Regional load table not found: $(load_path)"))
+    load = CSV.read(load_path, DataFrame)
+    maryland_zones =
+        Set(strip.(string.(zones.Zone_id[strip.(string.(zones.State)).=="MD"])))
+    load_columns = intersect(collect(maryland_zones), names(load))
+    isempty(load_columns) &&
+        throw(ArgumentError("Regional load table has no Maryland zone columns."))
+    if load_multiplier != 1.0
+        for name in load_columns
+            load[!, name] = Float64.(load[!, name]) .* load_multiplier
+        end
+        CSV.write(load_path, load)
+    end
+    rps_path = joinpath(child_data, "rpspolicies.csv")
+    isfile(rps_path) || throw(ArgumentError("RPS policy table not found: $(rps_path)"))
+    rps = CSV.read(rps_path, DataFrame)
+    _compact_required_columns(rps, ["From_state", "To_state", "RPS"], "RPS policy table")
+    maryland_row = findall(
+        (strip.(string.(rps.From_state)) .== "MD") .&
+        (strip.(string.(rps.To_state)) .== "MD"),
+    )
+    length(maryland_row) == 1 ||
+        throw(ArgumentError("RPS policy table must contain exactly one MD-to-MD row."))
+    rps[only(maryland_row), :RPS] = rps_fraction
+    CSV.write(rps_path, rps)
+    storage_candidate_path = joinpath(child_data, "storagedata_candidate.csv")
+    if !isnothing(storage_candidate_cost_per_mw_year) || !storage_candidates_enabled
+        isfile(storage_candidate_path) || throw(
+            ArgumentError("Storage candidate table not found: $(storage_candidate_path)"),
+        )
+        storage_candidates = CSV.read(storage_candidate_path, DataFrame)
+        _compact_required_columns(
+            storage_candidates,
+            ["Candidate_ID", raw"Cost ($/MW/yr)"],
+            "Storage candidate table",
+        )
+        if !isnothing(storage_candidate_cost_per_mw_year)
+            storage_candidates[!, raw"Cost ($/MW/yr)"] .= storage_candidate_cost_per_mw_year
+        end
+        if !storage_candidates_enabled
+            _compact_required_columns(
+                storage_candidates,
+                ["Max Power (MW)", "Capacity (MWh)"],
+                "Storage candidate table",
+            )
+            storage_candidates[!, "Max Power (MW)"] .= 0.0
+            storage_candidates[!, "Capacity (MWh)"] .= 0.0
+        end
+        CSV.write(storage_candidate_path, storage_candidates)
+    end
     experiment_directory = joinpath(child_path, "Experiment")
     mkpath(experiment_directory)
     contribution_path = joinpath(experiment_directory, "firm_external_contribution.csv")
@@ -311,7 +445,7 @@ function materialize_compact_rps_gtep_case(
         DataFrame(Proxy_ID = proxy_ids, Bus_id = bus_ids, Capacity_MW = capacities),
     )
     contract = Dict{String,Any}(
-        "artifact_type" => "HOPE.compact_rps_planning_contract",
+        "artifact_type" => "HOPE.compact_planning_contract",
         "schema_version" => 1,
         "status" => "materialized_pending_gtep_solve",
         "parent_case" => abspath(parent_path),
@@ -320,9 +454,44 @@ function materialize_compact_rps_gtep_case(
         "firm_external_contribution_mw" => sum(capacities),
         "external_energy_marginal_cost_usd_per_mwh" => marginal_cost_per_mwh,
         "external_resource_is_rps_eligible" => false,
-        "enforced_constraints" =>
-            ["system_planning_reserve_margin", "maryland_local_annual_rps"],
-        "changed_data_files" => ["gendata.csv", "gen_availability_timeseries.csv"],
+        "maryland_rps_fraction" => rps_fraction,
+        "storage_candidate_cost_per_mw_year" => storage_candidate_cost_per_mw_year,
+        "planning_reserve_margin" =>
+            isnothing(planning_reserve_margin) ?
+            parameters[1, "planning_reserve_margin"] : planning_reserve_margin,
+        "voll_usd_per_mwh" =>
+            isnothing(voll_per_mwh) ? parameters[1, "VOLL"] : voll_per_mwh,
+        "load_multiplier" => load_multiplier,
+        "allowed_generation_candidate_types" => allowed_generation_candidate_types,
+        "allowed_generation_candidate_zones" => allowed_generation_candidate_zones,
+        "storage_candidates_enabled" => storage_candidates_enabled,
+        "enforced_constraints" => vcat(
+            isnothing(planning_reserve_margin) || planning_reserve_margin > 0.0 ?
+            ["system_planning_reserve_margin"] : String[],
+            rps_fraction > 0.0 ? ["maryland_local_annual_rps"] : String[],
+            ["hourly_energy_balance"],
+        ),
+        "disabled_constraints" => vcat(
+            isnothing(planning_reserve_margin) || planning_reserve_margin > 0.0 ?
+            String[] : ["system_planning_reserve_margin"],
+            rps_fraction > 0.0 ? String[] : ["maryland_local_annual_rps"],
+        ),
+        "changed_data_files" => vcat(
+            [
+                "gendata.csv",
+                "gen_availability_timeseries.csv",
+                "rpspolicies.csv",
+                "single_parameter.csv",
+                "Settings/HOPE_model_settings.yml",
+            ],
+            load_multiplier == 1.0 ? String[] : ["load_timeseries_regional.csv"],
+            isnothing(allowed_generation_candidate_types) &&
+            isnothing(allowed_generation_candidate_zones) ? String[] :
+            ["gendata_candidate.csv"],
+            isnothing(storage_candidate_cost_per_mw_year) ? String[] :
+            ["storagedata_candidate.csv"],
+            storage_candidates_enabled ? String[] : ["storagedata_candidate.csv"],
+        ),
         "candidate_availability_contract" => Dict(
             "method" => "explicit_post_materialization_generator_columns",
             "candidate_profile_sources" =>
@@ -338,11 +507,25 @@ function materialize_compact_rps_gtep_case(
             "PCM must retain the same proxy IDs, capacities, and declared boundary buses.",
             "The experiment does not establish firm PJM deliverability under contingencies.",
         ],
-        "source_hashes" => Dict(
-            "parent_gendata.csv" => bytes2hex(sha256(read(generation_path))),
-            "child_gendata.csv" => bytes2hex(sha256(read(child_generation_path))),
-            "child_gen_availability_timeseries.csv" =>
-                bytes2hex(sha256(read(availability_contract["availability_path"]))),
+        "source_hashes" => merge(
+            Dict(
+                "parent_gendata.csv" => bytes2hex(sha256(read(generation_path))),
+                "child_gendata.csv" => bytes2hex(sha256(read(child_generation_path))),
+                "child_gen_availability_timeseries.csv" => bytes2hex(
+                    sha256(read(availability_contract["availability_path"])),
+                ),
+                "child_rpspolicies.csv" => bytes2hex(sha256(read(rps_path))),
+                "child_single_parameter.csv" => bytes2hex(sha256(read(parameter_path))),
+                "child_load_timeseries_regional.csv" =>
+                    bytes2hex(sha256(read(load_path))),
+                "child_gendata_candidate.csv" =>
+                    bytes2hex(sha256(read(generation_candidate_path))),
+            ),
+            isnothing(storage_candidate_cost_per_mw_year) && storage_candidates_enabled ? Dict{String,Any}() :
+            Dict(
+                "child_storagedata_candidate.csv" =>
+                    bytes2hex(sha256(read(storage_candidate_path))),
+            ),
         ),
     )
     contract_path = joinpath(experiment_directory, "planning_contract.yml")
@@ -366,6 +549,29 @@ function materialize_compact_rps_gtep_case(
             "contributions" => contribution_path,
             "manifest" => joinpath(child_path, "manifest.yml"),
         ),
+    )
+end
+
+"""
+    materialize_compact_rps_gtep_case(parent_case, child_case, contributions; ...)
+
+Compatibility wrapper for the validated 20% Maryland RPS experiment.
+"""
+function materialize_compact_rps_gtep_case(
+    parent_case::AbstractString,
+    child_case::AbstractString,
+    contributions::AbstractDataFrame;
+    external_zone::AbstractString = "EXT",
+    marginal_cost_per_mwh::Float64 = 0.0,
+)
+    return materialize_compact_gtep_case(
+        parent_case,
+        child_case,
+        contributions;
+        external_zone = external_zone,
+        marginal_cost_per_mwh = marginal_cost_per_mwh,
+        rps_fraction = 0.20,
+        storage_candidate_cost_per_mw_year = nothing,
     )
 end
 

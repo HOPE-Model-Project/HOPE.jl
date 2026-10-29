@@ -157,6 +157,7 @@ export materialize_approved_gtep_child_scenario
 export validate_gtep_child_scenario_spec
 export diagnose_gtep_feedback_context
 export write_gtep_feedback_diagnostic
+export materialize_compact_gtep_case
 export materialize_compact_rps_gtep_case
 export unitize_capacity_plan
 export add_compact_planning_proxies_to_pcm

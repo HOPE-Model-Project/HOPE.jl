@@ -1,5 +1,9 @@
 # [Maryland Compact RPS Planning and Realization Experiment v1](@id md-compact-rps-planning-v1)
 
+For a system-level visual explanation, assumption ledger, selected-site map,
+and feedback-loop interpretation, start with the [concrete Maryland experiment
+walkthrough](@ref md-compact-rps-experiment-summary).
+
 !!! warning "Workflow experiment, not a Maryland project forecast"
     The network identities and HOPE model inputs are real case data. Firm
     external supply, project development evidence, permitting, environmental,
@@ -139,7 +143,7 @@ julia --project=. tools/repo_utils/run_md_compact_rps_pcm_ensemble.jl `
 ```
 
 The planning and realization policies are under
-`tools/repo_utils/examples/md_compact_rps_planning_v1/`. Gurobi is recommended
+`ModelCases/MD_COMPACT_RPS_REALIZATION_EXAMPLE_V1/`. Gurobi is recommended
 for this large unit-commitment experiment; HiGHS found a feasible incumbent
 but made poor progress closing the root gap.
 

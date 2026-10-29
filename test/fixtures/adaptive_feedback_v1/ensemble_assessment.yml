@@ -7,19 +7,19 @@ findings:
   - Variant: balanced_permitting
     Classification: ACCEPTANCE_FAILED
     HumanReviewRequired: true
-    ReusedFrom: ''
+    ReusedFrom: ""
     LoadSheddingMWh: 0.0
     RPSSlackMWh: 222579.5642612884
   - Variant: least_cost
     Classification: ACCEPTANCE_FAILED
     HumanReviewRequired: false
-    ReusedFrom: ''
+    ReusedFrom: ""
     LoadSheddingMWh: 0.0
     RPSSlackMWh: 222579.5642612735
   - Variant: environmental_caution
     Classification: ACCEPTANCE_FAILED
     HumanReviewRequired: true
-    ReusedFrom: ''
+    ReusedFrom: ""
     LoadSheddingMWh: 0.0
     RPSSlackMWh: 222579.5642612884
   - Variant: grid_ready

@@ -11,9 +11,8 @@ standalone deterministic service. Its GTEP adapter, topology-screened Maryland
 catalog builder, selected-variant PCM handoff, pre-PCM structural screens, and
 opt-in `run_hope_holistic` integration are also implemented. Discrete-project
 selection, development-evidence screens, human-review flags, and multiple
-policy realizations are exercised by the
-[Maryland Incremental Project-Siting Benchmark v1](@ref md-incremental-project-siting-v1).
-The subsequent
+policy realizations are exercised by the maintained compact Maryland examples.
+The
 [Maryland Compact RPS Planning and Realization Experiment v1](@ref md-compact-rps-planning-v1)
 now exercises the complete GTEP-derived path: an RPS- and reserve-constrained
 plan, deterministic project unitization, restricted alternative nodal
@@ -160,13 +159,12 @@ hashed realization-set package. The command-line entry point is
 `tools/repo_utils/compute_nodal_realizations.jl`; its three input contracts are
 documented in `schemas/capacity_plan_v1.yml`,
 `schemas/candidate_site_catalog_v1.yml`, and
-`schemas/realization_policy_v1.yml`. A small synthetic executable example is
-under `tools/repo_utils/examples/computed_realization_v1/`; the geographically
-grounded synthetic Maryland project-siting benchmark is under
-`tools/repo_utils/examples/maryland_incremental_project_siting_v1/`. The
-adapter to solved GTEP outputs and the selected-realization PCM resource builder
-are implemented. Real project evidence, live interconnection studies, and the
-adaptive revision loop remain subsequent work.
+`schemas/realization_policy_v1.yml`. A small synthetic engine example remains
+under `tools/repo_utils/examples/computed_realization_v1/`. Maintained
+end-to-end Maryland scenario inputs live in the ModelCases repository, starting
+with `MD_COMPACT_RPS_REALIZATION_EXAMPLE_V1`; HOPE.jl retains the reusable
+planning, realization, transfer, and assessment algorithms. Real project
+evidence and live interconnection studies remain subsequent work.
 
 The first general realization method should be useful before it is elaborate.
 It should adapt the fundamentals-based logic of Site-and-Grow to HOPE without

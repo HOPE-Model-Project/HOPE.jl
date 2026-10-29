@@ -2,18 +2,10 @@ using HOPE
 using Test
 using YAML
 
-const FEEDBACK_EXAMPLE = joinpath(
-    @__DIR__,
-    "..",
-    "tools",
-    "repo_utils",
-    "examples",
-    "maryland_incremental_project_siting_v1",
-)
+const FEEDBACK_EXAMPLE = joinpath(@__DIR__, "fixtures", "adaptive_feedback_v1")
 
 @testset "Adaptive holistic feedback contracts" begin
-    assessment =
-        YAML.load_file(joinpath(FEEDBACK_EXAMPLE, "ensemble_assessment_observed.yml"))
+    assessment = YAML.load_file(joinpath(FEEDBACK_EXAMPLE, "ensemble_assessment.yml"))
     policy = HOPE.load_feedback_policy(joinpath(FEEDBACK_EXAMPLE, "feedback_policy.yml"))
     parent =
         Dict("assessment" => Dict("artifact_id" => "assessment-001", "sha256" => "abc"))

@@ -57,15 +57,8 @@ function _write_child_parent_case(path::AbstractString)
 end
 
 function _approved_child_request()
-    example = joinpath(
-        @__DIR__,
-        "..",
-        "tools",
-        "repo_utils",
-        "examples",
-        "maryland_incremental_project_siting_v1",
-    )
-    assessment = YAML.load_file(joinpath(example, "ensemble_assessment_observed.yml"))
+    example = joinpath(@__DIR__, "fixtures", "adaptive_feedback_v1")
+    assessment = YAML.load_file(joinpath(example, "ensemble_assessment.yml"))
     policy = HOPE.load_feedback_policy(joinpath(example, "feedback_policy.yml"))
     package =
         HOPE.build_holistic_feedback(assessment, policy; study_id = "child-scenario-test")

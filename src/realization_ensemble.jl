@@ -303,6 +303,43 @@ function _ensemble_classification(metrics::AbstractDict, feasible::Bool; thresho
     return ("ACCEPTED", true, "PCM is feasible and declared thresholds pass")
 end
 
+function _pcm_load_shedding_diagnostics(
+    model::JuMP.Model,
+    input::AbstractDict;
+    tolerance_mw::Float64 = 1e-9,
+)
+    diagnostics = DataFrame(
+        Zone = String[],
+        TimeIndex = Int[],
+        TimePeriod = Int[],
+        Month = Int[],
+        Day = Int[],
+        Hour = Int[],
+        LoadSheddingMW = Float64[],
+    )
+    haskey(JuMP.object_dictionary(model), :p_LS) || return diagnostics
+    zones = string.(input["Zonedata"].Zone_id)
+    load = input["Loaddata"]
+    values = model[:p_LS]
+    for zone_index in axes(values, 1), hour_index in axes(values, 2)
+        shed = Float64(JuMP.value(values[zone_index, hour_index]))
+        shed > tolerance_mw || continue
+        push!(
+            diagnostics,
+            (
+                zones[zone_index],
+                Int(hour_index),
+                "Time Period" in names(load) ? Int(load[hour_index, "Time Period"]) : 0,
+                "Month" in names(load) ? Int(load[hour_index, "Month"]) : 0,
+                "Day" in names(load) ? Int(load[hour_index, "Day"]) : 0,
+                "Hours" in names(load) ? Int(load[hour_index, "Hours"]) : Int(hour_index),
+                shed,
+            ),
+        )
+    end
+    return diagnostics
+end
+
 """
     assess_pcm_realization_ensemble(prepared, pcm_case_path, pcm_config; kwargs...)
 
@@ -409,6 +446,7 @@ function _assess_pcm_realization_ensemble_impl(
             "pcm_new_storage_charge_mwh" => 0.0,
             "pcm_new_storage_discharge_mwh" => 0.0,
         )
+        load_shedding_diagnostics = DataFrame()
         reused_from = ""
         if haskey(solved_signatures, signature)
             cached = solved_signatures[signature]
@@ -416,6 +454,7 @@ function _assess_pcm_realization_ensemble_impl(
             accepted = cached.accepted
             reason = cached.reason
             metrics = copy(cached.metrics)
+            load_shedding_diagnostics = copy(cached.load_shedding_diagnostics)
             reused_from = cached.variant
         else
             try
@@ -423,6 +462,8 @@ function _assess_pcm_realization_ensemble_impl(
                 model = create_PCM_model(config, member["pcm_input"], optimizer)
                 solved = solve_model(config, member["pcm_input"], model)
                 merge!(metrics, holistic_model_activity_metrics(solved, "pcm"))
+                load_shedding_diagnostics =
+                    _pcm_load_shedding_diagnostics(solved, member["pcm_input"])
                 if source_pcm_input !== nothing
                     merge!(
                         metrics,
@@ -446,6 +487,7 @@ function _assess_pcm_realization_ensemble_impl(
                 accepted = accepted,
                 reason = reason,
                 metrics = copy(metrics),
+                load_shedding_diagnostics = copy(load_shedding_diagnostics),
             )
         end
         human_review_required = any(selected.ReviewRequired)
@@ -475,6 +517,7 @@ function _assess_pcm_realization_ensemble_impl(
         )
         evidence[variant] = Dict{String,Any}(
             "metrics" => metrics,
+            "load_shedding_diagnostics" => load_shedding_diagnostics,
             "physical_signature" => bytes2hex(sha256(signature)),
             "reused_from" => isempty(reused_from) ? nothing : reused_from,
         )

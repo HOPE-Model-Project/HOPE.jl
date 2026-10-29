@@ -230,49 +230,6 @@ end
         @test !("BAT_SHORT" in allocations.CandidateSiteID)
     end
 
-    @testset "Maryland incremental project-siting benchmark" begin
-        example = joinpath(
-            @__DIR__,
-            "..",
-            "tools",
-            "repo_utils",
-            "examples",
-            "maryland_incremental_project_siting_v1",
-        )
-        plan = HOPE.load_capacity_plan(joinpath(example, "capacity_plan.csv"))
-        catalog = HOPE.load_candidate_site_catalog(
-            joinpath(example, "candidate_project_catalog.csv"),
-        )
-        policy = HOPE.load_realization_policy(joinpath(example, "realization_policy.yml"))
-        result = HOPE.compute_nodal_realizations(plan, catalog, policy)
-        allocations = result["allocations"]
-        screening = result["screening"]
-
-        @test nrow(screening) == 27
-        @test count(screening.ScreenedIn) == 18
-        @test count(.!screening.ScreenedIn) == 9
-        @test count(screening.ReviewRequired) == 9
-        @test nrow(allocations) == 36
-        excluded = Set(screening.CandidateSiteID[.!screening.ScreenedIn])
-        @test isempty(intersect(Set(allocations.CandidateSiteID), excluded))
-
-        signatures = Set{String}()
-        for variant in result["summary"].Variant
-            selected = allocations[allocations.Variant.==variant, :]
-            @test nrow(selected) == 9
-            @test length(unique(selected.PlanItemID)) == 9
-            @test length(unique(selected.CandidateSiteID)) == 9
-            @test sum(selected.AllocatedMW) ≈ 1700.0
-            @test sum(selected.AllocatedMWh) ≈ 800.0
-            push!(signatures, join(sort(selected.CandidateSiteID), "|"))
-        end
-        @test length(signatures) >= 3
-        least_cost = allocations[allocations.Variant.=="least_cost", :]
-        environmental = allocations[allocations.Variant.=="environmental_caution", :]
-        @test count(least_cost.ReviewRequired) == 0
-        @test count(environmental.ReviewRequired) == 9
-    end
-
     @testset "Infeasible plans and invalid policies fail closed" begin
         plan, catalog, policy = _computed_test_inputs()
         catalog = catalog[catalog.Candidate_Site_ID.!="SOL_RESOURCE", :]

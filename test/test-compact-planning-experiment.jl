@@ -21,7 +21,10 @@ function _compact_parent(path::AbstractString)
             "solver" => "highs",
         ),
     )
-    CSV.write(joinpath(data, "zonedata.csv"), DataFrame(Zone_id = ["MD", "EXT"]))
+    CSV.write(
+        joinpath(data, "zonedata.csv"),
+        DataFrame(Zone_id = ["MD", "EXT"], State = ["MD", "EXT"]),
+    )
     generation = DataFrame(
         GeneratorID = ["BASE_NGCC"],
         Asset_ID = ["BASE_NGCC"],
@@ -61,6 +64,26 @@ function _compact_parent(path::AbstractString)
     wind = copy(time)
     wind[!, "MD"] = [0.3, 0.4]
     CSV.write(joinpath(data, "wind_timeseries_regional.csv"), wind)
+    load = copy(time)
+    load[!, "MD"] = [0.1, 0.2]
+    load[!, "EXT"] = [0.0, 0.0]
+    load[!, "NI"] = [0.0, 0.0]
+    CSV.write(joinpath(data, "load_timeseries_regional.csv"), load)
+    CSV.write(
+        joinpath(data, "single_parameter.csv"),
+        DataFrame(VOLL = [100000.0], planning_reserve_margin = [0.15]),
+    )
+    CSV.write(
+        joinpath(data, "rpspolicies.csv"),
+        DataFrame(From_state = ["EXT", "MD"], To_state = ["EXT", "MD"], RPS = [0.0, 0.2]),
+    )
+    storage_candidates = DataFrame(
+        :Candidate_ID => ["BATTERY_C"],
+        Symbol(raw"Cost ($/MW/yr)") => [125000.0],
+        Symbol("Max Power (MW)") => [200.0],
+        Symbol("Capacity (MWh)") => [800.0],
+    )
+    CSV.write(joinpath(data, "storagedata_candidate.csv"), storage_candidates)
     write(joinpath(output, "stale.txt"), "must not be copied")
 end
 
@@ -172,9 +195,56 @@ end
         @test availability.G5 == [0.3, 0.4]
         @test availability.G6 == [0.9, 0.9]
         contract = YAML.load_file(result["paths"]["contract"])
+        @test contract["maryland_rps_fraction"] == 0.20
+        @test isempty(contract["disabled_constraints"])
         @test !contract["candidate_availability_contract"]["static_fallback_allowed_for_vre"]
         @test contract["candidate_availability_contract"]["candidate_profile_sources"]["SOLAR_C"] ==
               "solar_timeseries_regional.csv:MD"
+
+        no_rps_child = joinpath(directory, "child_no_rps")
+        no_rps = HOPE.materialize_compact_gtep_case(
+            parent,
+            no_rps_child,
+            contributions;
+            rps_fraction = 0.0,
+            storage_candidate_cost_per_mw_year = 160000.0,
+            planning_reserve_margin = 0.0,
+            voll_per_mwh = 200000.0,
+            load_multiplier = 1.10,
+            allowed_generation_candidate_types = ["NGCC"],
+            allowed_generation_candidate_zones = ["MD"],
+            storage_candidates_enabled = false,
+        )
+        no_rps_contract = YAML.load_file(no_rps["paths"]["contract"])
+        no_rps_settings =
+            YAML.load_file(joinpath(no_rps_child, "Settings", "HOPE_model_settings.yml"))
+        no_rps_table =
+            CSV.read(joinpath(no_rps_child, "Data", "rpspolicies.csv"), DataFrame)
+        no_rps_storage =
+            CSV.read(joinpath(no_rps_child, "Data", "storagedata_candidate.csv"), DataFrame)
+        no_rps_parameters =
+            CSV.read(joinpath(no_rps_child, "Data", "single_parameter.csv"), DataFrame)
+        no_rps_load = CSV.read(
+            joinpath(no_rps_child, "Data", "load_timeseries_regional.csv"),
+            DataFrame,
+        )
+        no_rps_generation_candidates =
+            CSV.read(joinpath(no_rps_child, "Data", "gendata_candidate.csv"), DataFrame)
+        @test no_rps_contract["maryland_rps_fraction"] == 0.0
+        @test Set(no_rps_contract["disabled_constraints"]) ==
+              Set(["system_planning_reserve_margin", "maryland_local_annual_rps"])
+        @test no_rps_settings["clean_energy_policy"] == 0
+        @test no_rps_settings["planning_reserve_mode"] == 0
+        @test only(no_rps_table.RPS[no_rps_table.From_state.=="MD"]) == 0.0
+        @test only(no_rps_storage[!, raw"Cost ($/MW/yr)"]) == 160000.0
+        @test only(no_rps_parameters.VOLL) == 200000.0
+        @test only(no_rps_parameters.planning_reserve_margin) == 0.0
+        @test no_rps_load.MD ≈ [0.11, 0.22]
+        @test no_rps_generation_candidates.Type == ["NGCC"]
+        @test no_rps_generation_candidates.Zone == ["MD"]
+        @test no_rps_contract["allowed_generation_candidate_zones"] == ["MD"]
+        @test only(no_rps_storage[!, "Max Power (MW)"]) == 0.0
+        @test only(no_rps_storage[!, "Capacity (MWh)"]) == 0.0
 
         continuous_plan = DataFrame(
             Plan_Item_ID = ["WIND_PARENT", "BATTERY_PARENT"],

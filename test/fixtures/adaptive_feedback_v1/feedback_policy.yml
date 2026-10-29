@@ -1,0 +1,98 @@
+schema_version: 1
+artifact_type: HOPE.feedback_policy
+max_iterations: 3
+routes:
+  rps_slack:
+    classification: planning_structural
+    owner: gtep
+    severity: high
+    minimum_distinct_realizations: 2
+    inference: Persistent policy shortfall across distinct realizations is upstream evidence.
+    revisable: true
+    approval_required: true
+    approval_class: material_planning_assumption
+    proposed_changes:
+      - path: gtep.resource_mix.qualifying_clean_energy
+        operation: rerun_optimization_with_bounded_search
+        before: current_approved_capacity_plan
+        after: optimized_child_capacity_plan
+        envelope:
+          max_additional_nameplate_mw: 2000
+          preserve:
+            [rps_target, planning_reserve_margin, demand, assessment_thresholds]
+    allowed_actions:
+      - add or substitute eligible qualifying renewable candidates
+    forbidden_actions:
+      - lower the RPS target or PCM acceptance threshold
+  load_shedding:
+    classification: planning_structural
+    owner: gtep
+    severity: critical
+    minimum_distinct_realizations: 2
+    inference: Repeated unserved energy may indicate insufficient firm resources.
+    revisable: true
+    approval_required: true
+    approval_class: material_planning_assumption
+    proposed_changes:
+      - path: gtep.adequacy_and_flexibility
+        operation: rerun_optimization_with_bounded_search
+        before: current_approved_capacity_plan
+        after: optimized_child_capacity_plan
+    allowed_actions: [review firm capacity and flexibility]
+    forbidden_actions: [increase load shedding to make the assessment pass]
+  pcm_infeasible:
+    classification: assessment_model_diagnosis
+    owner: pcm
+    severity: critical
+    inference: Infeasibility requires diagnostic evidence before upstream revision.
+    revisable: true
+    approval_required: false
+    approval_class: diagnostic_only
+    proposed_changes:
+      - path: pcm.diagnostics
+        operation: produce_conflict_or_minimum_slack_artifact
+        before: no_diagnostic
+        after: diagnostic_artifact
+    allowed_actions: [generate diagnostic evidence]
+    forbidden_actions: [report a relaxation as the original solution]
+  execution_failure:
+    classification: execution_or_numerical_failure
+    owner: pcm_runtime
+    severity: critical
+    inference: No scientific conclusion is justified after execution failure.
+    revisable: true
+    approval_required: false
+    approval_class: diagnostic_only
+    proposed_changes:
+      - path: pcm.runtime_diagnostics
+        operation: reproduce_and_diagnose
+        before: failed_execution
+        after: diagnostic_artifact
+    allowed_actions: [reproduce and diagnose]
+    forbidden_actions: [classify an unsolved case]
+  generic_failure:
+    classification: unrouted_assessment_failure
+    owner: verifier
+    severity: high
+    inference: Unknown assessment failures require contract review.
+    revisable: false
+    approval_required: false
+    approval_class: none
+    proposed_changes: []
+    allowed_actions: [inspect the authoritative assessment]
+    forbidden_actions: [treat an unknown failure as accepted]
+  human_review:
+    classification: unresolved_approval
+    owner: human_approver
+    severity: high
+    inference: Conditional projects require an explicit human decision.
+    revisable: true
+    approval_required: true
+    approval_class: project_evidence_approval
+    proposed_changes:
+      - path: realization.project_evidence
+        operation: approve_reject_or_replace_selected_project
+        before: conditional_or_under_review
+        after: explicit_human_decision
+    allowed_actions: [approve reject or replace the project]
+    forbidden_actions: [infer approval from silence]

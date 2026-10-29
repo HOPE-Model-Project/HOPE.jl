@@ -5,8 +5,8 @@ using SHA
 using YAML
 
 const ROOT = dirname(dirname(@__DIR__))
-const EXAMPLE = joinpath(@__DIR__, "examples", "md_compact_rps_planning_v1")
-const PCM_CASE = joinpath(ROOT, "ModelCases", "MD_PCM_RPS20_transmission_public_case")
+const MODEL_CASES = joinpath(ROOT, "ModelCases")
+const RPS_EXAMPLE = joinpath(MODEL_CASES, "MD_COMPACT_RPS_REALIZATION_EXAMPLE_V1")
 
 function _yaml_rows(table::AbstractDataFrame)
     return [
@@ -23,7 +23,33 @@ function usage(io::IO = stdout)
     )
 end
 
-function main(args::Vector{String} = ARGS)
+function _scale_compact_pcm_load!(input::AbstractDict, multiplier::Float64)
+    multiplier > 0.0 || throw(ArgumentError("load_multiplier must be positive."))
+    multiplier == 1.0 && return input
+    zones = input["Zonedata"]
+    buses = input["Busdata"]
+    maryland_zones = Set(
+        strip.(string.(zones.Zone_id[strip.(string.(zones.State)).=="MD"])),
+    )
+    maryland_buses = Set(
+        strip.(string.(buses.Bus_id[strip.(string.(buses.State)).=="MD"])),
+    )
+    for (key, identifiers) in
+        (("Loaddata", maryland_zones), ("NodalLoaddata", maryland_buses))
+        haskey(input, key) || throw(ArgumentError("PCM input is missing $(key)."))
+        table = input[key]
+        columns = intersect(collect(identifiers), names(table))
+        isempty(columns) && throw(
+            ArgumentError("PCM input $(key) has no Maryland load columns to scale."),
+        )
+        for name in columns
+            table[!, name] = Float64.(table[!, name]) .* multiplier
+        end
+    end
+    return input
+end
+
+function run_compact_pcm_ensemble(example::AbstractString, args::Vector{String})
     length(args) in (2, 3) || begin
         usage(stderr)
         return 2
@@ -36,11 +62,17 @@ function main(args::Vector{String} = ARGS)
         return 2
     end
     try
+        scenario = YAML.load_file(joinpath(example, "scenario.yml"))
+        scenario_id = String(scenario["scenario_id"])
+        pcm_case = joinpath(MODEL_CASES, String(scenario["pcm_parent_case"]))
         plan_path = joinpath(planning_case, "Planning", "unitized_capacity_plan.csv")
         plan = HOPE.load_capacity_plan(plan_path)
         gtep = HOPE.validate_hope(planning_case)
-        pcm = HOPE.validate_hope(PCM_CASE)
+        pcm = HOPE.validate_hope(pcm_case)
         pcm_input = HOPE.add_compact_planning_proxies_to_pcm(pcm["input"], gtep["input"])
+        load_multiplier =
+            haskey(scenario, "load_multiplier") ? Float64(scenario["load_multiplier"]) : 1.0
+        _scale_compact_pcm_load!(pcm_input, load_multiplier)
         generation_candidates = gtep["input"]["Gendata_candidate"]
         storage_candidates = gtep["input"]["Estoragedata_candidate"]
         branchdata = pcm_input["Branchdata"]
@@ -60,9 +92,9 @@ function main(args::Vector{String} = ARGS)
             hard_exclusions_per_group = 3,
             review_candidates_per_group = 3,
         )
-        policy = HOPE.load_realization_policy(joinpath(EXAMPLE, "realization_policy.yml"))
+        policy = HOPE.load_realization_policy(joinpath(example, "realization_policy.yml"))
         templates =
-            CSV.read(joinpath(EXAMPLE, "operational_resource_templates.csv"), DataFrame)
+            CSV.read(joinpath(example, "operational_resource_templates.csv"), DataFrame)
         physical = HOPE.load_holistic_physical_realization(
             joinpath(planning_case, "Settings", "HOPE_physical_realization.yml"),
         )
@@ -97,16 +129,24 @@ function main(args::Vector{String} = ARGS)
         CSV.write(screening_path, prepared["realization"]["screening"])
         CSV.write(preflight_path, prepared["summary"])
         CSV.write(findings_path, assessment["findings"])
-        cp(joinpath(EXAMPLE, "realization_policy.yml"), policy_path; force = false)
+        cp(joinpath(example, "realization_policy.yml"), policy_path; force = false)
         YAML.write_file(
             assessment_path,
             Dict(
                 "artifact_type" => assessment["artifact_type"],
                 "schema_version" => 1,
+                "scenario_id" => scenario_id,
                 "planning_case" => planning_case,
                 "planning_manifest" => joinpath(planning_case, "Planning", "manifest.yml"),
-                "pcm_case" => PCM_CASE,
+                "pcm_case" => pcm_case,
                 "solver" => solver,
+                "load_multiplier" => load_multiplier,
+                "firm_external_contribution_mw" => sum(
+                    CSV.read(
+                        joinpath(example, "firm_external_contribution.csv"),
+                        DataFrame,
+                    ).Capacity_MW,
+                ),
                 "thresholds" => assessment["thresholds"],
                 "findings" => _yaml_rows(assessment["findings"]),
             ),
@@ -121,10 +161,15 @@ function main(args::Vector{String} = ARGS)
             selected_path = joinpath(destination, "selected_projects.csv")
             fast_path = joinpath(destination, "fast_screen.csv")
             transfer_path = joinpath(destination, "transfer_reconciliation.csv")
+            shedding_path = joinpath(destination, "load_shedding_diagnostics.csv")
             CSV.write(selected_path, member["selected_projects"])
             CSV.write(fast_path, member["fast_screen"]["checks"])
             CSV.write(transfer_path, member["transfer_reconciliation"]["checks"])
-            append!(member_files, [selected_path, fast_path, transfer_path])
+            CSV.write(
+                shedding_path,
+                assessment["evidence"][variant]["load_shedding_diagnostics"],
+            )
+            append!(member_files, [selected_path, fast_path, transfer_path, shedding_path])
         end
         files = [
             catalog_path,
@@ -140,8 +185,9 @@ function main(args::Vector{String} = ARGS)
         YAML.write_file(
             manifest_path,
             Dict(
-                "artifact_type" => "HOPE.compact_rps_pcm_ensemble_manifest",
+                "artifact_type" => "HOPE.compact_pcm_ensemble_manifest",
                 "schema_version" => 1,
+                "scenario_id" => scenario_id,
                 "files" => Dict(
                     replace(relpath(path, output_directory), '\\' => '/') =>
                         bytes2hex(sha256(read(path))) for path in files
@@ -169,6 +215,10 @@ function main(args::Vector{String} = ARGS)
         println(stderr)
         return 1
     end
+end
+
+function main(args::Vector{String} = ARGS)
+    return run_compact_pcm_ensemble(RPS_EXAMPLE, args)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

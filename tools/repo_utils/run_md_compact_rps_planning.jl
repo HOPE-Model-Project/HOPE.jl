@@ -6,8 +6,8 @@ using SHA
 using YAML
 
 const ROOT = dirname(dirname(@__DIR__))
-const EXAMPLE = joinpath(@__DIR__, "examples", "md_compact_rps_planning_v1")
-const PARENT = joinpath(ROOT, "ModelCases", "MD_GTEP_RPS20_4zone_public_case")
+const MODEL_CASES = joinpath(ROOT, "ModelCases")
+const RPS_EXAMPLE = joinpath(MODEL_CASES, "MD_COMPACT_RPS_REALIZATION_EXAMPLE_V1")
 
 function _model_sum(model, name::Symbol)
     return haskey(JuMP.object_dictionary(model), name) ? sum(value.(model[name])) : 0.0
@@ -21,7 +21,7 @@ function usage(io::IO = stdout)
     )
 end
 
-function main(args::Vector{String} = ARGS)
+function run_compact_planning(example::AbstractString, args::Vector{String})
     length(args) in (1, 2) || begin
         usage(stderr)
         return 2
@@ -33,18 +33,47 @@ function main(args::Vector{String} = ARGS)
         return 2
     end
     try
+        scenario = YAML.load_file(joinpath(example, "scenario.yml"))
+        parent = joinpath(MODEL_CASES, String(scenario["planning_parent_case"]))
+        rps_fraction = Float64(scenario["maryland_rps_fraction"])
+        storage_cost = haskey(scenario, "storage_candidate_cost_per_mw_year") ?
+            Float64(scenario["storage_candidate_cost_per_mw_year"]) : nothing
+        reserve_margin = haskey(scenario, "planning_reserve_margin") ?
+            Float64(scenario["planning_reserve_margin"]) : nothing
+        voll = haskey(scenario, "voll_usd_per_mwh") ?
+            Float64(scenario["voll_usd_per_mwh"]) : nothing
+        load_multiplier =
+            haskey(scenario, "load_multiplier") ? Float64(scenario["load_multiplier"]) : 1.0
+        allowed_generation_types =
+            haskey(scenario, "allowed_generation_candidate_types") ?
+            String.(scenario["allowed_generation_candidate_types"]) : nothing
+        allowed_generation_zones =
+            haskey(scenario, "allowed_generation_candidate_zones") ?
+            String.(scenario["allowed_generation_candidate_zones"]) : nothing
+        storage_candidates_enabled =
+            Bool(get(scenario, "storage_candidates_enabled", true))
+        scenario_id = String(scenario["scenario_id"])
         contributions =
-            CSV.read(joinpath(EXAMPLE, "firm_external_contribution.csv"), DataFrame)
-        materialized = HOPE.materialize_compact_rps_gtep_case(
-            PARENT,
+            CSV.read(joinpath(example, "firm_external_contribution.csv"), DataFrame)
+        materialized = HOPE.materialize_compact_gtep_case(
+            parent,
             destination,
             contributions;
-            marginal_cost_per_mwh = 0.0,
+            marginal_cost_per_mwh =
+                Float64(scenario["external_energy_marginal_cost_usd_per_mwh"]),
+            rps_fraction = rps_fraction,
+            storage_candidate_cost_per_mw_year = storage_cost,
+            planning_reserve_margin = reserve_margin,
+            voll_per_mwh = voll,
+            load_multiplier = load_multiplier,
+            allowed_generation_candidate_types = allowed_generation_types,
+            allowed_generation_candidate_zones = allowed_generation_zones,
+            storage_candidates_enabled = storage_candidates_enabled,
         )
         result = HOPE.run_hope(destination; solver_override = solver)
         model = result["solved_model"]
         continuous_plan = HOPE.capacity_plan_from_gtep(result["output"], result["input"])
-        unitization_policy = YAML.load_file(joinpath(EXAMPLE, "unitization_policy.yml"))
+        unitization_policy = YAML.load_file(joinpath(example, "unitization_policy.yml"))
         unitized = HOPE.unitize_capacity_plan(continuous_plan, unitization_policy)
         project_plan = unitized["capacity_plan"]
 
@@ -58,13 +87,22 @@ function main(args::Vector{String} = ARGS)
         CSV.write(continuous_path, continuous_plan)
         CSV.write(project_path, project_plan)
         CSV.write(audit_path, unitized["audit"])
-        cp(joinpath(EXAMPLE, "unitization_policy.yml"), policy_path; force = false)
+        cp(joinpath(example, "unitization_policy.yml"), policy_path; force = false)
 
         rps_slack = _model_sum(model, :pt_rps)
         load_shedding = _model_sum(model, :p_LS)
         metrics = Dict{String,Any}(
-            "artifact_type" => "HOPE.compact_rps_planning_result",
+            "artifact_type" => "HOPE.compact_planning_result",
             "schema_version" => 1,
+            "scenario_id" => scenario_id,
+            "maryland_rps_fraction" => rps_fraction,
+            "storage_candidate_cost_per_mw_year" => storage_cost,
+            "planning_reserve_margin" => reserve_margin,
+            "voll_usd_per_mwh" => voll,
+            "load_multiplier" => load_multiplier,
+            "allowed_generation_candidate_types" => allowed_generation_types,
+            "allowed_generation_candidate_zones" => allowed_generation_zones,
+            "storage_candidates_enabled" => storage_candidates_enabled,
             "solver" => solver,
             "termination_status" => string(termination_status(model)),
             "primal_status" => string(primal_status(model)),
@@ -83,8 +121,12 @@ function main(args::Vector{String} = ARGS)
             "firm_external_contribution_mw" => sum(contributions.Capacity_MW),
             "capacity_plan_contract" => Dict(
                 "derivation_method" => "solved_gtep_with_declared_firm_external_supply",
-                "enforced_constraints" =>
-                    ["system_planning_reserve_margin", "maryland_local_annual_rps"],
+                "enforced_constraints" => vcat(
+                    isnothing(reserve_margin) || reserve_margin > 0.0 ?
+                    ["system_planning_reserve_margin"] : String[],
+                    rps_fraction > 0.0 ? ["maryland_local_annual_rps"] : String[],
+                    ["hourly_energy_balance"],
+                ),
             ),
         )
         YAML.write_file(result_path, metrics)
@@ -93,8 +135,9 @@ function main(args::Vector{String} = ARGS)
         YAML.write_file(
             manifest_path,
             Dict(
-                "artifact_type" => "HOPE.compact_rps_planning_manifest",
+                "artifact_type" => "HOPE.compact_planning_manifest",
                 "schema_version" => 1,
+                "scenario_id" => scenario_id,
                 "files" =>
                     Dict(basename(path) => bytes2hex(sha256(read(path))) for path in files),
             ),
@@ -145,6 +188,10 @@ function main(args::Vector{String} = ARGS)
         println(stderr)
         return 1
     end
+end
+
+function main(args::Vector{String} = ARGS)
+    return run_compact_planning(RPS_EXAMPLE, args)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
