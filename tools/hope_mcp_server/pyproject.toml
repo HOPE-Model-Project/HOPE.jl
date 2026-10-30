@@ -9,7 +9,7 @@ description = "Proof-of-concept MCP server for the HOPE Julia project."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "mcp>=1.0.0",
+  "mcp>=1.30.0,<2",
   "PyYAML>=6.0",
 ]
 
