@@ -5,3 +5,12 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+
+  - package-ecosystem: "uv"
+    directory: "/tools/hope_mcp_server"
+    schedule:
+      interval: "weekly"
+    groups:
+      hope-mcp-runtime:
+        patterns:
+          - "*"
