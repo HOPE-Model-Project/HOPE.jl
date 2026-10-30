@@ -8,6 +8,18 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from .adaptive_protocol import (
+    hope_adaptive_study_status,
+    hope_evaluate_adaptive_study,
+    hope_launch_adaptive_iteration,
+    hope_prepare_adaptive_study,
+    hope_record_adaptive_revision_decision,
+    hope_request_adaptive_revision,
+    hope_select_adaptive_realization,
+    hope_start_adaptive_child_iteration,
+    hope_wait_adaptive_study,
+    traced_adaptive_call,
+)
 from .core import (
     hope_aggregation_audit,
     hope_audit_holistic_study,
@@ -161,6 +173,9 @@ def create_mcp_server(
         "studies start with hope_prepare_holistic_study. Then use "
         "hope_launch_holistic_study -> hope_wait_holistic_study (repeat if timed out) -> "
         "hope_audit_holistic_study. "
+        "For the adaptive Maryland thermal feedback test, use "
+        "hope_prepare_adaptive_study -> hope_launch_adaptive_iteration -> "
+        "hope_wait_adaptive_study, then follow the returned next_action. "
         "If a Julia run needs to be stopped early, call hope_cancel_job with its job_id."
     )
     mcp = FastMCP(
@@ -649,6 +664,233 @@ def register_write_tools(mcp: FastMCP) -> None:
         task_id: str | None = None,
     ) -> dict[str, Any]:
         return hope_evaluate_holistic_agent_study(study_id=study_id, task_id=task_id)
+
+    @mcp.tool(
+        name="hope_prepare_adaptive_study",
+        description=(
+            "Create an immutable adaptive Maryland thermal study from the registered contract. "
+            "This pins the iteration budget, acceptance policy, fixed assumptions, and solver "
+            "choices without running a model. Reusing a study_id is idempotent."
+        ),
+    )
+    def hope_prepare_adaptive_study_tool(
+        study_id: str | None = None,
+        planning_solver: str = "highs",
+        pcm_solver: str = "gurobi",
+        agent_label: str | None = None,
+    ) -> dict[str, Any]:
+        return traced_adaptive_call(
+            operation="hope_prepare_adaptive_study",
+            role="coordinator",
+            agent_label=agent_label,
+            arguments={
+                "study_id": study_id,
+                "planning_solver": planning_solver,
+                "pcm_solver": pcm_solver,
+            },
+            call=lambda: hope_prepare_adaptive_study(
+                study_id=study_id,
+                planning_solver=planning_solver,
+                pcm_solver=pcm_solver,
+                agent_label=agent_label,
+            ),
+        )
+
+    @mcp.tool(
+        name="hope_launch_adaptive_iteration",
+        description=(
+            "Launch exactly one allowed GTEP-realization-PCM iteration from SPECIFIED. "
+            "Iteration 1 uses the registered base case; iteration 2 is available only after "
+            "the typed PEPCO siting revision has a recorded human approval."
+        ),
+    )
+    def hope_launch_adaptive_iteration_tool(
+        study_id: str,
+        agent_label: str | None = None,
+    ) -> dict[str, Any]:
+        return traced_adaptive_call(
+            operation="hope_launch_adaptive_iteration",
+            role="executor",
+            agent_label=agent_label,
+            arguments={"study_id": study_id},
+            call=lambda: hope_launch_adaptive_iteration(
+                study_id,
+                agent_label=agent_label,
+            ),
+        )
+
+    @mcp.tool(
+        name="hope_adaptive_study_status",
+        description=(
+            "Return reconnect-safe adaptive state, current verification, revision or selection, "
+            "background-run status, and the single next allowed action."
+        ),
+    )
+    def hope_adaptive_study_status_tool(study_id: str) -> dict[str, Any]:
+        return traced_adaptive_call(
+            operation="hope_adaptive_study_status",
+            role="observer",
+            agent_label=None,
+            arguments={"study_id": study_id},
+            call=lambda: hope_adaptive_study_status(study_id),
+        )
+
+    @mcp.tool(
+        name="hope_wait_adaptive_study",
+        description=(
+            "Wait at most 55 seconds for the current adaptive iteration. A timeout is normal; "
+            "call this tool again. It never launches, retries, or changes model assumptions."
+        ),
+    )
+    def hope_wait_adaptive_study_tool(
+        study_id: str,
+        timeout_seconds: float = 45.0,
+        poll_interval_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        return traced_adaptive_call(
+            operation="hope_wait_adaptive_study",
+            role="observer",
+            agent_label=None,
+            arguments={
+                "study_id": study_id,
+                "timeout_seconds": timeout_seconds,
+                "poll_interval_seconds": poll_interval_seconds,
+            },
+            call=lambda: hope_wait_adaptive_study(
+                study_id,
+                timeout_seconds=timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
+            ),
+        )
+
+    @mcp.tool(
+        name="hope_request_adaptive_revision",
+        description=(
+            "Propose one typed revision after a failed verified ensemble. State the observed "
+            "finding, exact changed fields, and controls intentionally held fixed. Protected "
+            "acceptance criteria and iteration budgets cannot be changed."
+        ),
+    )
+    def hope_request_adaptive_revision_tool(
+        study_id: str,
+        revision_type: str,
+        finding: str,
+        changes: dict[str, Any],
+        unchanged_controls: list[str],
+        agent_label: str | None = None,
+    ) -> dict[str, Any]:
+        return traced_adaptive_call(
+            operation="hope_request_adaptive_revision",
+            role="diagnostic-agent",
+            agent_label=agent_label,
+            arguments={
+                "study_id": study_id,
+                "revision_type": revision_type,
+                "finding": finding,
+                "changes": changes,
+                "unchanged_controls": unchanged_controls,
+            },
+            call=lambda: hope_request_adaptive_revision(
+                study_id,
+                revision_type,
+                finding=finding,
+                changes=changes,
+                unchanged_controls=unchanged_controls,
+                agent_label=agent_label,
+            ),
+        )
+
+    @mcp.tool(
+        name="hope_record_adaptive_revision_decision",
+        description=(
+            "Human approval boundary for a pending adaptive revision. Record approved or rejected, "
+            "the human approver identity, and rationale. This does not start a child iteration."
+        ),
+    )
+    def hope_record_adaptive_revision_decision_tool(
+        study_id: str,
+        decision: str,
+        approver: str,
+        rationale: str,
+    ) -> dict[str, Any]:
+        return traced_adaptive_call(
+            operation="hope_record_adaptive_revision_decision",
+            role="human-approver",
+            agent_label=approver,
+            arguments={
+                "study_id": study_id,
+                "decision": decision,
+                "approver": approver,
+                "rationale": rationale,
+            },
+            call=lambda: hope_record_adaptive_revision_decision(
+                study_id,
+                decision,
+                approver=approver,
+                rationale=rationale,
+            ),
+        )
+
+    @mcp.tool(
+        name="hope_start_adaptive_child_iteration",
+        description=(
+            "Create the next immutable attempt only after its revision is approved. Enforces the "
+            "iteration budget and rejects repeated revision cycles."
+        ),
+    )
+    def hope_start_adaptive_child_iteration_tool(study_id: str) -> dict[str, Any]:
+        return traced_adaptive_call(
+            operation="hope_start_adaptive_child_iteration",
+            role="coordinator",
+            agent_label=None,
+            arguments={"study_id": study_id},
+            call=lambda: hope_start_adaptive_child_iteration(study_id),
+        )
+
+    @mcp.tool(
+        name="hope_select_adaptive_realization",
+        description=(
+            "Select and freeze one realization only after independent ensemble verification. "
+            "The named variant must be in accepted_variants; failed or review-required variants "
+            "cannot be selected."
+        ),
+    )
+    def hope_select_adaptive_realization_tool(
+        study_id: str,
+        variant: str,
+        rationale: str,
+        evidence: dict[str, Any] | None = None,
+        agent_label: str | None = None,
+    ) -> dict[str, Any]:
+        return traced_adaptive_call(
+            operation="hope_select_adaptive_realization",
+            role="selection-agent",
+            agent_label=agent_label,
+            arguments={
+                "study_id": study_id,
+                "variant": variant,
+                "rationale": rationale,
+                "evidence": evidence or {},
+            },
+            call=lambda: hope_select_adaptive_realization(
+                study_id,
+                variant,
+                rationale=rationale,
+                evidence=evidence,
+                agent_label=agent_label,
+            ),
+        )
+
+    @mcp.tool(
+        name="hope_evaluate_adaptive_study",
+        description=(
+            "Independently score the terminal adaptive run. model_passed verifies the two solved "
+            "iterations and selected zero-shedding realization; agent_passed verifies the "
+            "hash-chained call sequence, human approval boundary, budgets, and typed revision."
+        ),
+    )
+    def hope_evaluate_adaptive_study_tool(study_id: str) -> dict[str, Any]:
+        return hope_evaluate_adaptive_study(study_id)
 
     @mcp.tool(
         name="hope_run_erec",

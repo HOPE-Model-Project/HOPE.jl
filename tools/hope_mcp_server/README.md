@@ -322,6 +322,26 @@ PCM inputs, handoff audits, and model outputs. If the PCM case supplies
 `Settings/HOPE_holistic_acceptance.yml`, the Julia wrapper also requires all
 declared capability checks to pass before publishing the run.
 
+## Adaptive Maryland feedback-loop test
+
+The full local server also exposes a bounded adaptive lifecycle for the
+registered Maryland energy-serving thermal case:
+
+`hope_prepare_adaptive_study` -> `hope_launch_adaptive_iteration` ->
+`hope_wait_adaptive_study` -> typed revision and human decision -> child
+iteration -> verified realization selection -> `hope_evaluate_adaptive_study`.
+
+This protocol does not let the LLM edit model files or freely construct a new
+scenario. Julia maps each approved state to one of two registered ModelCases
+examples, verifies published artifact hashes, and enforces the pinned study
+contract. The second iteration is unavailable until a human-approved
+`candidate_zone_eligibility` request restricts the eligible zone to PEPCO.
+
+Adaptive workspaces default to `artifacts/adaptive_agent_studies/`; set
+`HOPE_ADAPTIVE_STUDIES_ROOT` to relocate them. The exact Claude Desktop prompts,
+approval pause, expected lineage, and evaluation criteria are documented in
+`docs/src/development/holistic_agent/adaptive_agent_test_v1.md`.
+
 The manifest records both the preparing MCP process and the launched Julia PID.
 After a reconnect, a nonterminal manifest whose owning process is no longer
 alive is converted to a durable failed result instead of remaining `running`

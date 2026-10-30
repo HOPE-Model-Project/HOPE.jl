@@ -13,6 +13,8 @@ required_fields:
       ensemble_policy:
         { type: string, allowed: [any, all, fraction, worst_case] }
       minimum_fraction: { type: number, minimum: 0.0, maximum: 1.0 }
+      require_explicit_selection:
+        { type: boolean, required: false, default: false }
   iteration_budget: { type: integer, minimum: 1 }
   allowed_revision_types:
     type: list
@@ -31,4 +33,5 @@ semantics:
   - A fixed assumption can change only through an approved assumption_change revision.
   - An assumption_change always requires human approval.
   - Every iteration creates immutable child artifacts; no accepted parent artifact is edited.
+  - When explicit selection is required, ensemble verification remains nonterminal until an independently accepted realization is selected.
   - Budget exhaustion, repeated revisions, or missing authority terminate as INCONCLUSIVE rather than weakening a gate.

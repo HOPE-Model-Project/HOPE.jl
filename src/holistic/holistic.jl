@@ -19,6 +19,7 @@ include("realization_ensemble.jl")
 # Findings, bounded revisions, and adaptive-study orchestration.
 include("adaptive_feedback.jl")
 include("adaptive_study.jl")
+include("adaptive_execution.jl")
 include("gtep_child_scenario.jl")
 include("planning_feedback_diagnostic.jl")
 

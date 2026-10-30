@@ -14,6 +14,7 @@ fixed_assumptions:
 acceptance:
   ensemble_policy: any
   minimum_fraction: 0.25
+  require_explicit_selection: true
 iteration_budget: 3
 allowed_revision_types:
   - realization_local_resiting

@@ -94,11 +94,26 @@ end
         Dict("Variant" => "grid_ready", "Classification" => "ACCEPTANCE_FAILED"),
     ]
     final = HOPE.run_adaptive_study_iteration(child, _adaptive_handlers(accepted_iteration))
-    @test final["terminal_status"] == "ACCEPTED"
+    @test final["terminal_status"] == "ACTIVE"
+    @test final["stage"] == "VERIFIED"
     @test final["attempts"][2]["verification"]["accepted_count"] == 1
     @test final["attempts"][2]["verification"]["accepted_fraction"] == 0.25
-    @test_throws ArgumentError HOPE.request_adaptive_revision(
+    @test_throws ArgumentError HOPE.select_adaptive_realization(
         final,
+        "balanced_permitting";
+        rationale = "This member failed.",
+    )
+    selected = HOPE.select_adaptive_realization(
+        final,
+        "least_cost";
+        rationale = "It is the only approval-clean accepted realization.",
+        evidence = Dict("load_shedding_mwh" => 0.0),
+    )
+    @test selected["terminal_status"] == "ACCEPTED"
+    @test selected["stage"] == "REALIZATION_SELECTED"
+    @test selected["attempts"][2]["selection"]["selected_variant"] == "least_cost"
+    @test_throws ArgumentError HOPE.request_adaptive_revision(
+        selected,
         "realization_local_resiting",
     )
 
@@ -155,7 +170,7 @@ end
 
     mktempdir() do directory
         destination = joinpath(directory, "adaptive-study")
-        paths = HOPE.write_adaptive_study_state(final, destination)
+        paths = HOPE.write_adaptive_study_state(selected, destination)
         @test all(isfile, values(paths))
         roundtrip = YAML.load_file(paths["state"])
         @test roundtrip["terminal_status"] == "ACCEPTED"

@@ -569,22 +569,25 @@ the conservative interpretation explicit. Failed verification remains active
 only while a typed, authorized revision is possible. Acceptance, budget
 exhaustion, repeated revision fingerprints, and explicit stops produce the
 terminal states `ACCEPTED`, `INCONCLUSIVE`, or `NOT_ACCEPTED` without weakening
-the pinned gate. The Maryland energy-serving thermal example is the first
-regression fixture: its initial all-failed ensemble motivates an approved
-PEPCO eligibility revision, and its child iteration passes under the declared
-`any` policy because the verified `least_cost` realization is accepted.
+the pinned gate. When `require_explicit_selection` is true, passing the ensemble
+does not immediately accept the study. An independently accepted member must be
+selected through `REALIZATION_SELECTED`; a failed or review-required member is
+not selectable. The Maryland energy-serving thermal example is the first
+regression fixture: its initial all-failed ensemble motivates an approved PEPCO
+eligibility revision, and its child iteration passes under the declared `any`
+policy because the verified `least_cost` realization is accepted and selected.
 
 An adaptive study is a lineage of immutable attempts, not one case directory
 edited repeatedly:
 
 ```text
 SPECIFIED -> GTEP_SOLVED -> REALIZED -> PCM_SOLVED -> VERIFIED
-                                                |          |
-                                                |          +-> ACCEPTED
-                                                |
-                                                +-> REVISION_REQUESTED
-                                                          |
-                         APPROVED_CHILD_SCENARIO <---------+
+                                                       |       |
+                                                       |       +-> REALIZATION_SELECTED -> ACCEPTED
+                                                       |
+                                                       +-> REVISION_REQUESTED -> REVISION_APPROVED
+                                                                                       |
+                                                                                       +-> child SPECIFIED
 ```
 
 The workflow converges only when all hard gates in the pinned acceptance
@@ -661,6 +664,15 @@ tests. It must not be labeled a complete probabilistic reliability study. Later
 milestones can compose annual or rolling operation, contingency analysis, EREC,
 DART, policy, emissions, economics, resilience, or another validated assessment
 module under its own contract.
+
+The first end-to-end agent vertical slice is now implemented around this
+Maryland thermal case. `adaptive_study_cli.jl` provides atomic state transitions;
+`run_adaptive_thermal_iteration.jl` runs one registered planning and PCM
+ensemble attempt; and the MCP server exposes typed lifecycle operations with a
+hash-chained agent trace. The independent evaluator separates numerical/model
+acceptance from agent protocol compliance. See [Adaptive Maryland Agent Test
+v1](@ref adaptive-agent-test-v1) for the exact Claude Desktop prompts and human
+approval step.
 
 ## What not to build
 

@@ -7,6 +7,7 @@ const ADAPTIVE_STUDY_STAGES = Set([
     "REALIZED",
     "PCM_SOLVED",
     "VERIFIED",
+    "REALIZATION_SELECTED",
     "REVISION_REQUESTED",
     "REVISION_APPROVED",
 ])
@@ -110,6 +111,10 @@ function validate_holistic_study_spec(spec::AbstractDict)
         throw(ArgumentError("fraction acceptance requires a positive minimum_fraction."))
     acceptance["ensemble_policy"] = ensemble_policy
     acceptance["minimum_fraction"] = minimum_fraction
+    acceptance["require_explicit_selection"] = _adaptive_bool(
+        get(acceptance, "require_explicit_selection", false),
+        "acceptance.require_explicit_selection",
+    )
 
     iteration_budget = Int(get(normalized, "iteration_budget", 0))
     iteration_budget >= 1 || throw(ArgumentError("iteration_budget must be positive."))
@@ -185,6 +190,7 @@ function _adaptive_attempt(iteration::Int; parent_revision = nothing)
         "parent_revision" => deepcopy(parent_revision),
         "artifacts" => Dict{String,Any}(),
         "verification" => nothing,
+        "selection" => nothing,
         "revision" => nothing,
     )
 end
@@ -387,11 +393,73 @@ function verify_adaptive_study(state::AbstractDict, ensemble_results)
         ),
     )
     result["attempts"][end]["verification"] = verification
-    if verification["accepted"]
+    if verification["accepted"] &&
+       !result["spec"]["acceptance"]["require_explicit_selection"]
         result["terminal_status"] = "ACCEPTED"
     elseif result["iteration"] >= result["spec"]["iteration_budget"]
         result["terminal_status"] = "INCONCLUSIVE"
     end
+    return result
+end
+
+"""
+    select_adaptive_realization(state, variant; rationale, evidence = Dict())
+
+Finalize an acceptance result that requires an explicit physical-realization
+selection. The selected member must be one of the independently verified,
+approval-clean variants. The operation records a durable selection artifact
+without changing the planning totals or rerunning GTEP.
+"""
+function select_adaptive_realization(
+    state::AbstractDict,
+    variant::AbstractString;
+    rationale::AbstractString,
+    evidence::AbstractDict = Dict{String,Any}(),
+)
+    _validate_adaptive_state(state)
+    state["stage"] == "VERIFIED" ||
+        throw(ArgumentError("Realization selection requires stage VERIFIED."))
+    state["spec"]["acceptance"]["require_explicit_selection"] || throw(
+        ArgumentError(
+            "The study contract does not require explicit realization selection.",
+        ),
+    )
+    verification = state["attempts"][end]["verification"]
+    verification isa AbstractDict ||
+        throw(ArgumentError("Verified attempt has no ensemble acceptance result."))
+    Bool(get(verification, "accepted", false)) || throw(
+        ArgumentError("A realization can be selected only from an accepted ensemble."),
+    )
+    selected = strip(variant)
+    isempty(selected) && throw(ArgumentError("variant must be nonblank."))
+    selected in String.(verification["accepted_variants"]) || throw(
+        ArgumentError(
+            "Selected variant $(selected) is not independently accepted. " *
+            "Accepted variants: $(join(verification["accepted_variants"], ", ")).",
+        ),
+    )
+    isempty(strip(rationale)) && throw(ArgumentError("rationale must be nonblank."))
+    selection = Dict{String,Any}(
+        "artifact_type" => "HOPE.adaptive_realization_selection",
+        "schema_version" => 1,
+        "study_id" => state["study_id"],
+        "iteration" => state["iteration"],
+        "selected_variant" => selected,
+        "rationale" => String(rationale),
+        "evidence" => deepcopy(_adaptive_string_dict(evidence)),
+    )
+    result = _adaptive_transition(
+        state,
+        "select_realization",
+        "VERIFIED",
+        "REALIZATION_SELECTED";
+        details = Dict(
+            "selected_variant" => selected,
+            "selection_sha256" => _adaptive_fingerprint(selection),
+        ),
+    )
+    result["attempts"][end]["selection"] = selection
+    result["terminal_status"] = "ACCEPTED"
     return result
 end
 
