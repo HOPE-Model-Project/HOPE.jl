@@ -11,7 +11,10 @@ from unittest import mock
 import yaml
 
 from hope_mcp_server import agent_evaluation
-from hope_mcp_server.adaptive_protocol import hope_evaluate_adaptive_study
+from hope_mcp_server.adaptive_protocol import (
+    hope_adaptive_study_status,
+    hope_evaluate_adaptive_study,
+)
 
 
 def _publish_state(workspace: Path, study_id: str) -> None:
@@ -72,6 +75,97 @@ def _publish_state(workspace: Path, study_id: str) -> None:
 
 
 class AdaptiveProtocolTests(unittest.TestCase):
+    def test_verified_status_returns_decision_relevant_evidence(self) -> None:
+        study_id = "adaptive-evidence-r01"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / study_id
+            state = {
+                "artifact_type": "HOPE.adaptive_study_state",
+                "schema_version": 1,
+                "study_id": study_id,
+                "stage": "VERIFIED",
+                "terminal_status": "ACTIVE",
+                "iteration": 1,
+                "attempts": [
+                    {
+                        "artifacts": {
+                            "gtep": {
+                                "build_zones": ["BGE"],
+                                "resource_types": ["NGCC"],
+                                "new_generation_mw": 1674.3,
+                            },
+                            "realization": {
+                                "variants": ["least_cost", "grid_ready"]
+                            },
+                            "pcm": {
+                                "affected_zones": ["PEPCO"],
+                                "maximum_hourly_shortfall_mw": 931.0,
+                                "findings": [
+                                    {
+                                        "Variant": "least_cost",
+                                        "Accepted": False,
+                                        "Classification": "ACCEPTANCE_FAILED",
+                                        "LoadSheddingMWh": 11596.5,
+                                    }
+                                ],
+                            },
+                        },
+                        "verification": {
+                            "accepted": False,
+                            "accepted_count": 0,
+                            "member_count": 2,
+                            "accepted_variants": [],
+                            "failed_variants": ["least_cost", "grid_ready"],
+                            "ensemble_policy": "any",
+                        },
+                    }
+                ],
+            }
+            workspace.mkdir(parents=True)
+            state_path = workspace / "adaptive_study_state.yml"
+            state_path.write_text(
+                yaml.safe_dump(state, sort_keys=False), encoding="utf-8"
+            )
+            (workspace / "manifest.yml").write_text(
+                yaml.safe_dump(
+                    {
+                        "artifact_type": "HOPE.adaptive_study_manifest",
+                        "schema_version": 1,
+                        "study_id": study_id,
+                        "state_sha256": hashlib.sha256(state_path.read_bytes()).hexdigest(),
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            (workspace / "protocol.yml").write_text(
+                yaml.safe_dump(
+                    {
+                        "task_id": "md-compact-energy-thermal-adaptive-v1",
+                        "run_status": "PUBLISHED",
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(
+                os.environ,
+                {"HOPE_ADAPTIVE_STUDIES_ROOT": str(root)},
+            ):
+                result = hope_adaptive_study_status(study_id)
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["evidence"]["planning"]["build_zones"], ["BGE"])
+            self.assertEqual(result["evidence"]["pcm"]["affected_zones"], ["PEPCO"])
+            self.assertFalse(result["evidence"]["ensemble"]["accepted"])
+            self.assertEqual(
+                result["evidence"]["pcm"]["variant_outcomes"][0]["variant"],
+                "least_cost",
+            )
+            self.assertIn("evidence.planning.build_zones", result["next_action"])
+
     def test_adaptive_evaluator_separates_model_and_agent_checks(self) -> None:
         study_id = "adaptive-evaluator-r01"
         with tempfile.TemporaryDirectory() as temporary:

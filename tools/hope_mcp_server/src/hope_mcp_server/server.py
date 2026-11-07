@@ -722,8 +722,9 @@ def register_write_tools(mcp: FastMCP) -> None:
     @mcp.tool(
         name="hope_adaptive_study_status",
         description=(
-            "Return reconnect-safe adaptive state, current verification, revision or selection, "
-            "background-run status, and the single next allowed action."
+            "Return reconnect-safe adaptive state, compact authoritative planning, realization, "
+            "PCM, and ensemble evidence, current revision or selection, background-run status, "
+            "and the single next allowed action."
         ),
     )
     def hope_adaptive_study_status_tool(study_id: str) -> dict[str, Any]:
@@ -739,7 +740,9 @@ def register_write_tools(mcp: FastMCP) -> None:
         name="hope_wait_adaptive_study",
         description=(
             "Wait at most 55 seconds for the current adaptive iteration. A timeout is normal; "
-            "call this tool again. It never launches, retries, or changes model assumptions."
+            "call this tool again. When the iteration finishes, the response includes compact "
+            "authoritative planning, realization, PCM, and ensemble evidence. It never launches, "
+            "retries, or changes model assumptions."
         ),
     )
     def hope_wait_adaptive_study_tool(

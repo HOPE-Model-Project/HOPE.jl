@@ -187,6 +187,82 @@ def _run_cli(
                 pass
 
 
+def _adaptive_evidence_summary(attempt: dict[str, Any]) -> dict[str, Any]:
+    """Return compact, decision-relevant evidence from the verified state."""
+    artifacts = attempt.get("artifacts", {})
+    if not isinstance(artifacts, dict):
+        artifacts = {}
+    gtep = artifacts.get("gtep", {})
+    if not isinstance(gtep, dict):
+        gtep = {}
+    realization = artifacts.get("realization", {})
+    if not isinstance(realization, dict):
+        realization = {}
+    pcm = artifacts.get("pcm", {})
+    if not isinstance(pcm, dict):
+        pcm = {}
+    verification = attempt.get("verification", {})
+    if not isinstance(verification, dict):
+        verification = {}
+
+    variant_outcomes: list[dict[str, Any]] = []
+    findings = pcm.get("findings", [])
+    for finding in findings if isinstance(findings, list) else []:
+        if not isinstance(finding, dict):
+            continue
+        variant_outcomes.append(
+            {
+                "variant": finding.get("Variant"),
+                "accepted": finding.get("Accepted"),
+                "classification": finding.get("Classification"),
+                "reason": finding.get("Reason"),
+                "load_shedding_mwh": finding.get("LoadSheddingMWh"),
+                "new_generation_dispatch_mwh": finding.get(
+                    "NewGenerationDispatchMWh"
+                ),
+                "objective_value": finding.get("ObjectiveValue"),
+                "termination_status": finding.get("TerminationStatus"),
+                "primal_status": finding.get("PrimalStatus"),
+            }
+        )
+
+    return {
+        "planning": {
+            "build_zones": gtep.get("build_zones", []),
+            "resource_types": gtep.get("resource_types", []),
+            "new_generation_mw": gtep.get("new_generation_mw"),
+            "project_count": gtep.get("project_count"),
+            "termination_status": gtep.get("termination_status"),
+            "capacity_plan_path": gtep.get("capacity_plan_path"),
+            "planning_result_path": gtep.get("planning_result_path"),
+        },
+        "realization": {
+            "variants": realization.get("variants", []),
+            "allocations_path": realization.get("allocations_path"),
+            "screening_path": realization.get("screening_path"),
+        },
+        "pcm": {
+            "affected_zones": pcm.get("affected_zones", []),
+            "load_shedding_mwh_min": pcm.get("load_shedding_mwh_min"),
+            "load_shedding_mwh_max": pcm.get("load_shedding_mwh_max"),
+            "maximum_hourly_shortfall_mw": pcm.get(
+                "maximum_hourly_shortfall_mw"
+            ),
+            "load_shedding_hours": pcm.get("load_shedding_hours"),
+            "variant_outcomes": variant_outcomes,
+            "findings_path": pcm.get("findings_path"),
+        },
+        "ensemble": {
+            "accepted": verification.get("accepted"),
+            "accepted_count": verification.get("accepted_count"),
+            "member_count": verification.get("member_count"),
+            "accepted_variants": verification.get("accepted_variants", []),
+            "failed_variants": verification.get("failed_variants", []),
+            "ensemble_policy": verification.get("ensemble_policy"),
+        },
+    }
+
+
 def _adaptive_response(
     study_id: str,
     state: dict[str, Any],
@@ -205,12 +281,17 @@ def _adaptive_response(
         next_action = {
             "SPECIFIED": "Call hope_launch_adaptive_iteration.",
             "VERIFIED": (
-                "Select an accepted realization, or request one typed revision if none passed."
+                "Review evidence.planning.build_zones, evidence.pcm.affected_zones, "
+                "evidence.pcm.variant_outcomes, and evidence.ensemble. Select an accepted "
+                "realization, or request one typed revision if none passed."
             ),
             "REVISION_REQUESTED": "A human must call hope_record_adaptive_revision_decision.",
             "REVISION_APPROVED": "Call hope_start_adaptive_child_iteration.",
         }.get(stage, "Inspect the adaptive state before proceeding.")
-    attempt = state.get("attempts", [{}])[-1]
+    attempts = state.get("attempts", [])
+    attempt = attempts[-1] if isinstance(attempts, list) and attempts else {}
+    if not isinstance(attempt, dict):
+        attempt = {}
     return success_result(
         study_id=study_id,
         task_id=protocol.get("task_id", ADAPTIVE_TASK_ID),
@@ -220,6 +301,7 @@ def _adaptive_response(
         verification=attempt.get("verification"),
         revision=attempt.get("revision"),
         selection=attempt.get("selection"),
+        evidence=_adaptive_evidence_summary(attempt),
         run_status=str(protocol.get("run_status", "IDLE")).lower(),
         job_id=protocol.get("job_id"),
         process_pid=protocol.get("process_pid"),

@@ -93,6 +93,10 @@ acceptance criterion, or start an extra iteration.
    Repeated bounded waits are allowed and do not count as new model launches.
 3. When iteration 1 reaches VERIFIED, use the authoritative adaptive artifacts to
    identify the planning build zone, the PCM shortfall zone, and ensemble outcome.
+   The terminal `hope_wait_adaptive_study` response (and reconnect-safe
+   `hope_adaptive_study_status`) exposes these under `evidence.planning`,
+   `evidence.pcm`, and `evidence.ensemble`; no general-purpose file-read tool is
+   needed.
 4. If the expected evidence is present (BGE build, PEPCO shortfall, no accepted
    variant), request exactly one revision with:
    - revision_type: candidate_zone_eligibility
