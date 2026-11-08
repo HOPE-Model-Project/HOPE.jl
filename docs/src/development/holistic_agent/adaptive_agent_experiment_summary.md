@@ -42,6 +42,31 @@ The agent does not freely change assumptions until a run passes. It reads the
 structured evidence, proposes a narrowly scoped revision, records a human decision,
 and preserves the parent-child lineage of the two iterations.
 
+## Interactive geographic walkthrough
+
+The map below combines the experiment narrative with the Maryland geography and
+network context. Use the workflow controls to move from the existing system,
+through the BGE planning decision and PEPCO operational diagnosis, to the approved
+revision, PEPCO rerun, and final realization selection. The replicate selector
+distinguishes the r01 workflow shakedown, r02 development validation, and r03 clean
+formal benchmark.
+
+[Open the full interactive map](../../assets/adaptive_maryland_r01_r03_story.html)
+
+```@raw html
+<iframe
+  src="../../assets/adaptive_maryland_r01_r03_story.html"
+  title="Maryland adaptive-agent experiment map"
+  style="width:100%;height:900px;border:1px solid #d7dde3;border-radius:10px;"
+  loading="lazy">
+</iframe>
+```
+
+The geographic layers use Maryland state and county boundaries, BGE and PEPCO
+service-territory boundaries, and the tracked HOPE PCM network. The visualization
+explains the recorded workflow; it does not add evidence beyond the authoritative
+experiment artifacts listed below.
+
 ## Replicate classification
 
 | Run | Classification | Outcome | What it established |
@@ -194,6 +219,13 @@ The iteration-2 manifest can show the iteration itself as active because it is a
 snapshot written before the later realization-selection transition. The overall
 adaptive state and evaluation report are authoritative for the final terminal
 status, and both confirm acceptance.
+
+## Next development milestone
+
+The proposed next capability is documented in
+[Adaptive Feedback Contract v2](adaptive_feedback_v2_plan.md). It generalizes the
+validated spatial correction into a typed diagnosis-and-revision contract while
+preserving bounded authority, evidence provenance, and human approval.
 
 ## Conclusion
 
