@@ -431,29 +431,50 @@ def hope_prepare_adaptive_study(
     return _adaptive_response(normalized, state, protocol)
 
 
+def _published_iteration_manifest(
+    study_id: str, protocol: dict[str, Any]
+) -> tuple[bool, Path]:
+    iteration = int(protocol.get("running_iteration", 0) or 0)
+    path = _workspace(study_id) / "iterations" / f"{iteration:02d}" / "manifest.yml"
+    try:
+        durable = read_yaml(path) if iteration > 0 and path.is_file() else {}
+    except (OSError, ValueError, yaml.YAMLError):
+        durable = {}
+    return str(durable.get("status", "")).upper() == "PUBLISHED", path
+
+
 def _refresh_adaptive_run(study_id: str, protocol: dict[str, Any]) -> dict[str, Any]:
-    if str(protocol.get("run_status", "")).upper() != "RUNNING":
+    current_status = str(protocol.get("run_status", "")).upper()
+    if current_status != "RUNNING":
+        # Repair records written by older servers that mapped the core job's successful
+        # terminal status ("done") to FAILED even though the immutable iteration manifest
+        # was published. The manifest is authoritative for durable completion.
+        if current_status == "FAILED":
+            published, manifest_path = _published_iteration_manifest(study_id, protocol)
+            if published:
+                protocol["run_status"] = "PUBLISHED"
+                protocol["iteration_manifest_path"] = str(manifest_path)
+                _write_protocol(study_id, protocol)
         return protocol
     job_id = str(protocol.get("job_id", ""))
     if job_id in _jobs:
         job = hope_job_status(job_id)
         if job.get("status") == "running":
             return protocol
-        protocol["run_status"] = "PUBLISHED" if job.get("status") == "completed" else "FAILED"
+        published, manifest_path = _published_iteration_manifest(study_id, protocol)
+        protocol["run_status"] = (
+            "PUBLISHED"
+            if job.get("status") in {"done", "completed"} and published
+            else "FAILED"
+        )
         protocol["last_job"] = job
+        protocol["iteration_manifest_path"] = str(manifest_path)
         _write_protocol(study_id, protocol)
         return protocol
     if _process_is_alive(protocol.get("process_pid")):
         return protocol
-    iteration = int(protocol.get("running_iteration", 0) or 0)
-    iteration_manifest = _workspace(study_id) / "iterations" / f"{iteration:02d}" / "manifest.yml"
-    try:
-        durable = read_yaml(iteration_manifest) if iteration_manifest.is_file() else {}
-    except (OSError, ValueError, yaml.YAMLError):
-        durable = {}
-    protocol["run_status"] = (
-        "PUBLISHED" if str(durable.get("status", "")).upper() == "PUBLISHED" else "FAILED"
-    )
+    published, iteration_manifest = _published_iteration_manifest(study_id, protocol)
+    protocol["run_status"] = "PUBLISHED" if published else "FAILED"
     protocol["iteration_manifest_path"] = str(iteration_manifest)
     _write_protocol(study_id, protocol)
     return protocol

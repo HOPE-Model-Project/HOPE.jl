@@ -11,6 +11,7 @@ from unittest import mock
 import yaml
 
 from hope_mcp_server import agent_evaluation
+from hope_mcp_server import adaptive_protocol
 from hope_mcp_server.adaptive_protocol import (
     hope_adaptive_study_status,
     hope_evaluate_adaptive_study,
@@ -75,6 +76,65 @@ def _publish_state(workspace: Path, study_id: str) -> None:
 
 
 class AdaptiveProtocolTests(unittest.TestCase):
+    def test_successful_done_job_maps_to_published_run_status(self) -> None:
+        study_id = "adaptive-done-status-r01"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / study_id
+            iteration = workspace / "iterations" / "01"
+            iteration.mkdir(parents=True)
+            (iteration / "manifest.yml").write_text(
+                yaml.safe_dump({"status": "PUBLISHED"}), encoding="utf-8"
+            )
+            protocol = {
+                "run_status": "RUNNING",
+                "running_iteration": 1,
+                "job_id": "job-done",
+            }
+
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"HOPE_ADAPTIVE_STUDIES_ROOT": str(root)},
+                ),
+                mock.patch.object(adaptive_protocol, "_jobs", {"job-done": object()}),
+                mock.patch.object(
+                    adaptive_protocol,
+                    "hope_job_status",
+                    return_value={"status": "done", "exit_code": 0},
+                ),
+            ):
+                result = adaptive_protocol._refresh_adaptive_run(study_id, protocol)
+
+            self.assertEqual(result["run_status"], "PUBLISHED")
+            self.assertEqual(result["last_job"]["status"], "done")
+
+    def test_published_manifest_repairs_legacy_failed_run_status(self) -> None:
+        study_id = "adaptive-repair-status-r01"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / study_id
+            iteration = workspace / "iterations" / "01"
+            iteration.mkdir(parents=True)
+            (iteration / "manifest.yml").write_text(
+                yaml.safe_dump({"status": "PUBLISHED"}), encoding="utf-8"
+            )
+            protocol = {
+                "run_status": "FAILED",
+                "running_iteration": 1,
+                "job_id": "legacy-job",
+            }
+
+            with mock.patch.dict(
+                os.environ,
+                {"HOPE_ADAPTIVE_STUDIES_ROOT": str(root)},
+            ):
+                result = adaptive_protocol._refresh_adaptive_run(study_id, protocol)
+
+            self.assertEqual(result["run_status"], "PUBLISHED")
+            persisted = yaml.safe_load((workspace / "protocol.yml").read_text())
+            self.assertEqual(persisted["run_status"], "PUBLISHED")
+
     def test_verified_status_returns_decision_relevant_evidence(self) -> None:
         study_id = "adaptive-evidence-r01"
         with tempfile.TemporaryDirectory() as temporary:
