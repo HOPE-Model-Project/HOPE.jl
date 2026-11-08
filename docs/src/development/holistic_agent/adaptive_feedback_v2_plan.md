@@ -115,9 +115,35 @@ authority, or permitted action.
 
 ## Deliverables
 
-1. Freeze r03 as an automated regression benchmark.
+1. Freeze r03 as an automated regression benchmark. **Implemented:** the v2
+   regression reconstructs the r03 iteration-1 evidence pattern and requires the
+   BGE-build/PEPCO-shortfall diagnosis and PEPCO eligibility action.
 2. Define schemas for evidence, failure classification, and revision proposals.
-3. Implement diagnostic classification and action validation.
+   **Implemented:** schema-version-2 artifacts and validators now cover all three
+   model layers, diagnosis provenance, iteration budgets, stop conditions, and
+   rollback metadata.
+3. Implement diagnostic classification and action validation. **Implemented:** an
+   ordered classifier and catalog-backed validator reject unsupported or
+   contradictory actions before they reach the existing approval state machine.
 4. Add no-progress, rollback, and iteration-budget termination rules.
 5. Build the operational-flexibility benchmark.
 6. Only then expose separate role-specific agent tools.
+
+## Implemented API
+
+The implementation is intentionally backward compatible. Existing v1 adaptive
+state files and revision requests remain valid. The new layer adapts a recorded
+attempt into v2 artifacts and submits an approved proposal through the stable v1
+state machine:
+
+- `build_adaptive_evidence_v2` creates standardized planning, realization, and PCM
+  evidence without silently inventing unavailable metrics;
+- `diagnose_adaptive_failure_v2` assigns one failure class using ordered,
+  auditable rules;
+- `build_adaptive_revision_proposal_v2` creates the smallest catalog-authorized
+  intervention with held-fixed controls, causal expectation, budget, stop, and
+  rollback metadata;
+- `request_adaptive_revision(state, proposal)` validates and records the v2
+  proposal through the existing approval gate; and
+- `write_adaptive_feedback_v2` writes the three artifacts with a checksum
+  manifest.

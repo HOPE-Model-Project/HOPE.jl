@@ -18,6 +18,7 @@ using Test
     include("test-computed-realization.jl")
     include("test-computed-realization-handoff.jl")
     include("test-adaptive-feedback.jl")
+    include("test-adaptive-feedback-v2.jl")
     include("test-adaptive-study.jl")
     include("test-adaptive-execution.jl")
     include("test-adaptive-study-cli.jl")
