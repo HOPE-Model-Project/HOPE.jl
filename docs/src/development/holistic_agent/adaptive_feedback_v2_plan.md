@@ -126,6 +126,10 @@ authority, or permitted action.
    ordered classifier and catalog-backed validator reject unsupported or
    contradictory actions before they reach the existing approval state machine.
 4. Add no-progress, rollback, and iteration-budget termination rules.
+   **Implemented:** consecutive parent/child evidence is compared against
+   action-specific metrics; a non-improving or regressing child is terminated as
+   inconclusive with an immutable rollback record, and exhausted budgets stop
+   before another revision is requested.
 5. Build the operational-flexibility benchmark.
 6. Only then expose separate role-specific agent tools.
 
@@ -145,5 +149,8 @@ state machine:
   rollback metadata;
 - `request_adaptive_revision(state, proposal)` validates and records the v2
   proposal through the existing approval gate; and
+- `assess_adaptive_progress_v2` compares consecutive attempts using
+  action-specific metrics, while `apply_adaptive_progress_guard_v2` records
+  progress or terminates and rolls back a non-improving child;
 - `write_adaptive_feedback_v2` writes the three artifacts with a checksum
   manifest.

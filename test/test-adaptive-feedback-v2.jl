@@ -5,8 +5,9 @@ using YAML
 const ADAPTIVE_FEEDBACK_V2_EXAMPLE =
     joinpath(@__DIR__, "fixtures", "adaptive_study_v1", "md_energy_thermal_study.yml")
 
-function _adaptive_v2_failed_state()
+function _adaptive_v2_failed_state(; iteration_budget::Int = 3)
     spec = HOPE.load_holistic_study_spec(ADAPTIVE_FEEDBACK_V2_EXAMPLE)
+    spec["iteration_budget"] = iteration_budget
     state = HOPE.initialize_adaptive_study(spec)
     gtep = Dict{String,Any}(
         "artifact_type" => "HOPE.capacity_plan",
@@ -119,6 +120,96 @@ end
     @test revision["request"]["changes"] ==
           Dict("allowed_generation_candidate_zones" => ["PEPCO"])
     @test revision["request"]["contract_v2"]["proposal_id"] == proposal["proposal_id"]
+
+    no_progress_child = deepcopy(evidence)
+    no_progress_child["iteration"] = 2
+    no_progress_child["evidence_id"] = "adaptive-evidence-no-progress-child"
+    no_progress =
+        HOPE.assess_adaptive_progress_v2(evidence, no_progress_child; proposal = proposal)
+    @test no_progress["status"] == "NO_PROGRESS"
+    @test no_progress["primary_metrics"] ==
+          ["pcm_load_shedding_mwh_max", "maximum_hourly_shortfall_mw"]
+
+    improved_child = deepcopy(no_progress_child)
+    improved_child["evidence_id"] = "adaptive-evidence-improved-child"
+    improved_child["pcm"]["load_shedding"]["maximum_mwh"] = 5000.0
+    improved =
+        HOPE.assess_adaptive_progress_v2(evidence, improved_child; proposal = proposal)
+    @test improved["status"] == "PROGRESS"
+
+    regressed_child = deepcopy(no_progress_child)
+    regressed_child["evidence_id"] = "adaptive-evidence-regressed-child"
+    regressed_child["pcm"]["load_shedding"]["maximum_mwh"] = 13000.0
+    regressed_child["pcm"]["load_shedding"]["maximum_hourly_shortfall_mw"] = 1000.0
+    regressed =
+        HOPE.assess_adaptive_progress_v2(evidence, regressed_child; proposal = proposal)
+    @test regressed["status"] == "REGRESSION"
+
+    target_child = deepcopy(no_progress_child)
+    target_child["evidence_id"] = "adaptive-evidence-target-child"
+    target_child["pcm"]["accepted_count"] = 1
+    target_child["pcm"]["accepted_variants"] = ["least_cost"]
+    target = HOPE.assess_adaptive_progress_v2(evidence, target_child; proposal = proposal)
+    @test target["status"] == "TARGET_MET"
+
+    approved = HOPE.record_adaptive_revision_decision(
+        requested,
+        "approved";
+        approver = "human-reviewer",
+        rationale = "Approve one bounded spatial correction.",
+    )
+    child_state = HOPE.start_adaptive_child_iteration(approved)
+    for (stage, key) in
+        (("GTEP_SOLVED", "gtep"), ("REALIZED", "realization"), ("PCM_SOLVED", "pcm"))
+        artifact = deepcopy(state["attempts"][1]["artifacts"][key])
+        artifact["iteration"] = 2
+        child_state = HOPE.record_adaptive_stage(child_state, stage, artifact)
+    end
+    child_state = HOPE.verify_adaptive_study(
+        child_state,
+        child_state["attempts"][2]["artifacts"]["pcm"]["findings"],
+    )
+
+    repeated_evidence = HOPE.build_adaptive_evidence_v2(child_state)
+    repeated_diagnosis = HOPE.diagnose_adaptive_failure_v2(repeated_evidence)
+    repeated_proposal = HOPE.build_adaptive_revision_proposal_v2(
+        repeated_diagnosis,
+        repeated_evidence;
+        action = "change_generation_candidate_zone_eligibility",
+        old_value = ["BGE"],
+        proposed_value = ["PEPCO"],
+        held_fixed = held_fixed,
+        expected_causal_effect = "Repeat the same spatial correction.",
+        stop_condition = "Stop if the semantic action repeats.",
+        maximum_iterations = 3,
+    )
+    repeated_request = HOPE.request_adaptive_revision(child_state, repeated_proposal)
+    repeated_approval = HOPE.record_adaptive_revision_decision(
+        repeated_request,
+        "approved";
+        approver = "human-reviewer",
+        rationale = "Exercise the semantic cycle guard.",
+    )
+    cycle_stopped = HOPE.start_adaptive_child_iteration(repeated_approval)
+    @test cycle_stopped["terminal_status"] == "INCONCLUSIVE"
+    @test cycle_stopped["history"][end]["event"] == "revision_cycle_detected"
+
+    guarded = HOPE.apply_adaptive_progress_guard_v2(child_state, no_progress)
+    @test guarded["terminal_status"] == "INCONCLUSIVE"
+    @test guarded["attempts"][2]["rollback"]["status"] == "applied"
+    @test guarded["attempts"][2]["rollback"]["to_iteration"] == 1
+    @test guarded["history"][end]["event"] == "no_progress_rollback"
+
+    budget_state = _adaptive_v2_failed_state(; iteration_budget = 1)
+    @test budget_state["terminal_status"] == "INCONCLUSIVE"
+    @test budget_state["attempts"][1]["termination"]["reason"] ==
+          "ITERATION_BUDGET_EXHAUSTED"
+    @test budget_state["history"][end]["event"] ==
+          "iteration_budget_exhausted_at_verification"
+
+    mismatched_budget = deepcopy(proposal)
+    mismatched_budget["iteration_budget"]["maximum"] = 2
+    @test_throws ArgumentError HOPE.request_adaptive_revision(state, mismatched_budget)
 
     wrong_action = deepcopy(proposal)
     wrong_action["action"] = "enable_storage_flexibility_candidate"

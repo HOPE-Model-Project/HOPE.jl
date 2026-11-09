@@ -398,6 +398,26 @@ function verify_adaptive_study(state::AbstractDict, ensemble_results)
         result["terminal_status"] = "ACCEPTED"
     elseif result["iteration"] >= result["spec"]["iteration_budget"]
         result["terminal_status"] = "INCONCLUSIVE"
+        result["attempts"][end]["termination"] = Dict(
+            "artifact_type" => "HOPE.adaptive_termination",
+            "schema_version" => 1,
+            "reason" => "ITERATION_BUDGET_EXHAUSTED",
+            "iteration" => result["iteration"],
+            "iteration_budget" => result["spec"]["iteration_budget"],
+        )
+        push!(
+            result["history"],
+            _adaptive_history_entry(
+                result,
+                "iteration_budget_exhausted_at_verification",
+                result["stage"],
+                result["stage"];
+                details = Dict(
+                    "iteration" => result["iteration"],
+                    "iteration_budget" => result["spec"]["iteration_budget"],
+                ),
+            ),
+        )
     end
     return result
 end
@@ -586,12 +606,32 @@ function start_adaptive_child_iteration(state::AbstractDict)
         return result
     end
     revision = result["attempts"][end]["revision"]
-    fingerprint = _adaptive_fingerprint(
+    request = get(revision, "request", Dict{String,Any}())
+    contract_v2 = request isa AbstractDict ? get(request, "contract_v2", nothing) : nothing
+    if contract_v2 isa AbstractDict
+        budget = get(contract_v2, "iteration_budget", Dict{String,Any}())
+        budget isa AbstractDict ||
+            throw(ArgumentError("v2 revision iteration_budget must be a mapping."))
+        Int(get(budget, "current", 0)) == result["iteration"] ||
+            throw(ArgumentError("v2 revision budget does not match the current iteration."))
+        Int(get(budget, "maximum", 0)) == result["spec"]["iteration_budget"] ||
+            throw(ArgumentError("v2 revision budget does not match the study spec."))
+        rollback = get(contract_v2, "rollback", Dict{String,Any}())
+        rollback isa AbstractDict ||
+            throw(ArgumentError("v2 revision rollback must be a mapping."))
+        _feedback_text(get(rollback, "parent_evidence_id", "")) ==
+        _feedback_text(get(contract_v2, "evidence_id", "")) ||
+            throw(ArgumentError("v2 rollback does not identify the parent evidence."))
+    end
+    fingerprint_payload = if contract_v2 isa AbstractDict
         Dict(
-            "revision_type" => revision["revision_type"],
-            "request" => revision["request"],
-        ),
-    )
+            "action" => get(contract_v2, "action", nothing),
+            "change" => get(contract_v2, "change", nothing),
+        )
+    else
+        Dict("revision_type" => revision["revision_type"], "request" => revision["request"])
+    end
+    fingerprint = _adaptive_fingerprint(fingerprint_payload)
     if fingerprint in result["approved_revision_fingerprints"]
         result["terminal_status"] = "INCONCLUSIVE"
         push!(

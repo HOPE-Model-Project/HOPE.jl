@@ -69,6 +69,27 @@ const ADAPTIVE_ACTION_CATALOG = Dict{String,Dict{String,Any}}(
     ),
 )
 
+const ADAPTIVE_ACTION_PROGRESS_METRICS = Dict(
+    "change_generation_candidate_zone_eligibility" =>
+        ["pcm_load_shedding_mwh_max", "maximum_hourly_shortfall_mw"],
+    "change_candidate_technology_eligibility" =>
+        ["pcm_load_shedding_mwh_max", "reserve_shortage_mwh"],
+    "revise_firm_capacity_envelope" =>
+        ["planning_load_shedding_mwh", "pcm_load_shedding_mwh_max"],
+    "request_realization_alternatives" =>
+        ["unplaced_capacity_mw", "pcm_load_shedding_mwh_max"],
+    "enable_storage_flexibility_candidate" =>
+        ["reserve_shortage_mwh", "pcm_load_shedding_mwh_max"],
+    "enable_transmission_candidate" =>
+        ["pcm_load_shedding_mwh_max", "maximum_hourly_shortfall_mw"],
+    "escalate_assumption_change" => [
+        "planning_load_shedding_mwh",
+        "unplaced_capacity_mw",
+        "reserve_shortage_mwh",
+        "pcm_load_shedding_mwh_max",
+    ],
+)
+
 function _adaptive_v2_dict(value, field::AbstractString)
     value isa AbstractDict || throw(ArgumentError("$(field) must be a mapping."))
     return _adaptive_string_dict(value)
@@ -742,6 +763,280 @@ function validate_adaptive_revision_proposal_v2(proposal::AbstractDict)
     return normalized
 end
 
+function _adaptive_v2_progress_metrics(evidence::AbstractDict)
+    planning = evidence["planning"]
+    realization = evidence["realization"]
+    pcm = evidence["pcm"]
+    shedding = pcm["load_shedding"]
+    return Dict{String,Any}(
+        "accepted_count" => Float64(pcm["accepted_count"]),
+        "planning_load_shedding_mwh" => planning["planning_load_shedding_mwh"],
+        "unplaced_capacity_mw" => realization["unplaced_capacity_mw"],
+        "reserve_shortage_mwh" => pcm["reserve_shortage_mwh"],
+        "pcm_load_shedding_mwh_max" => shedding["maximum_mwh"],
+        "maximum_hourly_shortfall_mw" => shedding["maximum_hourly_shortfall_mw"],
+    )
+end
+
+function _adaptive_v2_metric_changes(parent_metrics, child_metrics)
+    changes = Dict{String,Any}()
+    for metric in sort(collect(union(keys(parent_metrics), keys(child_metrics))))
+        parent = get(parent_metrics, metric, nothing)
+        child = get(child_metrics, metric, nothing)
+        if parent === nothing || child === nothing
+            changes[metric] = Dict(
+                "parent" => parent,
+                "child" => child,
+                "improvement" => nothing,
+                "relative_improvement" => nothing,
+            )
+            continue
+        end
+        parent_number = Float64(parent)
+        child_number = Float64(child)
+        improvement = if metric == "accepted_count"
+            child_number - parent_number
+        else
+            parent_number - child_number
+        end
+        scale = max(abs(parent_number), 1.0e-12)
+        changes[metric] = Dict(
+            "parent" => parent_number,
+            "child" => child_number,
+            "improvement" => improvement,
+            "relative_improvement" => improvement / scale,
+        )
+    end
+    return changes
+end
+
+"""
+    assess_adaptive_progress_v2(parent_evidence, child_evidence; proposal=nothing)
+
+Compare consecutive iterations using the metrics implied by the approved action.
+An accepted child is `TARGET_MET`; otherwise the result is `PROGRESS`,
+`NO_PROGRESS`, or `REGRESSION` based on explicit absolute and relative tolerances.
+"""
+function assess_adaptive_progress_v2(
+    parent_evidence::AbstractDict,
+    child_evidence::AbstractDict;
+    proposal::Union{Nothing,AbstractDict} = nothing,
+    minimum_absolute_improvement::Float64 = 1.0e-6,
+    minimum_relative_improvement::Float64 = 0.01,
+)
+    minimum_absolute_improvement >= 0.0 ||
+        throw(ArgumentError("minimum_absolute_improvement cannot be negative."))
+    minimum_relative_improvement >= 0.0 ||
+        throw(ArgumentError("minimum_relative_improvement cannot be negative."))
+    parent = validate_adaptive_evidence_v2(parent_evidence)
+    child = validate_adaptive_evidence_v2(child_evidence)
+    parent["study_id"] == child["study_id"] ||
+        throw(ArgumentError("Progress evidence must belong to the same study."))
+    Int(child["iteration"]) == Int(parent["iteration"]) + 1 ||
+        throw(ArgumentError("Progress evidence must describe consecutive iterations."))
+    normalized_proposal =
+        proposal === nothing ? nothing : validate_adaptive_revision_proposal_v2(proposal)
+    if normalized_proposal !== nothing
+        normalized_proposal["evidence_id"] == parent["evidence_id"] ||
+            throw(ArgumentError("Progress proposal must reference the parent evidence."))
+        Int(normalized_proposal["iteration"]) == Int(parent["iteration"]) ||
+            throw(ArgumentError("Progress proposal iteration must match the parent."))
+    end
+
+    parent_metrics = _adaptive_v2_progress_metrics(parent)
+    child_metrics = _adaptive_v2_progress_metrics(child)
+    changes = _adaptive_v2_metric_changes(parent_metrics, child_metrics)
+    action = normalized_proposal === nothing ? nothing : normalized_proposal["action"]
+    primary_metrics =
+        action === nothing ? sort(collect(keys(parent_metrics))) :
+        ADAPTIVE_ACTION_PROGRESS_METRICS[action]
+    comparable = [
+        changes[metric] for metric in primary_metrics if
+        haskey(changes, metric) && changes[metric]["improvement"] !== nothing
+    ]
+    accepted = Int(child["pcm"]["accepted_count"]) > 0
+    meaningful = any(
+        item ->
+            item["improvement"] >= minimum_absolute_improvement &&
+                item["relative_improvement"] >= minimum_relative_improvement,
+        comparable,
+    )
+    regressed = any(
+        item ->
+            item["improvement"] <= -minimum_absolute_improvement &&
+                item["relative_improvement"] <= -minimum_relative_improvement,
+        comparable,
+    )
+    status = if accepted
+        "TARGET_MET"
+    elseif meaningful
+        "PROGRESS"
+    elseif regressed
+        "REGRESSION"
+    else
+        "NO_PROGRESS"
+    end
+    child_diagnosis = diagnose_adaptive_failure_v2(child)
+    assessment = Dict{String,Any}(
+        "artifact_type" => "HOPE.adaptive_progress_assessment",
+        "schema_version" => ADAPTIVE_FEEDBACK_V2_SCHEMA_VERSION,
+        "assessment_id" => _feedback_id(
+            "adaptive-progress",
+            parent["evidence_id"],
+            child["evidence_id"],
+            action,
+            status,
+        ),
+        "study_id" => parent["study_id"],
+        "parent_iteration" => parent["iteration"],
+        "child_iteration" => child["iteration"],
+        "parent_evidence_id" => parent["evidence_id"],
+        "child_evidence_id" => child["evidence_id"],
+        "proposal_id" =>
+            normalized_proposal === nothing ? nothing : normalized_proposal["proposal_id"],
+        "action" => action,
+        "status" => status,
+        "primary_metrics" => deepcopy(primary_metrics),
+        "metric_changes" => changes,
+        "child_failure_classification" => child_diagnosis["classification"],
+        "minimum_absolute_improvement" => minimum_absolute_improvement,
+        "minimum_relative_improvement" => minimum_relative_improvement,
+    )
+    return validate_adaptive_progress_assessment_v2(assessment)
+end
+
+"""Validate and normalize a parent/child progress assessment."""
+function validate_adaptive_progress_assessment_v2(assessment::AbstractDict)
+    normalized = _adaptive_string_dict(assessment)
+    _feedback_text(get(normalized, "artifact_type", "")) ==
+    "HOPE.adaptive_progress_assessment" ||
+        throw(ArgumentError("artifact_type must be HOPE.adaptive_progress_assessment."))
+    get(normalized, "schema_version", nothing) == ADAPTIVE_FEEDBACK_V2_SCHEMA_VERSION ||
+        throw(ArgumentError("Adaptive progress assessment schema_version must be 2."))
+    for field in
+        ("assessment_id", "study_id", "parent_evidence_id", "child_evidence_id", "status")
+        isempty(_feedback_text(get(normalized, field, ""))) &&
+            throw(ArgumentError("Adaptive progress assessment must declare $(field)."))
+    end
+    normalized["status"] in ("TARGET_MET", "PROGRESS", "NO_PROGRESS", "REGRESSION") ||
+        throw(ArgumentError("Unknown adaptive progress status."))
+    parent_iteration = Int(get(normalized, "parent_iteration", 0))
+    child_iteration = Int(get(normalized, "child_iteration", 0))
+    child_iteration == parent_iteration + 1 ||
+        throw(ArgumentError("Progress assessment iterations must be consecutive."))
+    normalized["primary_metrics"] = _adaptive_string_list(
+        get(normalized, "primary_metrics", nothing),
+        "progress.primary_metrics",
+    )
+    normalized["metric_changes"] = _adaptive_v2_dict(
+        get(normalized, "metric_changes", nothing),
+        "progress.metric_changes",
+    )
+    return normalized
+end
+
+"""
+    apply_adaptive_progress_guard_v2(state, assessment; maximum_no_progress=1)
+
+Record a validated progress assessment. When the configured no-progress limit is
+reached, terminate the child as inconclusive and record an immutable rollback to
+the parent evidence identified by the approved proposal.
+"""
+function apply_adaptive_progress_guard_v2(
+    state::AbstractDict,
+    assessment::AbstractDict;
+    maximum_no_progress::Int = 1,
+)
+    maximum_no_progress >= 1 ||
+        throw(ArgumentError("maximum_no_progress must be positive."))
+    _validate_adaptive_state(state)
+    state["stage"] == "VERIFIED" ||
+        throw(ArgumentError("Progress can be recorded only at stage VERIFIED."))
+    normalized = validate_adaptive_progress_assessment_v2(assessment)
+    normalized["study_id"] == state["study_id"] ||
+        throw(ArgumentError("Progress assessment study_id does not match the state."))
+    Int(normalized["child_iteration"]) == Int(state["iteration"]) ||
+        throw(ArgumentError("Progress assessment does not describe the current iteration."))
+    attempt = state["attempts"][end]
+    parent_revision = get(attempt, "parent_revision", nothing)
+    parent_revision isa AbstractDict ||
+        throw(ArgumentError("Progress guard requires a child with a parent revision."))
+    contract_v2 = get(get(parent_revision, "request", Dict()), "contract_v2", nothing)
+    contract_v2 isa AbstractDict ||
+        throw(ArgumentError("Progress guard requires a v2 parent revision."))
+    normalized["proposal_id"] == contract_v2["proposal_id"] ||
+        throw(ArgumentError("Progress assessment proposal does not match the child."))
+    normalized["parent_evidence_id"] == contract_v2["evidence_id"] ||
+        throw(ArgumentError("Progress assessment parent evidence does not match rollback."))
+
+    result = deepcopy(state)
+    result["attempts"][end]["progress_assessment"] = deepcopy(normalized)
+    status = normalized["status"]
+    prior_no_progress = count(
+        item -> begin
+            progress = get(item, "progress_assessment", nothing)
+            progress isa AbstractDict &&
+                get(progress, "status", "") in ("NO_PROGRESS", "REGRESSION")
+        end,
+        result["attempts"][1:(end-1)],
+    )
+    no_progress_count =
+        prior_no_progress + (status in ("NO_PROGRESS", "REGRESSION") ? 1 : 0)
+    terminate =
+        status in ("NO_PROGRESS", "REGRESSION") && no_progress_count >= maximum_no_progress
+    if terminate
+        rollback = contract_v2["rollback"]
+        rollback_record = Dict{String,Any}(
+            "artifact_type" => "HOPE.adaptive_rollback",
+            "schema_version" => ADAPTIVE_FEEDBACK_V2_SCHEMA_VERSION,
+            "rollback_id" => _feedback_id(
+                "adaptive-rollback",
+                normalized["assessment_id"],
+                rollback["parent_evidence_id"],
+            ),
+            "strategy" => rollback["strategy"],
+            "status" => "applied",
+            "from_iteration" => state["iteration"],
+            "to_iteration" => state["iteration"] - 1,
+            "parent_evidence_id" => rollback["parent_evidence_id"],
+            "reason" => status,
+        )
+        result["attempts"][end]["rollback"] = rollback_record
+        result["terminal_status"] = "INCONCLUSIVE"
+        push!(
+            result["history"],
+            _adaptive_history_entry(
+                result,
+                "no_progress_rollback",
+                result["stage"],
+                result["stage"];
+                details = Dict(
+                    "assessment_id" => normalized["assessment_id"],
+                    "progress_status" => status,
+                    "no_progress_count" => no_progress_count,
+                    "rollback_id" => rollback_record["rollback_id"],
+                ),
+            ),
+        )
+    else
+        push!(
+            result["history"],
+            _adaptive_history_entry(
+                result,
+                "record_progress_assessment",
+                result["stage"],
+                result["stage"];
+                details = Dict(
+                    "assessment_id" => normalized["assessment_id"],
+                    "progress_status" => status,
+                    "no_progress_count" => no_progress_count,
+                ),
+            ),
+        )
+    end
+    return result
+end
+
 """
     request_adaptive_revision(state, proposal)
 
@@ -756,6 +1051,32 @@ function request_adaptive_revision(state::AbstractDict, proposal::AbstractDict)
         throw(ArgumentError("Revision proposal study_id does not match the state."))
     Int(normalized["iteration"]) == Int(state["iteration"]) ||
         throw(ArgumentError("Revision proposal iteration does not match the state."))
+    state["stage"] == "VERIFIED" ||
+        throw(ArgumentError("Revision requests require stage VERIFIED."))
+    budget = normalized["iteration_budget"]
+    Int(budget["maximum"]) == Int(state["spec"]["iteration_budget"]) ||
+        throw(ArgumentError("Proposal iteration budget does not match the study spec."))
+    if Int(budget["current"]) >= Int(budget["maximum"])
+        result = deepcopy(state)
+        result["terminal_status"] = "INCONCLUSIVE"
+        result["attempts"][end]["termination"] = Dict(
+            "artifact_type" => "HOPE.adaptive_termination",
+            "schema_version" => ADAPTIVE_FEEDBACK_V2_SCHEMA_VERSION,
+            "reason" => "ITERATION_BUDGET_EXHAUSTED",
+            "proposal_id" => normalized["proposal_id"],
+        )
+        push!(
+            result["history"],
+            _adaptive_history_entry(
+                result,
+                "iteration_budget_exhausted_before_revision",
+                result["stage"],
+                result["stage"];
+                details = Dict("proposal_id" => normalized["proposal_id"]),
+            ),
+        )
+        return result
+    end
     revision_type = normalized["revision_type"]
     revision_type in state["spec"]["allowed_revision_types"] ||
         throw(ArgumentError("Revision type $(revision_type) is not allowed by the study."))
